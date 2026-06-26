@@ -1,0 +1,76 @@
+import { createCompanyClient } from "@/lib/company"
+import ComptabiliteClient from "./ComptabiliteClient"
+
+export default async function ComptabilitePage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params
+  const { db } = await createCompanyClient()
+
+  const today = new Date().toISOString().split("T")[0]
+
+  const [
+    { data: invoices },
+    { data: purchases },
+    { data: treasuryAccounts },
+    { data: transactions },
+  ] = await Promise.all([
+    // Toutes les factures clients avec leur statut et montants
+    db.from("invoice_totals")
+      .select("id, number, status, currency, due_date, total_ht, total_paid, balance, account_id, issue_date"),
+    // Factures fournisseurs (bons de commande achats)
+    db.from("purchase_orders")
+      .select("id, number, status, currency, total_ht, created_at")
+      .order("created_at", { ascending: false })
+      .limit(200),
+    // Comptes de trésorerie
+    db.from("treasury_balances")
+      .select("*")
+      .eq("is_active", true)
+      .order("name"),
+    // Dernières transactions
+    db.from("treasury_transactions")
+      .select("id, account_id, type, amount, currency, description, reference, category, date")
+      .order("date", { ascending: false })
+      .limit(200),
+  ])
+
+  // Calcul stats factures clients
+  const allInvoices = invoices ?? []
+  const clientStats = {
+    draft:   allInvoices.filter(i => i.status === "draft"),
+    unpaid:  allInvoices.filter(i => i.status === "sent" || i.status === "partial"),
+    overdue: allInvoices.filter(i =>
+      (i.status === "sent" || i.status === "partial") &&
+      i.due_date && i.due_date < today
+    ),
+    draftAmount:   allInvoices.filter(i => i.status === "draft").reduce((s, i) => s + Number(i.total_ht), 0),
+    unpaidAmount:  allInvoices.filter(i => i.status === "sent" || i.status === "partial").reduce((s, i) => s + Number(i.balance), 0),
+    overdueAmount: allInvoices.filter(i => (i.status === "sent" || i.status === "partial") && i.due_date && i.due_date < today).reduce((s, i) => s + Number(i.balance), 0),
+  }
+
+  // Calcul stats achats
+  const allPurchases = purchases ?? []
+  const purchaseStats = {
+    draft:        allPurchases.filter(p => p.status === "draft"),
+    toPay:        allPurchases.filter(p => p.status === "confirmed"),
+    draftAmount:  allPurchases.filter(p => p.status === "draft").reduce((s, p) => s + Number(p.total_ht), 0),
+    toPayAmount:  allPurchases.filter(p => p.status === "confirmed").reduce((s, p) => s + Number(p.total_ht), 0),
+  }
+
+  const accounts = (treasuryAccounts ?? []).map(a => ({
+    ...a,
+    balance:         Number(a.balance),
+    total_in:        Number(a.total_in),
+    total_out:       Number(a.total_out),
+    initial_balance: Number(a.initial_balance),
+  }))
+
+  return (
+    <ComptabiliteClient
+      locale={locale}
+      clientStats={clientStats}
+      purchaseStats={purchaseStats}
+      accounts={accounts}
+      transactions={transactions ?? []}
+    />
+  )
+}

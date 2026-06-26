@@ -1,0 +1,91 @@
+"use client"
+
+import { useState } from "react"
+import { Plus, Warehouse as WarehouseIcon, MapPin } from "lucide-react"
+import { Button } from "@/components/ui/Button"
+import { Modal } from "@/components/ui/Modal"
+import { Input } from "@/components/ui/Input"
+import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
+import type { Warehouse } from "@/types"
+
+interface Props { warehouses: Warehouse[] }
+
+export default function EntrepotsClient({ warehouses: initial }: Props) {
+  const [warehouses, setWarehouses] = useState(initial)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState({ name: "", city: "", address: "" })
+
+  async function handleSave() {
+    setSaving(true)
+    const { supabase, db } = getCompanyClientBrowser()
+    const { data, error } = await supabase
+      .from("warehouses")
+      .insert([{ ...form, city: form.city || null, address: form.address || null }])
+      .select("*")
+      .single()
+    if (!error && data) {
+      setWarehouses(prev => [...prev, data])
+      setModalOpen(false)
+      setForm({ name: "", city: "", address: "" })
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Sites de stockage</h1>
+          <p className="text-gray-500 text-sm mt-0.5">{warehouses.length} site{warehouses.length !== 1 ? "s" : ""}</p>
+        </div>
+        <Button onClick={() => setModalOpen(true)}>
+          <Plus className="w-4 h-4" />
+          Nouveau site
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {warehouses.map(w => (
+          <div key={w.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
+                <WarehouseIcon className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">{w.name}</h3>
+                {(w.city || w.address) && (
+                  <p className="text-sm text-gray-500 flex items-center gap-1 mt-0.5">
+                    <MapPin className="w-3 h-3" />
+                    {[w.city, w.address].filter(Boolean).join(" — ")}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {/* Placeholder ajouter */}
+        <button
+          onClick={() => setModalOpen(true)}
+          className="border-2 border-dashed border-gray-200 rounded-xl p-5 flex items-center justify-center gap-2 text-gray-400 hover:border-blue-300 hover:text-blue-500 transition-colors"
+        >
+          <Plus className="w-5 h-5" />
+          <span className="text-sm font-medium">Ajouter un site</span>
+        </button>
+      </div>
+
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Nouveau site de stockage">
+        <div className="space-y-4">
+          <Input label="Nom du site" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Dépôt Conakry principal" required />
+          <Input label="Ville" value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} placeholder="Conakry" />
+          <Input label="Adresse" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="Zone industrielle de Kaloum..." />
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="secondary" onClick={() => setModalOpen(false)}>Annuler</Button>
+            <Button onClick={handleSave} disabled={!form.name || saving}>Enregistrer</Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  )
+}
