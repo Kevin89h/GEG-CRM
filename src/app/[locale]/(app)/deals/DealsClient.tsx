@@ -241,8 +241,8 @@ export default function DealsClient({ deals: initial, accounts, profiles, curren
               value={form.currency}
               onChange={e => setForm(f => ({ ...f, currency: e.target.value as "USD" | "GNF" | "EUR" }))}
               options={[
-                { value: "USD", label: "USD" },
                 { value: "GNF", label: "GNF" },
+                { value: "USD", label: "USD" },
                 { value: "EUR", label: "EUR" },
               ]}
             />

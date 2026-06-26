@@ -151,7 +151,7 @@ export default function NouvelAchatClient({ products, locale }: Props) {
               placeholder="TotalEnergies, YESIL, Bridgestone…" />
             <Select label="Devise" value={form.currency}
               onChange={e => setForm(f => ({ ...f, currency: e.target.value as "USD" | "GNF" | "EUR" }))}
-              options={[{ value: "USD", label: "USD — Dollar" }, { value: "EUR", label: "EUR — Euro" }, { value: "GNF", label: "GNF — Franc guinéen" }]} />
+              options={[{ value: "GNF", label: "GNF — Franc guinéen" }, { value: "USD", label: "USD — Dollar" }, { value: "EUR", label: "EUR — Euro" }]} />
             <Input label="Date de commande" type="date" value={form.order_date}
               onChange={e => setForm(f => ({ ...f, order_date: e.target.value }))} />
             <Input label="Date d'arrivée prévue" type="date" value={form.expected_date}
