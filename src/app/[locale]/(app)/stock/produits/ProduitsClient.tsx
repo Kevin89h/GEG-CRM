@@ -1,6 +1,8 @@
 "use client"
 
 import { useState } from "react"
+import Link from "next/link"
+import { useParams } from "next/navigation"
 import { Plus, Search, Package } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { Badge } from "@/components/ui/Badge"
@@ -36,6 +38,8 @@ const colorMap: Record<string, "blue" | "yellow" | "gray" | "green" | "purple"> 
 }
 
 export default function ProduitsClient({ products: initial, categories, units }: Props) {
+  const params = useParams()
+  const locale = params.locale as string
   const [products, setProducts] = useState(initial)
   const [search, setSearch] = useState("")
   const [filterCat, setFilterCat] = useState("all")
@@ -145,8 +149,12 @@ export default function ProduitsClient({ products: initial, categories, units }:
             </thead>
             <tbody className="divide-y divide-gray-50">
               {filtered.map(p => (
-                <tr key={p.id} className="hover:bg-blue-50/30 transition-colors">
-                  <td className="px-4 py-3 font-medium text-gray-900">{p.name}</td>
+                <tr key={p.id} className="hover:bg-blue-50/30 transition-colors cursor-pointer">
+                  <td className="px-4 py-3 font-medium text-gray-900">
+                    <Link href={`/${locale}/stock/produits/${p.id}`} className="hover:text-blue-600 transition-colors">
+                      {p.name}
+                    </Link>
+                  </td>
                   <td className="px-4 py-3 text-gray-500 font-mono text-xs">{p.reference ?? "—"}</td>
                   <td className="px-4 py-3">
                     {p.category ? (
