@@ -21,6 +21,10 @@ interface Settings {
   logo_url?: string | null
   footer_text?: string | null
   bank_details?: string | null
+  bank_name?: string | null
+  bank_account?: string | null
+  bank_iban?: string | null
+  tva_rate?: number | null
   brand_color?: string | null
 }
 
@@ -60,17 +64,30 @@ const FIELD_GROUPS = [
     ],
   },
   {
+    title: "Informations bancaires",
+    icon: Landmark,
+    fields: [
+      { key: "bank_name", label: "Nom de la banque", placeholder: "ECOBANK" },
+      { key: "bank_account", label: "N° de compte", placeholder: "7308052262" },
+      { key: "bank_iban", label: "IBAN / RIB", placeholder: "GN..." },
+    ],
+  },
+  {
     title: "Documents",
     icon: FileText,
     fields: [
+      { key: "tva_rate_str", label: "Taux TVA (%)", placeholder: "18" },
       { key: "footer_text", label: "Pied de page", placeholder: "Merci pour votre confiance. Règlement à 30 jours.", textarea: true },
-      { key: "bank_details", label: "Coordonnées bancaires", placeholder: "Banque : BCRG · IBAN : GN...", textarea: true },
     ],
   },
 ]
 
 export default function DocumentSettingsClient({ settings: initial, companyId }: Props) {
-  const [form, setForm] = useState<Settings>(initial ?? { company_id: companyId, country: "Guinée", brand_color: "#2563eb" })
+  const [form, setForm] = useState<Settings & { tva_rate_str?: string }>(
+    initial
+      ? { ...initial, tva_rate_str: String(initial.tva_rate ?? 18) }
+      : { company_id: companyId, country: "Guinée", brand_color: "#2563eb", tva_rate_str: "18" }
+  )
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -98,7 +115,14 @@ export default function DocumentSettingsClient({ settings: initial, companyId }:
   async function save() {
     setSaving(true)
     const { supabase, db } = getCompanyClientBrowser()
-    const payload = { ...form, company_id: companyId, updated_at: new Date().toISOString() }
+    const tvaStr = (form as Record<string, unknown>).tva_rate_str as string | undefined
+    const payload = {
+      ...form,
+      tva_rate: tvaStr ? parseFloat(tvaStr) : (form.tva_rate ?? 18),
+      company_id: companyId,
+      updated_at: new Date().toISOString(),
+    }
+    delete (payload as Record<string, unknown>).tva_rate_str
 
     if (form.id) {
       await db.from("document_settings").update(payload).eq("id", form.id)

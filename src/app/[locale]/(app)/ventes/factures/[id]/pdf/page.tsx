@@ -1,10 +1,18 @@
 import { createCompanyClient } from "@/lib/company"
+import { createClient } from "@/lib/supabase/server"
+import { getCompanySchema } from "@/lib/company"
 import { notFound } from "next/navigation"
 import FacturePrintPage from "./FacturePrintPage"
 
 export default async function FacturePdfPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params
   const { db } = await createCompanyClient()
+  const publicSupa = await createClient()
+  const schema = await getCompanySchema()
+  const { data: company } = await publicSupa.from("companies").select("id").eq("schema_name", schema).single()
+  const { data: docSettings } = company
+    ? await publicSupa.from("document_settings").select("*").eq("company_id", company.id).maybeSingle()
+    : { data: null }
 
   const { data: invoice } = await db
     .from("invoices")
@@ -42,6 +50,7 @@ export default async function FacturePdfPage({ params }: { params: Promise<{ loc
       accountCountry={(account as Record<string, string> | null)?.country ?? null}
       lines={lines}
       locale={locale}
+      docSettings={docSettings ?? null}
     />
   )
 }
