@@ -97,11 +97,16 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
   async function confirmAndSend() {
     setSaving(true)
     setError(null)
-    const { supabase, db } = getCompanyClientBrowser()
-    await db.from("invoices").update({ status: "sent" }).eq("id", invoice.id)
+    const { db } = getCompanyClientBrowser()
+    const { error: err } = await db.from("invoices").update({ status: "sent" }).eq("id", invoice.id)
+    if (err) {
+      setError(err.message)
+      setSaving(false)
+      return
+    }
+    setInvoice(prev => ({ ...prev, status: "sent" }))
     setConfirmModalOpen(false)
     setSaving(false)
-    router.refresh()
   }
 
   async function resetToDraft() {
