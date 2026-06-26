@@ -40,8 +40,8 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   return (
     <ProductDetailClient
       product={product as Parameters<typeof ProductDetailClient>[0]["product"]}
-      stockLevels={(stockLevels ?? []) as Parameters<typeof ProductDetailClient>[0]["stockLevels"]}
-      moves={(moves ?? []) as Parameters<typeof ProductDetailClient>[0]["moves"]}
+      stockLevels={(stockLevels ?? []) as unknown as Parameters<typeof ProductDetailClient>[0]["stockLevels"]}
+      moves={(moves ?? []) as unknown as Parameters<typeof ProductDetailClient>[0]["moves"]}
       totalStock={totalStock}
       incoming={incoming}
       outgoing={outgoing}
