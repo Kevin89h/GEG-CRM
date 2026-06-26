@@ -1,5 +1,6 @@
 "use client"
 
+import Image from "next/image"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
@@ -75,16 +76,8 @@ export default function Sidebar({ locale, profile, companies, currentSchema }: P
   return (
     <aside className="w-64 flex-shrink-0 bg-slate-900 flex flex-col h-full">
       {/* Brand */}
-      <div className="px-6 py-5 border-b border-slate-800">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-blue-600 flex items-center justify-center">
-            <span className="text-white font-bold text-sm">G</span>
-          </div>
-          <div>
-            <p className="text-white font-semibold text-sm leading-tight">GEG CRM</p>
-            <p className="text-slate-500 text-xs">Global Energy Group</p>
-          </div>
-        </div>
+      <div className="px-6 py-4 border-b border-slate-800">
+        <Image src="/geg-logo-wide.png" alt="GEG" width={160} height={42} className="object-contain" priority />
       </div>
 
       {/* Company switcher */}

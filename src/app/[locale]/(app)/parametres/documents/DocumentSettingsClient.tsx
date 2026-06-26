@@ -86,7 +86,7 @@ export default function DocumentSettingsClient({ settings: initial, companyId }:
   const [form, setForm] = useState<Settings & { tva_rate_str?: string }>(
     initial
       ? { ...initial, tva_rate_str: String(initial.tva_rate ?? 18) }
-      : { company_id: companyId, country: "Guinée", brand_color: "#2563eb", tva_rate_str: "18" }
+      : { company_id: companyId, country: "Guinée", brand_color: "#0d2545", tva_rate_str: "18", logo_url: "/geg-logo.png" }
   )
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)

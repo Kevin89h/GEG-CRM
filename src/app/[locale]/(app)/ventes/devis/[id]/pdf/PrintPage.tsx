@@ -75,7 +75,7 @@ export default function PrintPage({
   const city = docSettings?.city ?? "Conakry"
   const phone = docSettings?.phone ?? ""
   const nif = docSettings?.nif ?? ""
-  const logoUrl = docSettings?.logo_url ?? null
+  const logoUrl = docSettings?.logo_url ?? "/geg-logo.png"
   const bankName = docSettings?.bank_name ?? ""
   const bankAccount = docSettings?.bank_account ?? ""
   const bankIban = docSettings?.bank_iban ?? ""
