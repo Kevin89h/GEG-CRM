@@ -6,7 +6,7 @@ export default async function DealsPage() {
   const { data: { user } } = await supabase.auth.getUser()
 
   const [{ data: deals }, { data: accounts }, { data: profiles }] = await Promise.all([
-    supabase
+    db
       .from("deals")
       .select("*, account:accounts(id, name, type)")
       .order("created_at", { ascending: false }),
