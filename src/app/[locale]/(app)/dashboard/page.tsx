@@ -26,6 +26,11 @@ export default async function DashboardPage() {
   const weekStart = new Date(now)
   weekStart.setDate(now.getDate() - now.getDay())
 
+  const twelveMonthsAgo = new Date(now)
+  twelveMonthsAgo.setMonth(now.getMonth() - 12)
+  const eightWeeksAgo = new Date(now)
+  eightWeeksAgo.setDate(now.getDate() - 56)
+
   const [
     { count: accountsCount },
     { data: deals },
@@ -35,6 +40,8 @@ export default async function DashboardPage() {
     { data: treasuryStats },
     { data: stockStats },
     { data: allInvoices },
+    { data: recentInvoices },
+    { data: recentPayments },
   ] = await Promise.all([
     supabase.from("accounts").select("*", { count: "exact", head: true }),
     supabase.from("deals")
@@ -52,6 +59,13 @@ export default async function DashboardPage() {
     supabase.from("treasury_balances").select("balance, currency").eq("is_active", true),
     supabase.from("stock_levels").select("quantity, product:products(buy_price, currency)"),
     supabase.from("invoice_totals").select("status"),
+    supabase.from("invoice_totals")
+      .select("total_ht, currency, issue_date")
+      .neq("status", "cancelled")
+      .gte("issue_date", twelveMonthsAgo.toISOString().split("T")[0]),
+    supabase.from("payments")
+      .select("amount, currency, paid_at")
+      .gte("paid_at", eightWeeksAgo.toISOString()),
   ])
 
   const openDeals = (deals ?? []).filter((d: Record<string, unknown>) => !["won", "lost"].includes(d.stage as string))
@@ -73,6 +87,69 @@ export default async function DashboardPage() {
     if (!product?.buy_price) return sum
     return sum + Number(s.quantity) * product.buy_price
   }, 0)
+
+  // ── Facturation / Paiements par mois (12 derniers mois) ──────────────────
+  const MONTHS_FR = ["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"]
+
+  const monthlyBuckets = Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (11 - i), 1)
+    return { key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, label: `${MONTHS_FR[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`, invoiced: 0, paid: 0 }
+  })
+  const monthMap: Record<string, (typeof monthlyBuckets)[0]> = {}
+  for (const b of monthlyBuckets) monthMap[b.key] = b
+
+  for (const inv of (recentInvoices ?? []) as Array<{ total_ht: number; currency: string; issue_date: string }>) {
+    if (!inv.issue_date) continue
+    const key = inv.issue_date.slice(0, 7)
+    if (monthMap[key]) monthMap[key].invoiced += inv.total_ht ?? 0
+  }
+  for (const p of (recentPayments ?? []) as Array<{ amount: number; currency: string; paid_at: string }>) {
+    if (!p.paid_at) continue
+    const key = p.paid_at.slice(0, 7)
+    if (monthMap[key]) monthMap[key].paid += p.amount ?? 0
+  }
+
+  // ── Facturation / Paiements par semaine (8 dernières semaines) ───────────
+  // Monday of each week
+  const weeklyBuckets = Array.from({ length: 8 }, (_, i) => {
+    const d = new Date(now)
+    const dayOfWeek = d.getDay() === 0 ? 6 : d.getDay() - 1 // 0=Mon
+    d.setDate(d.getDate() - dayOfWeek - (7 - i) * 7 + 7)
+    d.setHours(0, 0, 0, 0)
+    const dd = String(d.getDate()).padStart(2, "0")
+    const mm = MONTHS_FR[d.getMonth()]
+    return { mondayMs: d.getTime(), label: `${dd} ${mm}`, invoiced: 0, paid: 0 }
+  })
+
+  for (const inv of (recentInvoices ?? []) as Array<{ total_ht: number; issue_date: string }>) {
+    if (!inv.issue_date) continue
+    const d = new Date(inv.issue_date)
+    for (let i = weeklyBuckets.length - 1; i >= 0; i--) {
+      const bucket = weeklyBuckets[i]
+      const nextMs = i < weeklyBuckets.length - 1 ? weeklyBuckets[i + 1].mondayMs : Infinity
+      if (d.getTime() >= bucket.mondayMs && d.getTime() < nextMs) {
+        bucket.invoiced += inv.total_ht ?? 0
+        break
+      }
+    }
+  }
+  for (const p of (recentPayments ?? []) as Array<{ amount: number; paid_at: string }>) {
+    if (!p.paid_at) continue
+    const d = new Date(p.paid_at)
+    for (let i = weeklyBuckets.length - 1; i >= 0; i--) {
+      const bucket = weeklyBuckets[i]
+      const nextMs = i < weeklyBuckets.length - 1 ? weeklyBuckets[i + 1].mondayMs : Infinity
+      if (d.getTime() >= bucket.mondayMs && d.getTime() < nextMs) {
+        bucket.paid += p.amount ?? 0
+        break
+      }
+    }
+  }
+
+  const billingData = {
+    monthly: monthlyBuckets.map(({ label, invoiced, paid }) => ({ label, invoiced, paid })),
+    weekly: weeklyBuckets.map(({ label, invoiced, paid }) => ({ label, invoiced, paid })),
+  }
 
   // Pipeline chart data
   const STAGE_META: Record<string, { label: string; color: string; order: number }> = {
@@ -179,7 +256,7 @@ export default async function DashboardPage() {
         ))}
       </div>
 
-      <DashboardCharts pipeline={pipeline} invoiceStatus={invoiceStatus} />
+      <DashboardCharts pipeline={pipeline} invoiceStatus={invoiceStatus} billingData={billingData} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
