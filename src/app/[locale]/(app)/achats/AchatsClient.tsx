@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
+import { useTranslations } from "next-intl"
 import {
   Plus, Search, LayoutList, LayoutGrid, ChevronLeft, ChevronRight,
   Clock, CheckCircle2, XCircle, FileText, AlertTriangle, Calendar,
@@ -25,14 +26,6 @@ interface Props {
   orders: Order[]
 }
 
-const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; dot: string }> = {
-  draft:     { label: "Demande de prix", bg: "bg-blue-50",    text: "text-blue-700",    dot: "bg-blue-400" },
-  sent:      { label: "Envoyé",          bg: "bg-purple-50",  text: "text-purple-700",  dot: "bg-purple-400" },
-  confirmed: { label: "Bon de commande", bg: "bg-green-50",   text: "text-green-700",   dot: "bg-green-500" },
-  received:  { label: "Réceptionné",     bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-500" },
-  cancelled: { label: "Annulé",          bg: "bg-red-50",     text: "text-red-700",     dot: "bg-red-400" },
-}
-
 type Tab = "all" | "rfq" | "po"
 
 function isOverdue(dateStr: string | null) {
@@ -40,21 +33,30 @@ function isOverdue(dateStr: string | null) {
   return new Date(dateStr) < new Date(new Date().toDateString())
 }
 
-function relativeDate(dateStr: string | null, locale: string): { label: string; overdue: boolean } {
-  if (!dateStr) return { label: "—", overdue: false }
-  const d = new Date(dateStr)
-  const now = new Date()
-  const diff = Math.round((d.getTime() - now.getTime()) / 86400000)
-  if (diff === 0) return { label: "Aujourd'hui", overdue: false }
-  if (diff === -1) return { label: "Hier", overdue: true }
-  if (diff < 0) return { label: `Il y a ${Math.abs(diff)} jours`, overdue: true }
-  if (diff === 1) return { label: "Demain", overdue: false }
-  return { label: formatDate(dateStr, locale), overdue: false }
-}
-
 export default function AchatsClient({ orders }: Props) {
   const params = useParams()
   const locale = params.locale as string
+  const t = useTranslations("achats")
+
+  const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; dot: string }> = {
+    draft:     { label: t("statusDraft"),     bg: "bg-blue-50",    text: "text-blue-700",    dot: "bg-blue-400" },
+    sent:      { label: t("statusSent"),      bg: "bg-purple-50",  text: "text-purple-700",  dot: "bg-purple-400" },
+    confirmed: { label: t("statusConfirmed"), bg: "bg-green-50",   text: "text-green-700",   dot: "bg-green-500" },
+    received:  { label: t("statusReceived"),  bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-500" },
+    cancelled: { label: t("statusCancelled"), bg: "bg-red-50",     text: "text-red-700",     dot: "bg-red-400" },
+  }
+
+  function relativeDate(dateStr: string | null, locale: string): { label: string; overdue: boolean } {
+    if (!dateStr) return { label: "—", overdue: false }
+    const d = new Date(dateStr)
+    const now = new Date()
+    const diff = Math.round((d.getTime() - now.getTime()) / 86400000)
+    if (diff === 0) return { label: t("dateToday"), overdue: false }
+    if (diff === -1) return { label: t("dateYesterday"), overdue: true }
+    if (diff < 0) return { label: t("dateDaysAgo", { count: Math.abs(diff) }), overdue: true }
+    if (diff === 1) return { label: t("dateTomorrow"), overdue: false }
+    return { label: formatDate(dateStr, locale), overdue: false }
+  }
 
   const [tab, setTab] = useState<Tab>("all")
   const [search, setSearch] = useState("")
@@ -107,9 +109,9 @@ export default function AchatsClient({ orders }: Props) {
   function goPage(n: number) { setPage(Math.min(Math.max(1, n), totalPages)) }
 
   const TABS: { key: Tab; label: string; count: number }[] = [
-    { key: "all", label: "Toutes",          count: orders.length },
-    { key: "rfq", label: "Demandes de prix", count: rfqOrders.length },
-    { key: "po",  label: "Bons de commande", count: poOrders.length },
+    { key: "all", label: t("tabAll"),  count: orders.length },
+    { key: "rfq", label: t("tabRfq"),  count: rfqOrders.length },
+    { key: "po",  label: t("tabPo"),   count: poOrders.length },
   ]
 
   return (
@@ -120,23 +122,23 @@ export default function AchatsClient({ orders }: Props) {
           href={`/${locale}/achats/nouveau`}
           className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded bg-[#7c3aed] text-white hover:bg-[#6d28d9] transition"
         >
-          <Plus className="w-3.5 h-3.5" /> Nouveau
+          <Plus className="w-3.5 h-3.5" /> {t("btnNew")}
         </Link>
 
         {/* Tabs */}
         <div className="flex items-center gap-1 overflow-x-auto">
-          {TABS.map(t => (
+          {TABS.map(tab => (
             <button
-              key={t.key}
-              onClick={() => { setTab(t.key); setPage(1) }}
+              key={tab.key}
+              onClick={() => { setTab(tab.key); setPage(1) }}
               className={`whitespace-nowrap px-3 py-1.5 text-sm rounded transition font-medium ${
-                tab === t.key
+                tab.key === tab.key
                   ? "bg-gray-100 text-gray-900"
                   : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
               }`}
             >
-              {t.label}
-              <span className="ml-1.5 text-xs text-gray-400">({t.count})</span>
+              {tab.label}
+              <span className="ml-1.5 text-xs text-gray-400">({tab.count})</span>
             </button>
           ))}
         </div>
@@ -147,7 +149,7 @@ export default function AchatsClient({ orders }: Props) {
           <input
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1) }}
-            placeholder="Rechercher..."
+            placeholder={t("searchPlaceholder")}
             className="pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 w-full sm:w-60"
           />
         </div>
@@ -177,26 +179,26 @@ export default function AchatsClient({ orders }: Props) {
           <thead>
             <tr className="text-xs text-gray-400 uppercase tracking-wide">
               <th className="py-2 pr-6 font-medium text-left w-16"></th>
-              <th className="py-2 px-4 font-medium text-center">Nouveau</th>
-              <th className="py-2 px-4 font-medium text-center">Envoyé</th>
-              <th className="py-2 px-4 font-medium text-center text-orange-500">Demande de prix en retard</th>
-              <th className="py-2 px-4 font-medium text-center">Non confirmé</th>
-              <th className="py-2 px-4 font-medium text-center text-red-500">Réception en retard</th>
+              <th className="py-2 px-4 font-medium text-center">{t("statsNew")}</th>
+              <th className="py-2 px-4 font-medium text-center">{t("statsSent")}</th>
+              <th className="py-2 px-4 font-medium text-center text-orange-500">{t("statsRfqOverdue")}</th>
+              <th className="py-2 px-4 font-medium text-center">{t("statsUnconfirmed")}</th>
+              <th className="py-2 px-4 font-medium text-center text-red-500">{t("statsReceiptOverdue")}</th>
               <th className="py-2 px-4 font-medium text-center">OTD</th>
-              <th className="py-2 px-4 font-medium text-center">Jours pour commander</th>
+              <th className="py-2 px-4 font-medium text-center">{t("statsDaysToOrder")}</th>
             </tr>
           </thead>
           <tbody>
             {[
-              { label: "Tous",  nouveau: stats.nouveau, envoye: stats.envoye, retard: stats.rfqEnRetard, nonConf: stats.nonConfirme, recepRetard: stats.receptionEnRetard, otd: stats.otd, jours: stats.avgDays },
-              { label: "Mes",   nouveau: 0,             envoye: 0,           retard: 0,                  nonConf: 0,                recepRetard: 0,                        otd: 100,       jours: 0 },
+              { label: t("statsRowAll"), nouveau: stats.nouveau, envoye: stats.envoye, retard: stats.rfqEnRetard, nonConf: stats.nonConfirme, recepRetard: stats.receptionEnRetard, otd: stats.otd, jours: stats.avgDays },
+              { label: t("statsRowMine"), nouveau: 0,             envoye: 0,           retard: 0,                  nonConf: 0,                recepRetard: 0,                        otd: 100,       jours: 0 },
             ].map(row => (
               <tr key={row.label} className="border-t border-gray-100">
                 <td className="py-2 pr-6 text-xs font-medium text-gray-500">{row.label}</td>
                 <td className="py-2 px-4 text-center">
                   <button className="group flex flex-col items-center gap-0.5 mx-auto hover:text-blue-600 transition">
                     <span className={`text-lg font-semibold ${row.nouveau > 0 ? "text-blue-600" : "text-gray-400"}`}>{row.nouveau}</span>
-                    <span className="text-[10px] text-gray-400 group-hover:text-blue-500">Nouveau</span>
+                    <span className="text-[10px] text-gray-400 group-hover:text-blue-500">{t("statsNew")}</span>
                   </button>
                 </td>
                 <td className="py-2 px-4 text-center">
@@ -228,7 +230,7 @@ export default function AchatsClient({ orders }: Props) {
         {paged.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-200 py-20 text-center text-gray-400">
             <FileText className="w-10 h-10 mx-auto mb-3 opacity-30" />
-            <p className="text-sm">Aucune commande trouvée</p>
+            <p className="text-sm">{t("emptyOrders")}</p>
           </div>
         ) : (
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
@@ -239,14 +241,14 @@ export default function AchatsClient({ orders }: Props) {
                   <th className="w-8 px-4 py-3 hidden sm:table-cell">
                     <input type="checkbox" className="rounded border-gray-300" />
                   </th>
-                  <th className="text-left px-4 py-3">Référence</th>
-                  <th className="text-left px-4 py-3">Fournisseur</th>
-                  <th className="text-left px-4 py-3 hidden md:table-cell">Société</th>
-                  <th className="text-left px-4 py-3 hidden md:table-cell">Acheteur</th>
-                  <th className="text-left px-4 py-3 hidden sm:table-cell">Échéance</th>
-                  <th className="text-left px-4 py-3 hidden lg:table-cell">Activités</th>
-                  <th className="text-right px-4 py-3">Total</th>
-                  <th className="text-left px-4 py-3">Statut</th>
+                  <th className="text-left px-4 py-3">{t("colReference")}</th>
+                  <th className="text-left px-4 py-3">{t("colSupplier")}</th>
+                  <th className="text-left px-4 py-3 hidden md:table-cell">{t("colCompany")}</th>
+                  <th className="text-left px-4 py-3 hidden md:table-cell">{t("colBuyer")}</th>
+                  <th className="text-left px-4 py-3 hidden sm:table-cell">{t("colDueDate")}</th>
+                  <th className="text-left px-4 py-3 hidden lg:table-cell">{t("colActivities")}</th>
+                  <th className="text-right px-4 py-3">{t("colTotal")}</th>
+                  <th className="text-left px-4 py-3">{t("colStatus")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -302,12 +304,12 @@ export default function AchatsClient({ orders }: Props) {
             {/* Footer */}
             {displayed.length > pageSize && (
               <div className="border-t border-gray-100 px-4 py-3 flex items-center justify-between text-xs text-gray-500">
-                <span>{displayed.length} enregistrements</span>
+                <span>{t("footerRecords", { count: displayed.length })}</span>
                 <div className="flex items-center gap-1">
                   <button onClick={() => goPage(page - 1)} disabled={page === 1} className="px-2 py-1 rounded hover:bg-gray-100 disabled:opacity-30">
                     <ChevronLeft className="w-3.5 h-3.5" />
                   </button>
-                  <span>Page {page} / {totalPages}</span>
+                  <span>{t("footerPage", { page, totalPages })}</span>
                   <button onClick={() => goPage(page + 1)} disabled={page === totalPages} className="px-2 py-1 rounded hover:bg-gray-100 disabled:opacity-30">
                     <ChevronRight className="w-3.5 h-3.5" />
                   </button>

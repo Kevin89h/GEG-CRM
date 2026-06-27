@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Plus, Trash2, ArrowLeft, Info } from "lucide-react"
 import Link from "next/link"
+import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
@@ -19,23 +20,8 @@ interface Line {
   unit_price: string
 }
 
-const INCOTERMS = [
-  { value: "EXW", label: "EXW — Ex Works (départ usine)" },
-  { value: "FOB", label: "FOB — Free On Board" },
-  { value: "CFR", label: "CFR — Cost and Freight" },
-  { value: "CIF", label: "CIF — Cost, Insurance & Freight" },
-  { value: "DDP", label: "DDP — Delivered Duty Paid" },
-]
-
-const INCOTERM_INFO: Record<string, string> = {
-  EXW: "Prix départ usine — tu gères tout le transport.",
-  FOB: "Fournisseur livre au port. Transport + assurance à ta charge.",
-  CFR: "Prix inclut le fret maritime. Assurance à ta charge.",
-  CIF: "Prix inclut fret + assurance maritime.",
-  DDP: "Livraison à destination, tous frais inclus.",
-}
-
 export default function NouvelAchatClient({ products, locale }: Props) {
+  const t = useTranslations("achats")
   const router = useRouter()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -53,6 +39,22 @@ export default function NouvelAchatClient({ products, locale }: Props) {
   const [lines, setLines] = useState<Line[]>([
     { product_id: "", description: "", quantity: "1", unit_price: "0" },
   ])
+
+  const INCOTERMS = [
+    { value: "EXW", label: t("incotermEXW") },
+    { value: "FOB", label: t("incotermFOB") },
+    { value: "CFR", label: t("incotermCFR") },
+    { value: "CIF", label: t("incotermCIF") },
+    { value: "DDP", label: t("incotermDDP") },
+  ]
+
+  const INCOTERM_INFO: Record<string, string> = {
+    EXW: t("incotermInfoEXW"),
+    FOB: t("incotermInfoFOB"),
+    CFR: t("incotermInfoCFR"),
+    CIF: t("incotermInfoCIF"),
+    DDP: t("incotermInfoDDP"),
+  }
 
   function setLine(i: number, k: keyof Line, v: string) {
     setLines(ls => ls.map((l, idx) => {
@@ -80,14 +82,14 @@ export default function NouvelAchatClient({ products, locale }: Props) {
   const showInsurance = ["CIF", "DDP"].includes(form.incoterm)
 
   async function handleSave() {
-    if (!form.supplier_name) { setError("Nom du fournisseur requis"); return }
-    if (lines.some(l => !l.description)) { setError("Chaque ligne doit avoir une description"); return }
+    if (!form.supplier_name) { setError(t("errorSupplierRequired")); return }
+    if (lines.some(l => !l.description)) { setError(t("errorLineDescription")); return }
 
     setSaving(true)
     setError(null)
     const { supabase, db } = getCompanyClientBrowser()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setError("Non authentifié"); setSaving(false); return }
+    if (!user) { setError(t("errorNotAuthenticated")); setSaving(false); return }
 
     const { data: order, error: err } = await db
       .from("purchase_orders")
@@ -107,7 +109,7 @@ export default function NouvelAchatClient({ products, locale }: Props) {
       .select("id")
       .single()
 
-    if (err || !order) { setError(err?.message ?? "Erreur"); setSaving(false); return }
+    if (err || !order) { setError(err?.message ?? t("errorGeneric")); setSaving(false); return }
 
     await db.from("purchase_order_lines").insert(
       lines.map((l, i) => ({
@@ -122,8 +124,8 @@ export default function NouvelAchatClient({ products, locale }: Props) {
 
     // Créer automatiquement les purchase_costs pour fret et assurance
     const costsToCreate = []
-    if (freight > 0) costsToCreate.push({ order_id: order.id, type: "transport_maritime", label: "Fret maritime", amount: freight, currency: form.currency })
-    if (insurance > 0) costsToCreate.push({ order_id: order.id, type: "assurance", label: "Assurance maritime", amount: insurance, currency: form.currency })
+    if (freight > 0) costsToCreate.push({ order_id: order.id, type: "transport_maritime", label: t("labelSeaFreight"), amount: freight, currency: form.currency })
+    if (insurance > 0) costsToCreate.push({ order_id: order.id, type: "assurance", label: t("labelSeaInsurance"), amount: insurance, currency: form.currency })
     if (costsToCreate.length > 0) {
       await db.from("purchase_costs").insert(costsToCreate)
     }
@@ -134,32 +136,32 @@ export default function NouvelAchatClient({ products, locale }: Props) {
   return (
     <div className="max-w-4xl mx-auto">
       <Link href={`/${locale}/achats`} className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 mb-4 transition-colors">
-        <ArrowLeft className="w-4 h-4" /> Retour aux achats
+        <ArrowLeft className="w-4 h-4" /> {t("backToOrders")}
       </Link>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Nouvelle commande fournisseur</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{t("newOrderTitle")}</h1>
       </div>
 
       <div className="space-y-6">
 
         {/* Fournisseur & conditions */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-          <h2 className="font-semibold text-gray-800 mb-4">Fournisseur & conditions</h2>
+          <h2 className="font-semibold text-gray-800 mb-4">{t("sectionSupplier")}</h2>
           <div className="grid grid-cols-2 gap-4">
-            <Input label="Nom du fournisseur *" value={form.supplier_name}
+            <Input label={t("labelSupplierName")} value={form.supplier_name}
               onChange={e => setForm(f => ({ ...f, supplier_name: e.target.value }))}
               placeholder="TotalEnergies, YESIL, Bridgestone…" />
-            <Select label="Devise" value={form.currency}
+            <Select label={t("labelCurrency")} value={form.currency}
               onChange={e => setForm(f => ({ ...f, currency: e.target.value as "USD" | "GNF" | "EUR" }))}
-              options={[{ value: "GNF", label: "GNF — Franc guinéen" }, { value: "USD", label: "USD — Dollar" }, { value: "EUR", label: "EUR — Euro" }]} />
-            <Input label="Date de commande" type="date" value={form.order_date}
+              options={[{ value: "GNF", label: t("currencyGNF") }, { value: "USD", label: t("currencyUSD") }, { value: "EUR", label: t("currencyEUR") }]} />
+            <Input label={t("labelOrderDate")} type="date" value={form.order_date}
               onChange={e => setForm(f => ({ ...f, order_date: e.target.value }))} />
-            <Input label="Date d'arrivée prévue" type="date" value={form.expected_date}
+            <Input label={t("labelExpectedDate")} type="date" value={form.expected_date}
               onChange={e => setForm(f => ({ ...f, expected_date: e.target.value }))} />
 
             {/* Incoterm — prend toute la largeur */}
             <div className="col-span-2">
-              <label className="block text-xs font-medium text-gray-600 mb-1.5">Incoterm</label>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">{t("labelIncoterm")}</label>
               <div className="grid grid-cols-5 gap-2">
                 {INCOTERMS.map(inc => (
                   <button key={inc.value} type="button"
@@ -183,20 +185,20 @@ export default function NouvelAchatClient({ products, locale }: Props) {
 
         {/* Lignes produits */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-          <h2 className="font-semibold text-gray-800 mb-4">Produits commandés</h2>
+          <h2 className="font-semibold text-gray-800 mb-4">{t("sectionProducts")}</h2>
           <div className="space-y-3">
             <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-400 px-1">
-              <div className="col-span-4">Produit</div>
-              <div className="col-span-4">Description</div>
-              <div className="col-span-2 text-right">Quantité</div>
-              <div className="col-span-2 text-right">Prix unitaire ({form.incoterm})</div>
+              <div className="col-span-4">{t("colProduct")}</div>
+              <div className="col-span-4">{t("colDescription")}</div>
+              <div className="col-span-2 text-right">{t("colQuantity")}</div>
+              <div className="col-span-2 text-right">{t("colUnitPrice")} ({form.incoterm})</div>
             </div>
             {lines.map((l, i) => (
               <div key={i} className="grid grid-cols-12 gap-2 items-center">
                 <div className="col-span-4">
                   <select value={l.product_id} onChange={e => setLine(i, "product_id", e.target.value)}
                     className="w-full px-2 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
-                    <option value="">— libre —</option>
+                    <option value="">{t("optionFree")}</option>
                     {products.map(p => (
                       <option key={p.id} value={p.id}>
                         {p.reference ? `${p.name} (${p.reference})` : p.name}
@@ -206,7 +208,7 @@ export default function NouvelAchatClient({ products, locale }: Props) {
                 </div>
                 <div className="col-span-4">
                   <input value={l.description} onChange={e => setLine(i, "description", e.target.value)}
-                    placeholder="Description"
+                    placeholder={t("placeholderDescription")}
                     className="w-full px-2 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div className="col-span-2">
@@ -233,17 +235,17 @@ export default function NouvelAchatClient({ products, locale }: Props) {
           <button
             onClick={() => setLines(ls => [...ls, { product_id: "", description: "", quantity: "1", unit_price: "0" }])}
             className="mt-4 flex items-center gap-2 text-sm text-blue-600 hover:text-blue-500 font-medium">
-            <Plus className="w-4 h-4" /> Ajouter un produit
+            <Plus className="w-4 h-4" /> {t("addProduct")}
           </button>
         </div>
 
         {/* Frais & remise */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-          <h2 className="font-semibold text-gray-800 mb-4">Frais & remise</h2>
+          <h2 className="font-semibold text-gray-800 mb-4">{t("sectionFeesDiscount")}</h2>
           <div className="grid grid-cols-3 gap-4">
             {showFreight && (
               <Input
-                label={`Fret maritime (${form.currency})`}
+                label={`${t("labelFreight")} (${form.currency})`}
                 type="number" min="0" step="any"
                 value={form.freight_cost}
                 onChange={e => setForm(f => ({ ...f, freight_cost: e.target.value }))}
@@ -252,7 +254,7 @@ export default function NouvelAchatClient({ products, locale }: Props) {
             )}
             {showInsurance && (
               <Input
-                label={`Assurance maritime (${form.currency})`}
+                label={`${t("labelInsurance")} (${form.currency})`}
                 type="number" min="0" step="any"
                 value={form.insurance_cost}
                 onChange={e => setForm(f => ({ ...f, insurance_cost: e.target.value }))}
@@ -260,7 +262,7 @@ export default function NouvelAchatClient({ products, locale }: Props) {
               />
             )}
             <Input
-              label="Remise fournisseur (%)"
+              label={t("labelSupplierDiscount")}
               type="number" min="0" max="100" step="0.01"
               value={form.global_discount_pct}
               onChange={e => setForm(f => ({ ...f, global_discount_pct: e.target.value }))}
@@ -272,29 +274,29 @@ export default function NouvelAchatClient({ products, locale }: Props) {
           <div className="mt-6 pt-5 border-t border-gray-100 flex justify-end">
             <div className="space-y-1.5 min-w-[280px]">
               <div className="flex justify-between text-sm text-gray-500">
-                <span>Sous-total marchandises</span>
+                <span>{t("subtotalGoods")}</span>
                 <span className="font-medium text-gray-800">{subtotal.toLocaleString("fr")} {form.currency}</span>
               </div>
               {showFreight && freight > 0 && (
                 <div className="flex justify-between text-sm text-gray-500">
-                  <span>+ Fret maritime</span>
+                  <span>+ {t("summaryFreight")}</span>
                   <span className="font-medium text-gray-800">{freight.toLocaleString("fr")} {form.currency}</span>
                 </div>
               )}
               {showInsurance && insurance > 0 && (
                 <div className="flex justify-between text-sm text-gray-500">
-                  <span>+ Assurance</span>
+                  <span>+ {t("summaryInsurance")}</span>
                   <span className="font-medium text-gray-800">{insurance.toLocaleString("fr")} {form.currency}</span>
                 </div>
               )}
               {discountPct > 0 && (
                 <div className="flex justify-between text-sm text-red-600">
-                  <span>− Remise ({discountPct}%)</span>
+                  <span>− {t("summaryDiscount")} ({discountPct}%)</span>
                   <span className="font-medium">−{discountAmt.toLocaleString("fr")} {form.currency}</span>
                 </div>
               )}
               <div className="flex justify-between pt-2 border-t border-gray-200">
-                <span className="font-semibold text-gray-900">Total {form.incoterm}</span>
+                <span className="font-semibold text-gray-900">{t("totalLabel")} {form.incoterm}</span>
                 <span className="text-xl font-bold text-blue-600">{totalCIF.toLocaleString("fr")} {form.currency}</span>
               </div>
             </div>
@@ -303,19 +305,19 @@ export default function NouvelAchatClient({ products, locale }: Props) {
 
         {/* Notes */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-          <h2 className="font-semibold text-gray-800 mb-4">Notes internes</h2>
+          <h2 className="font-semibold text-gray-800 mb-4">{t("sectionNotes")}</h2>
           <textarea rows={3} value={form.notes}
             onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-            placeholder="Instructions de livraison, références douanières…"
+            placeholder={t("placeholderNotes")}
             className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
         </div>
 
         {error && <p className="text-sm text-red-600 bg-red-50 px-4 py-3 rounded-lg">{error}</p>}
 
         <div className="flex justify-end gap-3 pb-8">
-          <Button variant="secondary" onClick={() => router.back()}>Annuler</Button>
+          <Button variant="secondary" onClick={() => router.back()}>{t("cancel")}</Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving ? "Création…" : "Créer la commande"}
+            {saving ? t("creating") : t("createOrder")}
           </Button>
         </div>
       </div>

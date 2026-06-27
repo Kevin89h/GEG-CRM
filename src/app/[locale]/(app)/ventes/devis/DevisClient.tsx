@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
+import { useTranslations } from "next-intl"
 import {
   Plus, Search, ChevronLeft, ChevronRight, LayoutList, LayoutGrid,
   FileText, Clock,
@@ -26,18 +27,19 @@ interface Props {
   orders: Order[]
 }
 
-const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; dot: string }> = {
-  draft:     { label: "Devis",           bg: "bg-gray-50",    text: "text-gray-600",    dot: "bg-gray-400" },
-  confirmed: { label: "Bon de commande", bg: "bg-green-50",   text: "text-green-700",   dot: "bg-green-500" },
-  invoiced:  { label: "Facturé",         bg: "bg-purple-50",  text: "text-purple-700",  dot: "bg-purple-500" },
-  cancelled: { label: "Annulé",          bg: "bg-red-50",     text: "text-red-700",     dot: "bg-red-400" },
-}
-
 type Tab = "all" | "draft" | "confirmed"
 
 export default function DevisClient({ orders }: Props) {
   const params = useParams()
   const locale = params.locale as string
+  const t = useTranslations("devis")
+
+  const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; dot: string }> = {
+    draft:     { label: t("statusDraft"),     bg: "bg-gray-50",    text: "text-gray-600",    dot: "bg-gray-400" },
+    confirmed: { label: t("statusConfirmed"), bg: "bg-green-50",   text: "text-green-700",   dot: "bg-green-500" },
+    invoiced:  { label: t("statusInvoiced"),  bg: "bg-purple-50",  text: "text-purple-700",  dot: "bg-purple-500" },
+    cancelled: { label: t("statusCancelled"), bg: "bg-red-50",     text: "text-red-700",     dot: "bg-red-400" },
+  }
 
   const [tab, setTab] = useState<Tab>("all")
   const [search, setSearch] = useState("")
@@ -76,9 +78,9 @@ export default function DevisClient({ orders }: Props) {
   function goPage(n: number) { setPage(Math.min(Math.max(1, n), totalPages)) }
 
   const TABS: { key: Tab; label: string; count: number }[] = [
-    { key: "all",       label: "Tout",            count: orders.length },
-    { key: "draft",     label: "Devis",           count: drafts.length },
-    { key: "confirmed", label: "Bons de commande", count: confirmed.length },
+    { key: "all",       label: t("tabAll"),       count: orders.length },
+    { key: "draft",     label: t("tabDraft"),     count: drafts.length },
+    { key: "confirmed", label: t("tabConfirmed"), count: confirmed.length },
   ]
 
   return (
@@ -89,23 +91,23 @@ export default function DevisClient({ orders }: Props) {
           href={`/${locale}/ventes/devis/nouveau`}
           className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded bg-[#7c3aed] text-white hover:bg-[#6d28d9] transition"
         >
-          <Plus className="w-3.5 h-3.5" /> Nouveau
+          <Plus className="w-3.5 h-3.5" /> {t("new")}
         </Link>
 
         {/* Tabs */}
         <div className="flex items-center gap-1 ml-2">
-          {TABS.map(t => (
+          {TABS.map(tab => (
             <button
-              key={t.key}
-              onClick={() => { setTab(t.key); setPage(1) }}
+              key={tab.key}
+              onClick={() => { setTab(tab.key); setPage(1) }}
               className={`px-3 py-1.5 text-sm rounded transition font-medium ${
-                tab === t.key
+                tab.key === tab.key
                   ? "bg-gray-100 text-gray-900"
                   : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
               }`}
             >
-              {t.label}
-              <span className="ml-1.5 text-xs text-gray-400">({t.count})</span>
+              {tab.label}
+              <span className="ml-1.5 text-xs text-gray-400">({tab.count})</span>
             </button>
           ))}
         </div>
@@ -116,7 +118,7 @@ export default function DevisClient({ orders }: Props) {
           <input
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1) }}
-            placeholder="Rechercher..."
+            placeholder={t("searchPlaceholder")}
             className="pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 w-60"
           />
         </div>
@@ -142,10 +144,10 @@ export default function DevisClient({ orders }: Props) {
       <div className="bg-white border-b border-gray-200 px-6 py-3">
         <div className="flex items-stretch gap-px">
           {[
-            { label: "Devis",            value: stats.devis,       color: stats.devis > 0 ? "text-blue-600" : "text-gray-300",   bg: stats.devis > 0 ? "bg-blue-50" : "" },
-            { label: "Bon de commande",  value: stats.bonCommande, color: stats.bonCommande > 0 ? "text-green-600" : "text-gray-300", bg: stats.bonCommande > 0 ? "bg-green-50" : "" },
-            { label: "À facturer",       value: stats.aFacturer,   color: stats.aFacturer > 0 ? "text-orange-500" : "text-gray-300", bg: stats.aFacturer > 0 ? "bg-orange-50" : "" },
-            { label: "Annulé",           value: stats.annule,      color: stats.annule > 0 ? "text-red-500" : "text-gray-300",   bg: "" },
+            { label: t("statDevis"),       value: stats.devis,       color: stats.devis > 0 ? "text-blue-600" : "text-gray-300",   bg: stats.devis > 0 ? "bg-blue-50" : "" },
+            { label: t("statBonCommande"), value: stats.bonCommande, color: stats.bonCommande > 0 ? "text-green-600" : "text-gray-300", bg: stats.bonCommande > 0 ? "bg-green-50" : "" },
+            { label: t("statAFacturer"),   value: stats.aFacturer,   color: stats.aFacturer > 0 ? "text-orange-500" : "text-gray-300", bg: stats.aFacturer > 0 ? "bg-orange-50" : "" },
+            { label: t("statAnnule"),      value: stats.annule,      color: stats.annule > 0 ? "text-red-500" : "text-gray-300",   bg: "" },
           ].map(s => (
             <div key={s.label} className={`flex-1 flex flex-col items-center py-3 px-4 rounded-lg mx-1 ${s.bg}`}>
               <span className={`text-2xl font-bold tabular-nums ${s.color}`}>{s.value}</span>
@@ -154,7 +156,7 @@ export default function DevisClient({ orders }: Props) {
           ))}
           <div className="w-px bg-gray-200 mx-3" />
           <div className="flex flex-col items-end justify-center px-4">
-            <span className="text-xs text-gray-400">Pipeline confirmé</span>
+            <span className="text-xs text-gray-400">{t("pipelineConfirmed")}</span>
             <span className="text-lg font-bold text-gray-800 tabular-nums">
               {formatCurrency(stats.pipeline, stats.pipelineCur as "GNF" | "USD" | "EUR")}
             </span>
@@ -167,7 +169,7 @@ export default function DevisClient({ orders }: Props) {
         {paged.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-200 py-20 text-center text-gray-400">
             <FileText className="w-10 h-10 mx-auto mb-3 opacity-30" />
-            <p className="text-sm">Aucun devis trouvé</p>
+            <p className="text-sm">{t("noResults")}</p>
           </div>
         ) : (
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
@@ -177,13 +179,13 @@ export default function DevisClient({ orders }: Props) {
                   <th className="w-8 px-4 py-3">
                     <input type="checkbox" className="rounded border-gray-300" />
                   </th>
-                  <th className="text-left px-4 py-3">N° Commande</th>
-                  <th className="text-left px-4 py-3">Client</th>
-                  <th className="text-left px-4 py-3">Vendeur</th>
-                  <th className="text-left px-4 py-3">Date de commande</th>
-                  <th className="text-left px-4 py-3">Activités</th>
-                  <th className="text-right px-4 py-3">Total HT</th>
-                  <th className="text-left px-4 py-3">Statut</th>
+                  <th className="text-left px-4 py-3">{t("colOrderNumber")}</th>
+                  <th className="text-left px-4 py-3">{t("colClient")}</th>
+                  <th className="text-left px-4 py-3">{t("colSalesperson")}</th>
+                  <th className="text-left px-4 py-3">{t("colOrderDate")}</th>
+                  <th className="text-left px-4 py-3">{t("colActivities")}</th>
+                  <th className="text-right px-4 py-3">{t("colTotalHT")}</th>
+                  <th className="text-left px-4 py-3">{t("colStatus")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -225,12 +227,12 @@ export default function DevisClient({ orders }: Props) {
 
             {displayed.length > pageSize && (
               <div className="border-t border-gray-100 px-4 py-3 flex items-center justify-between text-xs text-gray-500">
-                <span>{displayed.length} enregistrements</span>
+                <span>{displayed.length} {t("records")}</span>
                 <div className="flex items-center gap-1">
                   <button onClick={() => goPage(page - 1)} disabled={page === 1} className="px-2 py-1 rounded hover:bg-gray-100 disabled:opacity-30">
                     <ChevronLeft className="w-3.5 h-3.5" />
                   </button>
-                  <span>Page {page} / {totalPages}</span>
+                  <span>{t("page")} {page} / {totalPages}</span>
                   <button onClick={() => goPage(page + 1)} disabled={page === totalPages} className="px-2 py-1 rounded hover:bg-gray-100 disabled:opacity-30">
                     <ChevronRight className="w-3.5 h-3.5" />
                   </button>

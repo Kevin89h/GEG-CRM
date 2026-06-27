@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Printer, Check, X, ChevronDown } from "lucide-react"
 import Link from "next/link"
+import { useTranslations } from "next-intl"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { formatNumber } from "@/lib/utils"
 
@@ -37,15 +38,6 @@ interface Line {
 
 type Currency = "GNF" | "USD" | "EUR"
 
-const PAYMENT_TERMS = [
-  { value: "",          label: "Immédiat" },
-  { value: "15j",       label: "15 jours" },
-  { value: "30j",       label: "30 jours" },
-  { value: "45j",       label: "45 jours" },
-  { value: "60j",       label: "60 jours" },
-  { value: "avance",    label: "À la commande" },
-]
-
 let _id = 0
 const uid = () => ++_id
 
@@ -63,6 +55,7 @@ function AccountPicker({ accounts, value, onSelect, onCreateNew }: {
   onSelect: (id: string) => void
   onCreateNew: () => void
 }) {
+  const t = useTranslations("devis")
   const [query, setQuery] = useState("")
   const [open, setOpen]   = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -93,7 +86,7 @@ function AccountPicker({ accounts, value, onSelect, onCreateNew }: {
             autoFocus={open}
             value={query}
             onChange={e => { setQuery(e.target.value); setOpen(true) }}
-            placeholder="Tapez pour trouver un client..."
+            placeholder={t("tapezPourTrouverUnClient")}
             className="flex-1 text-sm outline-none bg-transparent placeholder-gray-400"
           />
         )}
@@ -109,7 +102,7 @@ function AccountPicker({ accounts, value, onSelect, onCreateNew }: {
         <div className="absolute z-50 top-full left-0 mt-1 w-full min-w-[320px] bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
           <div className="max-h-56 overflow-y-auto">
             {filtered.length === 0 && query && (
-              <p className="px-4 py-2 text-sm text-gray-400">Aucun résultat pour «&nbsp;{query}&nbsp;»</p>
+              <p className="px-4 py-2 text-sm text-gray-400">{t("aucunResultatPour", { query })}</p>
             )}
             {filtered.map(a => (
               <button
@@ -126,7 +119,7 @@ function AccountPicker({ accounts, value, onSelect, onCreateNew }: {
               onMouseDown={() => { setOpen(false); onCreateNew() }}
               className="w-full text-left px-4 py-2 text-sm text-blue-600 font-medium hover:bg-blue-50 transition-colors flex items-center gap-2"
             >
-              <span className="text-lg leading-none">+</span> Nouveau client
+              <span className="text-lg leading-none">+</span> {t("nouveauClient")}
             </button>
           </div>
         </div>
@@ -143,6 +136,7 @@ function ProductPicker({ products, value, onChange, onCreateNew, lineIndex }: {
   onCreateNew: (lineIndex: number) => void
   lineIndex: number
 }) {
+  const t = useTranslations("devis")
   const [query, setQuery] = useState("")
   const [open, setOpen]   = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -176,7 +170,7 @@ function ProductPicker({ products, value, onChange, onCreateNew, lineIndex }: {
             autoFocus={open}
             value={query}
             onChange={e => { setQuery(e.target.value); setOpen(true) }}
-            placeholder="Chercher un produit…"
+            placeholder={t("chercherUnProduit")}
             className="w-full text-sm outline-none bg-transparent placeholder-gray-400"
           />
         )}
@@ -186,7 +180,7 @@ function ProductPicker({ products, value, onChange, onCreateNew, lineIndex }: {
         <div className="absolute z-50 top-full left-0 mt-1 min-w-[300px] bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
           <div className="max-h-56 overflow-y-auto">
             {filtered.length === 0 && (
-              <p className="px-4 py-2 text-sm text-gray-400">Aucun produit trouvé</p>
+              <p className="px-4 py-2 text-sm text-gray-400">{t("aucunProduitTrouve")}</p>
             )}
             {filtered.map(p => (
               <button
@@ -204,7 +198,7 @@ function ProductPicker({ products, value, onChange, onCreateNew, lineIndex }: {
               onMouseDown={() => { setOpen(false); onCreateNew(lineIndex) }}
               className="w-full text-left px-4 py-2 text-sm text-blue-600 font-medium hover:bg-blue-50 flex items-center gap-2"
             >
-              <span className="text-lg leading-none">+</span> Nouveau produit
+              <span className="text-lg leading-none">+</span> {t("nouveauProduit")}
             </button>
           </div>
         </div>
@@ -234,6 +228,7 @@ export default function NouveauDevisClient({
   accounts: initAccounts, contacts, products: initProducts, employees, units, locale,
 }: Props) {
   const router = useRouter()
+  const t = useTranslations("devis")
 
   const [accounts, setAccounts] = useState(initAccounts)
   const [products, setProducts] = useState(initProducts)
@@ -263,6 +258,15 @@ export default function NouveauDevisClient({
   const [pForm, setPForm] = useState({ name: "", reference: "", sell_price: "", unit_id: "" })
   const [pSaving, setPSaving] = useState(false)
   const [pError,  setPError]  = useState<string | null>(null)
+
+  const PAYMENT_TERMS = [
+    { value: "",          label: t("paymentTermImmediat") },
+    { value: "15j",       label: t("paymentTerm15j") },
+    { value: "30j",       label: t("paymentTerm30j") },
+    { value: "45j",       label: t("paymentTerm45j") },
+    { value: "60j",       label: t("paymentTerm60j") },
+    { value: "avance",    label: t("paymentTermAvance") },
+  ]
 
   /* ── Helpers form ── */
   function setF<K extends keyof typeof form>(k: K, v: typeof form[K]) {
@@ -311,14 +315,14 @@ export default function NouveauDevisClient({
 
   /* ── Création client ── */
   async function handleCreateClient() {
-    if (!cForm.name.trim()) { setCError("Le nom est requis"); return }
+    if (!cForm.name.trim()) { setCError(t("erreurNomRequis")); return }
     setCSaving(true); setCError(null)
     const { db } = getCompanyClientBrowser()
     const { data, error: err } = await db
       .from("accounts")
       .insert([{ name: cForm.name.trim(), type: cForm.type, phone: cForm.phone || null, email: cForm.email || null, country: cForm.country || null, is_active: true }])
       .select("id, name, salesperson_id").single()
-    if (err || !data) { setCError(err?.message ?? "Erreur"); setCSaving(false); return }
+    if (err || !data) { setCError(err?.message ?? t("erreur")); setCSaving(false); return }
     setAccounts(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
     onAccountChange(data.id)
     setShowClientModal(false)
@@ -335,14 +339,14 @@ export default function NouveauDevisClient({
   }
 
   async function handleCreateProduct() {
-    if (!pForm.name.trim()) { setPError("Le nom est requis"); return }
+    if (!pForm.name.trim()) { setPError(t("erreurNomRequis")); return }
     setPSaving(true); setPError(null)
     const { db } = getCompanyClientBrowser()
     const { data, error: err } = await db
       .from("products")
       .insert([{ name: pForm.name.trim(), reference: pForm.reference || null, sell_price: pForm.sell_price ? parseFloat(pForm.sell_price) : null, currency: form.currency, unit_id: pForm.unit_id || null, is_active: true }])
       .select("id, name, reference, sell_price, currency, unit_id").single()
-    if (err || !data) { setPError(err?.message ?? "Erreur"); setPSaving(false); return }
+    if (err || !data) { setPError(err?.message ?? t("erreur")); setPSaving(false); return }
     const unitObj = units.find(u => u.id === data.unit_id) ?? null
     const productWithUnit = { ...data, unit: unitObj ? { id: unitObj.id, name: unitObj.name } : null }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -364,15 +368,15 @@ export default function NouveauDevisClient({
 
   /* ── Enregistrement ── */
   async function handleSave() {
-    if (!form.account_id) { setError("Veuillez sélectionner un client"); return }
+    if (!form.account_id) { setError(t("veuillezselectionnerclient")); return }
     const productLines = lines.filter(l => l.kind === "product")
-    if (productLines.length === 0) { setError("Ajoutez au moins un produit"); return }
-    if (productLines.some(l => !l.description.trim())) { setError("Chaque ligne produit doit avoir une description"); return }
+    if (productLines.length === 0) { setError(t("ajoutezAuMoinsUnProduit")); return }
+    if (productLines.some(l => !l.description.trim())) { setError(t("chaqueLineProduitDescription")); return }
 
     setSaving(true); setError(null)
     const { supabase, db } = getCompanyClientBrowser()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setError("Non authentifié"); setSaving(false); return }
+    if (!user) { setError(t("nonAuthentifie")); setSaving(false); return }
 
     // Générer un numéro unique basé sur le timestamp
     const year = new Date().getFullYear()
@@ -393,7 +397,7 @@ export default function NouveauDevisClient({
     }
 
     const { data: order, error: err } = await db.from("sales_orders").insert([payload]).select("id").single()
-    if (err || !order) { setError(err?.message ?? "Erreur"); setSaving(false); return }
+    if (err || !order) { setError(err?.message ?? t("erreur")); setSaving(false); return }
 
     const lineRows = lines.map((l, i) => {
       return {
@@ -417,10 +421,10 @@ export default function NouveauDevisClient({
       {/* Barre du haut style Odoo */}
       <div className="flex items-center gap-2 mb-0 py-3 border-b border-gray-100 bg-gray-50 px-0 -mx-4 px-4 mb-4">
         <Link href={`/${locale}/ventes/devis`} className="text-sm text-gray-500 hover:text-gray-800 flex items-center gap-1">
-          <ArrowLeft className="w-3.5 h-3.5" /> Devis
+          <ArrowLeft className="w-3.5 h-3.5" /> {t("devis")}
         </Link>
         <span className="text-gray-300">/</span>
-        <span className="text-sm text-gray-700 font-medium">Nouveau</span>
+        <span className="text-sm text-gray-700 font-medium">{t("nouveau")}</span>
       </div>
 
       {/* Boutons d'action style Odoo */}
@@ -431,18 +435,18 @@ export default function NouveauDevisClient({
           className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-40 transition-colors"
         >
           <Check className="w-4 h-4" />
-          {saving ? "Enregistrement…" : "Confirmer"}
+          {saving ? t("enregistrement") : t("confirmer")}
         </button>
         <button className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">
-          <Printer className="w-4 h-4" /> Imprimer
+          <Printer className="w-4 h-4" /> {t("imprimer")}
         </button>
         <button onClick={() => router.back()} className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">
-          Annuler
+          {t("annuler")}
         </button>
 
         {/* Stepper status */}
         <div className="ml-auto flex items-center gap-0">
-          {["Devis", "Envoyé", "Bon de commande"].map((s, i) => (
+          {([t("statusDevis"), t("statusEnvoye"), t("statusBonDeCommande")] as const).map((s, i) => (
             <div key={s} className={`flex items-center ${i > 0 ? "-ml-2" : ""}`}>
               <div className={`px-4 py-1.5 text-xs font-semibold rounded-full border-2 ${
                 i === 0
@@ -462,12 +466,12 @@ export default function NouveauDevisClient({
 
         {/* Zone en-tête du document */}
         <div className="px-8 pt-8 pb-6 border-b border-gray-100">
-          <h1 className="text-3xl font-light text-gray-800 mb-6">Nouveau</h1>
+          <h1 className="text-3xl font-light text-gray-800 mb-6">{t("nouveau")}</h1>
           <div className="grid grid-cols-2 gap-x-16 gap-y-4 text-sm">
             {/* Col gauche */}
             <div className="space-y-3">
               <div className="flex items-start gap-4">
-                <label className="w-36 shrink-0 text-gray-600 pt-1.5">Client</label>
+                <label className="w-36 shrink-0 text-gray-600 pt-1.5">{t("client")}</label>
                 <AccountPicker
                   accounts={accounts}
                   value={form.account_id}
@@ -478,7 +482,7 @@ export default function NouveauDevisClient({
 
               {form.account_id && filteredContacts.length > 0 && (
                 <div className="flex items-center gap-4">
-                  <label className="w-36 shrink-0 text-gray-600">Contact</label>
+                  <label className="w-36 shrink-0 text-gray-600">{t("contact")}</label>
                   <select
                     value={form.contact_id}
                     onChange={e => setF("contact_id", e.target.value)}
@@ -493,7 +497,7 @@ export default function NouveauDevisClient({
               )}
 
               <div className="flex items-center gap-4">
-                <label className="w-36 shrink-0 text-gray-600">Vendeur</label>
+                <label className="w-36 shrink-0 text-gray-600">{t("vendeur")}</label>
                 <select
                   value={form.salesperson_id}
                   onChange={e => {
@@ -502,13 +506,13 @@ export default function NouveauDevisClient({
                   }}
                   className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px]"
                 >
-                  <option value="">— Aucun —</option>
+                  <option value="">{t("aucun")}</option>
                   {employees.map(e => <option key={e.id} value={e.id}>{e.full_name}</option>)}
                 </select>
               </div>
 
               <div className="flex items-center gap-4">
-                <label className="w-36 shrink-0 text-gray-600">Réf. client</label>
+                <label className="w-36 shrink-0 text-gray-600">{t("refClient")}</label>
                 <input
                   value={form.client_order_ref}
                   onChange={e => setF("client_order_ref", e.target.value)}
@@ -521,7 +525,7 @@ export default function NouveauDevisClient({
             {/* Col droite */}
             <div className="space-y-3">
               <div className="flex items-center gap-4">
-                <label className="w-40 shrink-0 text-gray-600">Expiration</label>
+                <label className="w-40 shrink-0 text-gray-600">{t("expiration")}</label>
                 <input
                   type="date" value={form.valid_until}
                   onChange={e => setF("valid_until", e.target.value)}
@@ -530,18 +534,18 @@ export default function NouveauDevisClient({
               </div>
 
               <div className="flex items-center gap-4">
-                <label className="w-40 shrink-0 text-gray-600">Conditions de paiement</label>
+                <label className="w-40 shrink-0 text-gray-600">{t("conditionsDePaiement")}</label>
                 <select
                   value={form.payment_terms}
                   onChange={e => setF("payment_terms", e.target.value)}
                   className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px]"
                 >
-                  {PAYMENT_TERMS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  {PAYMENT_TERMS.map(pt => <option key={pt.value} value={pt.value}>{pt.label}</option>)}
                 </select>
               </div>
 
               <div className="flex items-center gap-4">
-                <label className="w-40 shrink-0 text-gray-600">Devise</label>
+                <label className="w-40 shrink-0 text-gray-600">{t("devise")}</label>
                 <select
                   value={form.currency}
                   onChange={e => setF("currency", e.target.value as Currency)}
@@ -559,7 +563,7 @@ export default function NouveauDevisClient({
         {/* Onglets */}
         <div className="flex border-b border-gray-100 px-8">
           {(["lines", "other"] as const).map(tab => {
-            const labels = { lines: "Lignes de la commande", other: "Autres informations" }
+            const labels = { lines: t("lignesDeLaCommande"), other: t("autresInformations") }
             return (
               <button
                 key={tab}
@@ -581,12 +585,12 @@ export default function NouveauDevisClient({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="text-xs font-semibold text-gray-500 border-b border-gray-100">
-                    <th className="text-left px-8 py-2.5 font-medium">Produit</th>
-                    <th className="text-right px-3 py-2.5 font-medium w-20">Quantité</th>
-                    <th className="text-left px-3 py-2.5 font-medium w-24">Unité d…</th>
-                    <th className="text-right px-3 py-2.5 font-medium w-32">Prix unitaire</th>
-                    <th className="text-right px-3 py-2.5 font-medium w-20">Rem. %</th>
-                    <th className="text-right px-8 py-2.5 font-medium w-32">Montant</th>
+                    <th className="text-left px-8 py-2.5 font-medium">{t("produit")}</th>
+                    <th className="text-right px-3 py-2.5 font-medium w-20">{t("quantite")}</th>
+                    <th className="text-left px-3 py-2.5 font-medium w-24">{t("unite")}</th>
+                    <th className="text-right px-3 py-2.5 font-medium w-32">{t("prixUnitaire")}</th>
+                    <th className="text-right px-3 py-2.5 font-medium w-20">{t("remise")}</th>
+                    <th className="text-right px-8 py-2.5 font-medium w-32">{t("montant")}</th>
                     <th className="w-8 pr-2"></th>
                   </tr>
                 </thead>
@@ -599,7 +603,7 @@ export default function NouveauDevisClient({
                             <input
                               value={l.description}
                               onChange={e => updateLine(l.id, { description: e.target.value })}
-                              placeholder="Note…"
+                              placeholder={t("notePlaceholder")}
                               className="w-full text-sm text-gray-500 italic outline-none bg-transparent border-b border-dashed border-gray-200 focus:border-blue-400 py-0.5"
                             />
                           </td>
@@ -624,7 +628,7 @@ export default function NouveauDevisClient({
                               <input
                                 value={l.description}
                                 onChange={e => updateLine(l.id, { description: e.target.value })}
-                                placeholder="Description…"
+                                placeholder={t("descriptionPlaceholder")}
                                 className="mt-0.5 w-full text-xs text-gray-500 outline-none bg-transparent border-b border-dashed border-transparent focus:border-gray-300 py-0.5"
                               />
                             )}
@@ -679,10 +683,10 @@ export default function NouveauDevisClient({
             {/* Liens Ajouter — style Odoo */}
             <div className="px-8 py-3 flex items-center gap-5 border-t border-gray-50">
               <button onClick={addProductLine} className="text-sm text-blue-600 hover:text-blue-500 font-medium transition-colors">
-                Ajouter un produit
+                {t("ajouterUnProduit")}
               </button>
               <button onClick={addNoteLine} className="text-sm text-blue-600 hover:text-blue-500 font-medium transition-colors">
-                Ajouter une note
+                {t("ajouterUneNote")}
               </button>
             </div>
 
@@ -693,13 +697,13 @@ export default function NouveauDevisClient({
                   value={form.notes}
                   onChange={e => setF("notes", e.target.value)}
                   rows={3}
-                  placeholder="Conditions générales…"
+                  placeholder={t("conditionsGenerales")}
                   className="w-full text-sm text-gray-500 outline-none bg-transparent border-0 resize-none placeholder-gray-300 focus:placeholder-gray-400"
                 />
               </div>
               <div className="w-64 space-y-2 text-sm">
                 <div className="flex justify-between text-gray-500">
-                  <span>Montant HT :</span>
+                  <span>{t("montantHt")}</span>
                   <span className="font-medium">{formatNumber(total)} {form.currency}</span>
                 </div>
                 {/* Toggle TVA */}
@@ -711,14 +715,14 @@ export default function NouveauDevisClient({
                     >
                       <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${form.tva ? "translate-x-4" : "translate-x-0.5"}`} />
                     </div>
-                    <span className="text-sm">TVA 18%</span>
+                    <span className="text-sm">{t("tva18")}</span>
                   </label>
                   {form.tva && (
                     <span className="font-medium text-gray-700">{formatNumber(total * 0.18)} {form.currency}</span>
                   )}
                 </div>
                 <div className="flex justify-between font-bold text-gray-900 text-base pt-2 border-t border-gray-200">
-                  <span>Total TTC :</span>
+                  <span>{t("totalTtc")}</span>
                   <span>{formatNumber(total * (form.tva ? 1.18 : 1))} {form.currency}</span>
                 </div>
               </div>
@@ -731,7 +735,7 @@ export default function NouveauDevisClient({
           <div className="px-8 py-6 grid grid-cols-2 gap-x-16 gap-y-4 text-sm">
             <div className="space-y-3">
               <div className="flex items-center gap-4">
-                <label className="w-44 shrink-0 text-gray-600">Taux de commission (%)</label>
+                <label className="w-44 shrink-0 text-gray-600">{t("tauxDeCommission")}</label>
                 <input
                   type="number" min="0" max="100" step="0.1" value={form.commission_rate}
                   onChange={e => setF("commission_rate", e.target.value)}
@@ -739,7 +743,7 @@ export default function NouveauDevisClient({
                 />
               </div>
               <div className="flex items-center gap-4">
-                <label className="w-44 shrink-0 text-gray-600">Date de commande</label>
+                <label className="w-44 shrink-0 text-gray-600">{t("dateDeCommande")}</label>
                 <input
                   type="date" value={form.date_order}
                   onChange={e => setF("date_order", e.target.value)}
@@ -757,11 +761,11 @@ export default function NouveauDevisClient({
 
       {/* ── Modal Nouveau client ─────────────────────────────── */}
       {showClientModal && (
-        <Modal title="Nouveau client" onClose={() => setShowClientModal(false)}>
+        <Modal title={t("modalNouveauClient")} onClose={() => setShowClientModal(false)}>
           <div className="space-y-4">
-            <LabeledInput label="Nom *" value={cForm.name} onChange={v => setCForm(f => ({ ...f, name: v }))} placeholder="Ex: Total Guinée…" autoFocus />
+            <LabeledInput label={t("nomLabel")} value={cForm.name} onChange={v => setCForm(f => ({ ...f, name: v }))} placeholder={t("nomPlaceholder")} autoFocus />
             <div>
-              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Type</label>
+              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">{t("typeLabel")}</label>
               <div className="flex gap-2">
                 {[{ v: "prospect", l: "Prospect" }, { v: "client", l: "Client" }].map(({ v, l }) => (
                   <button key={v} type="button"
@@ -772,15 +776,15 @@ export default function NouveauDevisClient({
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <LabeledInput label="Téléphone" value={cForm.phone} onChange={v => setCForm(f => ({ ...f, phone: v }))} placeholder="+224 6xx xxx xxx" />
-              <LabeledInput label="Pays" value={cForm.country} onChange={v => setCForm(f => ({ ...f, country: v }))} />
+              <LabeledInput label={t("telephoneLabel")} value={cForm.phone} onChange={v => setCForm(f => ({ ...f, phone: v }))} placeholder="+224 6xx xxx xxx" />
+              <LabeledInput label={t("paysLabel")} value={cForm.country} onChange={v => setCForm(f => ({ ...f, country: v }))} />
             </div>
-            <LabeledInput label="Email" type="email" value={cForm.email} onChange={v => setCForm(f => ({ ...f, email: v }))} placeholder="contact@entreprise.com" />
+            <LabeledInput label={t("emailLabel")} type="email" value={cForm.email} onChange={v => setCForm(f => ({ ...f, email: v }))} placeholder="contact@entreprise.com" />
             {cError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg">{cError}</p>}
             <div className="flex gap-3 pt-2">
-              <button onClick={() => setShowClientModal(false)} className="flex-1 py-2 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">Annuler</button>
+              <button onClick={() => setShowClientModal(false)} className="flex-1 py-2 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">{t("annuler")}</button>
               <button onClick={handleCreateClient} disabled={cSaving || !cForm.name.trim()} className="flex-1 py-2 text-sm font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-40">
-                {cSaving ? "Création…" : "Créer et sélectionner"}
+                {cSaving ? t("creationEnCours") : t("creerEtSelectionner")}
               </button>
             </div>
           </div>
@@ -789,13 +793,13 @@ export default function NouveauDevisClient({
 
       {/* ── Modal Nouveau produit ────────────────────────────── */}
       {showProductModal && (
-        <Modal title="Nouveau produit" onClose={() => setShowProductModal(false)}>
+        <Modal title={t("modalNouveauProduit")} onClose={() => setShowProductModal(false)}>
           <div className="space-y-4">
-            <LabeledInput label="Nom du produit *" value={pForm.name} onChange={v => setPForm(f => ({ ...f, name: v }))} placeholder="Ex: Huile moteur 20L…" autoFocus />
+            <LabeledInput label={t("nomDuProduitLabel")} value={pForm.name} onChange={v => setPForm(f => ({ ...f, name: v }))} placeholder={t("nomDuProduitPlaceholder")} autoFocus />
             <div className="grid grid-cols-2 gap-3">
-              <LabeledInput label="Référence" value={pForm.reference} onChange={v => setPForm(f => ({ ...f, reference: v }))} placeholder="LUB-20L" />
+              <LabeledInput label={t("referenceLabel")} value={pForm.reference} onChange={v => setPForm(f => ({ ...f, reference: v }))} placeholder="LUB-20L" />
               <div>
-                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Unité de mesure</label>
+                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">{t("uniteDeMesureLabel")}</label>
                 <select
                   value={pForm.unit_id}
                   onChange={e => setPForm(f => ({ ...f, unit_id: e.target.value }))}
@@ -806,12 +810,12 @@ export default function NouveauDevisClient({
                 </select>
               </div>
             </div>
-            <LabeledInput label={`Prix de vente (${form.currency})`} type="number" value={pForm.sell_price} onChange={v => setPForm(f => ({ ...f, sell_price: v }))} placeholder="0" />
+            <LabeledInput label={t("prixDeVenteLabel", { currency: form.currency })} type="number" value={pForm.sell_price} onChange={v => setPForm(f => ({ ...f, sell_price: v }))} placeholder="0" />
             {pError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg">{pError}</p>}
             <div className="flex gap-3 pt-2">
-              <button onClick={() => setShowProductModal(false)} className="flex-1 py-2 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">Annuler</button>
+              <button onClick={() => setShowProductModal(false)} className="flex-1 py-2 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">{t("annuler")}</button>
               <button onClick={handleCreateProduct} disabled={pSaving || !pForm.name.trim()} className="flex-1 py-2 text-sm font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-40">
-                {pSaving ? "Création…" : "Créer et ajouter"}
+                {pSaving ? t("creationEnCours") : t("creerEtAjouter")}
               </button>
             </div>
           </div>

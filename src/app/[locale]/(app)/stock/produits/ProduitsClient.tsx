@@ -3,6 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
+import { useTranslations } from "next-intl"
 import { Plus, Search, Package } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { Badge } from "@/components/ui/Badge"
@@ -38,6 +39,7 @@ const colorMap: Record<string, "blue" | "yellow" | "gray" | "green" | "purple"> 
 }
 
 export default function ProduitsClient({ products: initial, categories, units }: Props) {
+  const t = useTranslations("produits")
   const params = useParams()
   const locale = params.locale as string
   const [products, setProducts] = useState(initial)
@@ -98,12 +100,12 @@ export default function ProduitsClient({ products: initial, categories, units }:
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Catalogue produits</h1>
-          <p className="text-gray-500 text-sm mt-0.5">{filtered.length} produit{filtered.length !== 1 ? "s" : ""}</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t("catalogueProduits")}</h1>
+          <p className="text-gray-500 text-sm mt-0.5">{filtered.length} {t("produit")}{filtered.length !== 1 ? t("pluralSuffix") : ""}</p>
         </div>
         <Button onClick={() => setModalOpen(true)}>
           <Plus className="w-4 h-4" />
-          Nouveau produit
+          {t("nouveauProduit")}
         </Button>
       </div>
 
@@ -114,7 +116,7 @@ export default function ProduitsClient({ products: initial, categories, units }:
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Rechercher..."
+            placeholder={t("rechercher")}
             className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
           />
         </div>
@@ -123,7 +125,7 @@ export default function ProduitsClient({ products: initial, categories, units }:
             onClick={() => setFilterCat("all")}
             className={`px-3 py-2 text-xs rounded-lg font-medium transition ${filterCat === "all" ? "bg-blue-600 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}
           >
-            Tous
+            {t("tous")}
           </button>
           {categories.map(c => (
             <button
@@ -141,19 +143,19 @@ export default function ProduitsClient({ products: initial, categories, units }:
       {filtered.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
           <Package className="w-10 h-10 mx-auto mb-3 opacity-30" />
-          <p>Aucun produit trouvé</p>
+          <p>{t("aucunProduitTrouve")}</p>
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Produit</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Réf.</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Catégorie</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Format</th>
-                <th className="text-right px-4 py-3 font-medium text-gray-600">Prix achat</th>
-                <th className="text-right px-4 py-3 font-medium text-gray-600">Prix vente</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colProduit")}</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colReference")}</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colCategorie")}</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colFormat")}</th>
+                <th className="text-right px-4 py-3 font-medium text-gray-600">{t("colPrixAchat")}</th>
+                <th className="text-right px-4 py-3 font-medium text-gray-600">{t("colPrixVente")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -185,24 +187,24 @@ export default function ProduitsClient({ products: initial, categories, units }:
       )}
 
       {/* Modal nouveau produit */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Nouveau produit">
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={t("nouveauProduit")}>
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="col-span-1 sm:col-span-2">
-              <Input label="Nom du produit" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
+              <Input label={t("nomDuProduit")} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
             </div>
-            <Input label="Référence" value={form.reference} onChange={e => setForm(f => ({ ...f, reference: e.target.value }))} placeholder="LUB-20L-001" />
+            <Input label={t("reference")} value={form.reference} onChange={e => setForm(f => ({ ...f, reference: e.target.value }))} placeholder="LUB-20L-001" />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Select
-              label="Catégorie"
+              label={t("categorie")}
               value={form.category_id}
               onChange={e => setForm(f => ({ ...f, category_id: e.target.value }))}
               options={categories.map(c => ({ value: c.id, label: c.name }))}
             />
             <Select
-              label="Format / Conditionnement"
+              label={t("formatConditionnement")}
               value={form.unit_id}
               onChange={e => setForm(f => ({ ...f, unit_id: e.target.value }))}
               options={units.map(u => ({ value: u.id, label: u.name }))}
@@ -210,7 +212,7 @@ export default function ProduitsClient({ products: initial, categories, units }:
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t("description")}</label>
             <textarea
               value={form.description}
               onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
@@ -223,14 +225,14 @@ export default function ProduitsClient({ products: initial, categories, units }:
             <div className="flex gap-2">
               <div className="flex-1">
                 <Input
-                  label="Prix achat"
+                  label={t("prixAchat")}
                   type="number"
                   value={form.buy_price}
                   onChange={e => setForm(f => ({ ...f, buy_price: e.target.value }))}
                 />
               </div>
               <Select
-                label="Devise achat"
+                label={t("deviseAchat")}
                 value={form.buy_price_currency}
                 onChange={e => setForm(f => ({ ...f, buy_price_currency: e.target.value as Currency }))}
                 options={CURRENCIES.map(c => ({ value: c, label: c }))}
@@ -239,14 +241,14 @@ export default function ProduitsClient({ products: initial, categories, units }:
             <div className="flex gap-2">
               <div className="flex-1">
                 <Input
-                  label="Prix vente"
+                  label={t("prixVente")}
                   type="number"
                   value={form.sell_price}
                   onChange={e => setForm(f => ({ ...f, sell_price: e.target.value }))}
                 />
               </div>
               <Select
-                label="Devise vente"
+                label={t("deviseVente")}
                 value={form.currency}
                 onChange={e => setForm(f => ({ ...f, currency: e.target.value as Currency }))}
                 options={CURRENCIES.map(c => ({ value: c, label: c }))}
@@ -258,9 +260,9 @@ export default function ProduitsClient({ products: initial, categories, units }:
             <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{saveError}</p>
           )}
           <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" onClick={() => setModalOpen(false)}>Annuler</Button>
+            <Button variant="secondary" onClick={() => setModalOpen(false)}>{t("annuler")}</Button>
             <Button onClick={handleSave} disabled={!form.name || saving}>
-              {saving ? "Enregistrement…" : "Enregistrer"}
+              {saving ? t("enregistrement") : t("enregistrer")}
             </Button>
           </div>
         </div>

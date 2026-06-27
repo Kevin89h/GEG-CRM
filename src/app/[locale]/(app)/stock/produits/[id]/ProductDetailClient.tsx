@@ -8,6 +8,7 @@ import {
   Edit2, Save, X, ChevronRight, BarChart3, ShoppingCart, ShoppingBag,
   FileText, Shield, Upload, Trash2, Download, Lock, Eye, AlertTriangle,
 } from "lucide-react"
+import { useTranslations } from "next-intl"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { createClient } from "@/lib/supabase/client"
 import { formatCurrency, formatNumber, formatDate } from "@/lib/utils"
@@ -80,18 +81,6 @@ interface Props {
 
 type Tab = "general" | "interne" | "prix" | "inventaire" | "documents" | "mouvements"
 
-const PRODUCT_TYPES = [
-  { value: "consumable", label: "Consommable" },
-  { value: "storable", label: "Stockable" },
-  { value: "service", label: "Service" },
-]
-
-const DOC_TYPES = [
-  { value: "technical_sheet", label: "Fiche technique", icon: FileText, color: "text-blue-600", bg: "bg-blue-50" },
-  { value: "safety_data_sheet", label: "Fiche de sécurité (SDS)", icon: Shield, color: "text-red-600", bg: "bg-red-50" },
-  { value: "other", label: "Autre", icon: FileText, color: "text-gray-600", bg: "bg-gray-50" },
-]
-
 function formatFileSize(bytes: number | null): string {
   if (!bytes) return ""
   if (bytes < 1024) return `${bytes} B`
@@ -104,6 +93,7 @@ export default function ProductDetailClient({
   totalStock, incoming, outgoing,
   categories, units, warehouses, locale, isAdmin,
 }: Props) {
+  const t = useTranslations("produits")
   const router = useRouter()
   const [product, setProduct] = useState(initial)
   const [editing, setEditing] = useState(false)
@@ -115,6 +105,18 @@ export default function ProductDetailClient({
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const PRODUCT_TYPES = [
+    { value: "consumable", label: t("typeConsommable") },
+    { value: "storable", label: t("typeStockable") },
+    { value: "service", label: t("typeService") },
+  ]
+
+  const DOC_TYPES = [
+    { value: "technical_sheet", label: t("docFicheTechnique"), icon: FileText, color: "text-blue-600", bg: "bg-blue-50" },
+    { value: "safety_data_sheet", label: t("docFicheSDS"), icon: Shield, color: "text-red-600", bg: "bg-red-50" },
+    { value: "other", label: t("docAutre"), icon: FileText, color: "text-gray-600", bg: "bg-gray-50" },
+  ]
 
   const [form, setForm] = useState({
     name: initial.name,
@@ -253,12 +255,12 @@ export default function ProductDetailClient({
   const forecast = totalStock + incoming - outgoing
 
   const TABS: { key: Tab; label: string; adminOnly?: boolean }[] = [
-    { key: "general", label: "Général" },
-    { key: "interne", label: "Référence interne", adminOnly: true },
-    { key: "prix", label: "Prix" },
-    { key: "inventaire", label: "Inventaire" },
-    { key: "documents", label: `Documents${documents.length > 0 ? ` (${documents.length})` : ""}` },
-    { key: "mouvements", label: "Mouvements" },
+    { key: "general", label: t("tabGeneral") },
+    { key: "interne", label: t("tabRefInterne"), adminOnly: true },
+    { key: "prix", label: t("tabPrix") },
+    { key: "inventaire", label: t("tabInventaire") },
+    { key: "documents", label: documents.length > 0 ? `${t("tabDocuments")} (${documents.length})` : t("tabDocuments") },
+    { key: "mouvements", label: t("tabMouvements") },
   ]
 
   const visibleTabs = TABS.filter(t => !t.adminOnly || isAdmin)
@@ -273,7 +275,7 @@ export default function ProductDetailClient({
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <div className="flex items-center gap-2 text-sm text-gray-500 min-w-0">
-          <span className="hidden sm:inline">Produits</span>
+          <span className="hidden sm:inline">{t("breadcrumbProduits")}</span>
           <ChevronRight className="w-3 h-3 hidden sm:inline" />
           <span className="text-gray-800 font-medium truncate">{product.name}</span>
         </div>
@@ -281,10 +283,10 @@ export default function ProductDetailClient({
           {editing ? (
             <>
               <Button variant="secondary" onClick={() => { setEditing(false); resetForm(product) }}>
-                <X className="w-4 h-4" /> <span className="hidden sm:inline">Annuler</span>
+                <X className="w-4 h-4" /> <span className="hidden sm:inline">{t("btnAnnuler")}</span>
               </Button>
               <Button onClick={save} disabled={saving}>
-                <Save className="w-4 h-4" /> {saving ? "…" : <span className="hidden sm:inline">Enregistrer</span>}
+                <Save className="w-4 h-4" /> {saving ? "…" : <span className="hidden sm:inline">{t("btnEnregistrer")}</span>}
               </Button>
             </>
           ) : (
@@ -294,7 +296,7 @@ export default function ProductDetailClient({
                 <Trash2 className="w-4 h-4" />
               </button>
               <Button variant="secondary" onClick={() => setEditing(true)}>
-                <Edit2 className="w-4 h-4" /> <span className="hidden sm:inline">Modifier</span>
+                <Edit2 className="w-4 h-4" /> <span className="hidden sm:inline">{t("btnModifier")}</span>
               </Button>
             </>
           )}
@@ -335,8 +337,8 @@ export default function ProductDetailClient({
                 </div>
                 <div className="flex flex-wrap items-center gap-4 md:gap-6 mt-3">
                   {[
-                    { key: "can_be_sold", label: "Peut être vendu", icon: ShoppingCart },
-                    { key: "can_be_purchased", label: "Peut être acheté", icon: ShoppingBag },
+                    { key: "can_be_sold", label: t("canBeSold"), icon: ShoppingCart },
+                    { key: "can_be_purchased", label: t("canBePurchased"), icon: ShoppingBag },
                   ].map(({ key, label, icon: Icon }) => (
                     <label key={key} className="flex items-center gap-2 cursor-pointer select-none">
                       <input
@@ -358,11 +360,11 @@ export default function ProductDetailClient({
           {/* Smart buttons */}
           <div className="flex divide-x divide-gray-100 overflow-x-auto">
             {[
-              { label: "En stock", value: formatNumber(totalStock), color: totalStock < 0 ? "text-red-600" : totalStock === 0 ? "text-gray-400" : "text-blue-600", onClick: () => setTab("mouvements") },
-              { label: "Entrées", value: formatNumber(incoming), color: "text-emerald-600", onClick: () => setTab("mouvements") },
-              { label: "Sorties", value: formatNumber(outgoing), color: "text-red-500", onClick: () => setTab("mouvements") },
-              { label: "Prévu", value: formatNumber(forecast), color: forecast < 0 ? "text-red-600" : "text-purple-600", onClick: () => setTab("inventaire") },
-              ...(product.buy_price ? [{ label: "Valeur stock", value: formatCurrency(stockValue, product.buy_price_currency), color: "text-gray-700", onClick: undefined }] : []),
+              { label: t("statEnStock"), value: formatNumber(totalStock), color: totalStock < 0 ? "text-red-600" : totalStock === 0 ? "text-gray-400" : "text-blue-600", onClick: () => setTab("mouvements") },
+              { label: t("statEntrees"), value: formatNumber(incoming), color: "text-emerald-600", onClick: () => setTab("mouvements") },
+              { label: t("statSorties"), value: formatNumber(outgoing), color: "text-red-500", onClick: () => setTab("mouvements") },
+              { label: t("statPrevu"), value: formatNumber(forecast), color: forecast < 0 ? "text-red-600" : "text-purple-600", onClick: () => setTab("inventaire") },
+              ...(product.buy_price ? [{ label: t("statValeurStock"), value: formatCurrency(stockValue, product.buy_price_currency), color: "text-gray-700", onClick: undefined }] : []),
             ].map(({ label, value, color, onClick }) => (
               <div key={label}
                 className={`flex-1 min-w-[80px] px-3 md:px-6 py-3 text-center ${onClick ? "hover:bg-gray-50 cursor-pointer" : ""} transition`}
@@ -400,7 +402,7 @@ export default function ProductDetailClient({
             {tab === "general" && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-5">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Type de produit</label>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t("labelTypeProduit")}</label>
                   {editing ? (
                     <div className="flex gap-3 flex-wrap">
                       {PRODUCT_TYPES.map(pt => (
@@ -414,15 +416,15 @@ export default function ProductDetailClient({
                       ))}
                     </div>
                   ) : (
-                    <p className="text-sm text-gray-800">{PRODUCT_TYPES.find(t => t.value === product.product_type)?.label ?? "Consommable"}</p>
+                    <p className="text-sm text-gray-800">{PRODUCT_TYPES.find(pt => pt.value === product.product_type)?.label ?? t("typeConsommable")}</p>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Catégorie</label>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t("labelCategorie")}</label>
                   {editing ? (
                     <select value={form.category_id} onChange={e => setF("category_id", e.target.value)} className={inputCls}>
-                      <option value="">— Aucune —</option>
+                      <option value="">{t("optionAucune")}</option>
                       {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                     </select>
                   ) : (
@@ -431,10 +433,10 @@ export default function ProductDetailClient({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Unité de mesure</label>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t("labelUniteMesure")}</label>
                   {editing ? (
                     <select value={form.unit_id} onChange={e => setF("unit_id", e.target.value)} className={inputCls}>
-                      <option value="">— Aucune —</option>
+                      <option value="">{t("optionAucune")}</option>
                       {units.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                     </select>
                   ) : (
@@ -444,8 +446,8 @@ export default function ProductDetailClient({
 
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
-                    Référence marchande
-                    <span className="ml-1.5 text-xs text-gray-400 normal-case font-normal">(visible clients)</span>
+                    {t("labelRefMarchande")}
+                    <span className="ml-1.5 text-xs text-gray-400 normal-case font-normal">{t("visibleClients")}</span>
                   </label>
                   {editing ? (
                     <input value={form.merchant_reference} onChange={e => setF("merchant_reference", e.target.value)}
@@ -456,18 +458,18 @@ export default function ProductDetailClient({
                 </div>
 
                 <div className="sm:col-span-2">
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Description</label>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t("labelDescription")}</label>
                   {editing ? (
                     <textarea value={form.description} onChange={e => setF("description", e.target.value)}
-                      rows={3} className={`${inputCls} resize-none`} placeholder="Description du produit…" />
+                      rows={3} className={`${inputCls} resize-none`} placeholder={t("placeholderDescription")} />
                   ) : (
-                    <p className="text-sm text-gray-600">{product.description ?? <span className="text-gray-300 italic">Aucune description</span>}</p>
+                    <p className="text-sm text-gray-600">{product.description ?? <span className="text-gray-300 italic">{t("aucuneDescription")}</span>}</p>
                   )}
                 </div>
 
                 {stockLevels.length > 0 && (
                   <div className="sm:col-span-2">
-                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Stock par entrepôt</label>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{t("labelStockParEntrepot")}</label>
                     <div className="flex gap-3 flex-wrap">
                       {stockLevels.map((sl, i) => (
                         <div key={i} className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-4 py-2">
@@ -489,12 +491,12 @@ export default function ProductDetailClient({
               <div className="space-y-6">
                 <div className="flex items-center gap-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5">
                   <Lock className="w-4 h-4 flex-shrink-0" />
-                  Ces informations sont visibles uniquement par les administrateurs.
+                  {t("adminOnlyNotice")}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-5">
                   <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Référence interne</label>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t("labelRefInterne")}</label>
                     {editing ? (
                       <input value={form.reference} onChange={e => setF("reference", e.target.value)}
                         className={inputCls} placeholder="INT-001" />
@@ -504,7 +506,7 @@ export default function ProductDetailClient({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">SKU</label>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t("labelSku")}</label>
                     {editing ? (
                       <input value={form.sku} onChange={e => setF("sku", e.target.value)}
                         className={inputCls} placeholder="ex: OIL-15W40-208-FUT" />
@@ -514,10 +516,10 @@ export default function ProductDetailClient({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Pays d'origine</label>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t("labelPaysOrigine")}</label>
                     {editing ? (
                       <input value={form.origin} onChange={e => setF("origin", e.target.value)}
-                        className={inputCls} placeholder="ex: France, Singapour…" />
+                        className={inputCls} placeholder={t("placeholderOrigine")} />
                     ) : (
                       <p className="text-sm text-gray-800">{product.origin ?? "—"}</p>
                     )}
@@ -525,13 +527,13 @@ export default function ProductDetailClient({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Notes internes</label>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t("labelNotesInternes")}</label>
                   {editing ? (
                     <textarea value={form.internal_notes} onChange={e => setF("internal_notes", e.target.value)}
                       rows={4} className={`${inputCls} resize-none`}
-                      placeholder="Fournisseurs préférés, conditions de stockage, notes logistiques…" />
+                      placeholder={t("placeholderNotesInternes")} />
                   ) : (
-                    <p className="text-sm text-gray-600 whitespace-pre-wrap">{product.internal_notes ?? <span className="text-gray-300 italic">Aucune note</span>}</p>
+                    <p className="text-sm text-gray-600 whitespace-pre-wrap">{product.internal_notes ?? <span className="text-gray-300 italic">{t("aucuneNote")}</span>}</p>
                   )}
                 </div>
               </div>
@@ -541,7 +543,7 @@ export default function ProductDetailClient({
             {tab === "prix" && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-5">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Prix de vente</label>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t("labelPrixVente")}</label>
                   {editing ? (
                     <div className="flex gap-2">
                       <input type="number" value={form.sell_price} onChange={e => setF("sell_price", e.target.value)}
@@ -558,7 +560,7 @@ export default function ProductDetailClient({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">TVA vente (%)</label>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t("labelTvaVente")}</label>
                   {editing ? (
                     <input type="number" value={form.tva_vente} onChange={e => setF("tva_vente", e.target.value)}
                       className={inputCls} placeholder="18" />
@@ -568,7 +570,7 @@ export default function ProductDetailClient({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Coût (prix d'achat)</label>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t("labelCoutAchat")}</label>
                   {editing ? (
                     <div className="flex gap-2">
                       <input type="number" value={form.buy_price} onChange={e => setF("buy_price", e.target.value)}
@@ -585,7 +587,7 @@ export default function ProductDetailClient({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">TVA achat (%)</label>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t("labelTvaAchat")}</label>
                   {editing ? (
                     <input type="number" value={form.tva_achat} onChange={e => setF("tva_achat", e.target.value)}
                       className={inputCls} placeholder="18" />
@@ -597,11 +599,11 @@ export default function ProductDetailClient({
                 {product.sell_price && product.buy_price && (
                   <div className="sm:col-span-2 bg-blue-50 rounded-xl p-4 flex flex-wrap gap-8">
                     <div>
-                      <p className="text-xs text-blue-600 font-semibold uppercase tracking-wide mb-1">Marge brute</p>
+                      <p className="text-xs text-blue-600 font-semibold uppercase tracking-wide mb-1">{t("margeBrute")}</p>
                       <p className="text-lg font-bold text-blue-700">{formatCurrency(product.sell_price - product.buy_price, product.currency)}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-blue-600 font-semibold uppercase tracking-wide mb-1">Taux de marge</p>
+                      <p className="text-xs text-blue-600 font-semibold uppercase tracking-wide mb-1">{t("tauxMarge")}</p>
                       <p className="text-lg font-bold text-blue-700">{((product.sell_price - product.buy_price) / product.buy_price * 100).toFixed(1)}%</p>
                     </div>
                   </div>
@@ -613,7 +615,7 @@ export default function ProductDetailClient({
             {tab === "inventaire" && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-5">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Code-barres</label>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t("labelCodeBarres")}</label>
                   {editing ? (
                     <input value={form.barcode} onChange={e => setF("barcode", e.target.value)}
                       className={inputCls} placeholder="5901234123457" />
@@ -623,28 +625,28 @@ export default function ProductDetailClient({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Quantité disponible</label>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t("labelQuantiteDisponible")}</label>
                   <p className={`text-2xl font-bold ${totalStock < 0 ? "text-red-600" : totalStock === 0 ? "text-gray-400" : "text-blue-600"}`}>
-                    {formatNumber(totalStock)} <span className="text-sm font-normal text-gray-500">{initial.unit?.name ?? "Unité"}</span>
+                    {formatNumber(totalStock)} <span className="text-sm font-normal text-gray-500">{initial.unit?.name ?? t("defaultUnit")}</span>
                   </p>
                 </div>
 
                 <div className="sm:col-span-2">
-                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Prévision de stock</label>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">{t("labelPrevisionStock")}</label>
                   <div className="bg-gray-50 rounded-xl border border-gray-200 p-4">
                     <div className="flex items-center gap-2 mb-3">
                       <Warehouse className="w-4 h-4 text-gray-400" />
-                      <span className="text-sm font-medium text-gray-600">{warehouses[0]?.name ?? "Entrepôt principal"}</span>
+                      <span className="text-sm font-medium text-gray-600">{warehouses[0]?.name ?? t("entrepotPrincipal")}</span>
                     </div>
                     <div className="flex items-center gap-2 md:gap-4 text-center overflow-x-auto">
                       {[
-                        { label: "Disponible", value: formatNumber(totalStock), color: "text-blue-600" },
+                        { label: t("prevDisponible"), value: formatNumber(totalStock), color: "text-blue-600" },
                         { label: "+", value: null, color: "text-gray-300" },
-                        { label: "Entrant", value: formatNumber(incoming), color: "text-emerald-600" },
+                        { label: t("prevEntrant"), value: formatNumber(incoming), color: "text-emerald-600" },
                         { label: "−", value: null, color: "text-gray-300" },
-                        { label: "Sortant", value: formatNumber(outgoing), color: "text-red-500" },
+                        { label: t("prevSortant"), value: formatNumber(outgoing), color: "text-red-500" },
                         { label: "=", value: null, color: "text-gray-300" },
-                        { label: "Prévu", value: formatNumber(forecast), color: forecast < 0 ? "text-red-600" : "text-purple-600" },
+                        { label: t("prevPrevu"), value: formatNumber(forecast), color: forecast < 0 ? "text-red-600" : "text-purple-600" },
                       ].map(({ label, value, color }, i) => value !== null ? (
                         <div key={i} className="flex-1 min-w-[60px]">
                           <p className={`text-xl font-bold ${color}`}>{value}</p>
@@ -656,7 +658,7 @@ export default function ProductDetailClient({
                     </div>
                     {forecast < 0 && (
                       <div className="mt-3 bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-xs text-red-600 font-medium">
-                        ⚠ Stock insuffisant — réapprovisionnement recommandé
+                        {t("alerteStockInsuffisant")}
                       </div>
                     )}
                   </div>
@@ -671,7 +673,7 @@ export default function ProductDetailClient({
                 {isAdmin && (
                   <div className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center">
                     <Upload className="w-8 h-8 text-gray-300 mx-auto mb-3" />
-                    <p className="text-sm font-medium text-gray-600 mb-3">Ajouter un document</p>
+                    <p className="text-sm font-medium text-gray-600 mb-3">{t("ajouterDocument")}</p>
                     <div className="flex justify-center gap-2 mb-4 flex-wrap">
                       {DOC_TYPES.map(dt => (
                         <button key={dt.value}
@@ -694,9 +696,9 @@ export default function ProductDetailClient({
                     />
                     <Button variant="secondary" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
                       <Upload className="w-4 h-4" />
-                      {uploading ? "Envoi en cours…" : "Choisir un fichier"}
+                      {uploading ? t("envoiEnCours") : t("choisirFichier")}
                     </Button>
-                    <p className="text-xs text-gray-400 mt-2">PDF, Word, Excel, images — max 20 MB</p>
+                    <p className="text-xs text-gray-400 mt-2">{t("uploadHint")}</p>
                   </div>
                 )}
 
@@ -714,7 +716,7 @@ export default function ProductDetailClient({
                         <span className="text-xs text-gray-400">({docs.length})</span>
                       </div>
                       {docs.length === 0 ? (
-                        <p className="text-sm text-gray-400 italic pl-9">Aucun document</p>
+                        <p className="text-sm text-gray-400 italic pl-9">{t("aucunDocument")}</p>
                       ) : (
                         <div className="space-y-2 pl-9">
                           {docs.map(doc => (
@@ -747,7 +749,7 @@ export default function ProductDetailClient({
                 {documents.length === 0 && !isAdmin && (
                   <div className="text-center py-12 text-gray-400">
                     <FileText className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                    <p>Aucun document disponible</p>
+                    <p>{t("aucunDocumentDisponible")}</p>
                   </div>
                 )}
               </div>
@@ -756,11 +758,11 @@ export default function ProductDetailClient({
             {/* MOUVEMENTS */}
             {tab === "mouvements" && (
               <div>
-                <p className="text-sm text-gray-500 mb-4">{moves.length} mouvement{moves.length !== 1 ? "s" : ""}</p>
+                <p className="text-sm text-gray-500 mb-4">{moves.length} {t("mouvementCount", { count: moves.length })}</p>
                 {moves.length === 0 ? (
                   <div className="text-center py-12 text-gray-400">
                     <BarChart3 className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                    <p>Aucun mouvement enregistré</p>
+                    <p>{t("aucunMouvement")}</p>
                   </div>
                 ) : (
                   <div className="space-y-1">
@@ -775,7 +777,7 @@ export default function ProductDetailClient({
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-gray-800">
-                            {m.type === "in" ? "Entrée" : m.type === "out" ? "Sortie" : "Transfert"}
+                            {m.type === "in" ? t("moveEntree") : m.type === "out" ? t("moveSortie") : t("moveTransfert")}
                             {m.reference && <span className="ml-2 text-xs text-gray-400 font-mono">{m.reference}</span>}
                           </p>
                           <p className="text-xs text-gray-400">{formatDate(m.date, locale)}</p>
@@ -802,21 +804,21 @@ export default function ProductDetailClient({
                 <AlertTriangle className="w-5 h-5 text-red-600" />
               </div>
               <div>
-                <h3 className="font-semibold text-gray-900">Supprimer ce produit ?</h3>
-                <p className="text-sm text-gray-500 mt-0.5">Cette action est irréversible.</p>
+                <h3 className="font-semibold text-gray-900">{t("confirmDeleteTitle")}</h3>
+                <p className="text-sm text-gray-500 mt-0.5">{t("confirmDeleteIrreversible")}</p>
               </div>
             </div>
             <p className="text-sm text-gray-600 bg-gray-50 rounded-lg px-4 py-3 mb-5">
-              <span className="font-semibold">{product.name}</span> sera définitivement supprimé, ainsi que tous ses mouvements de stock et documents.
+              <span className="font-semibold">{product.name}</span> {t("confirmDeleteBody")}
             </p>
             <div className="flex gap-3">
               <button onClick={() => setConfirmDelete(false)}
                 className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition">
-                Annuler
+                {t("btnAnnuler")}
               </button>
               <button onClick={deleteProduct} disabled={deleting}
                 className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-600 rounded-xl hover:bg-red-700 transition disabled:opacity-50">
-                {deleting ? "Suppression…" : "Supprimer"}
+                {deleting ? t("suppression") : t("btnSupprimer")}
               </button>
             </div>
           </div>

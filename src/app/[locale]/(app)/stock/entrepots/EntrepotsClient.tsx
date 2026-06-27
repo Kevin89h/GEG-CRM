@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useTranslations } from "next-intl"
 import { Plus, Warehouse as WarehouseIcon, MapPin, X } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { Modal } from "@/components/ui/Modal"
@@ -10,6 +11,7 @@ import type { Warehouse } from "@/types"
 interface Props { warehouses: Warehouse[] }
 
 export default function EntrepotsClient({ warehouses: initial }: Props) {
+  const t = useTranslations("entrepots")
   const [warehouses, setWarehouses] = useState(initial)
   const [modalOpen, setModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -28,7 +30,7 @@ export default function EntrepotsClient({ warehouses: initial }: Props) {
     })
     const json = await res.json()
     if (!res.ok) {
-      setSaveError(json.error ?? "Erreur serveur")
+      setSaveError(json.error ?? t("serverError"))
     } else {
       setWarehouses(prev => [...prev, json.data])
       setModalOpen(false)
@@ -53,12 +55,12 @@ export default function EntrepotsClient({ warehouses: initial }: Props) {
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Sites de stockage</h1>
-          <p className="text-gray-500 text-sm mt-0.5">{warehouses.length} site{warehouses.length !== 1 ? "s" : ""}</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t("pageTitle")}</h1>
+          <p className="text-gray-500 text-sm mt-0.5">{warehouses.length} {t("siteCount", { count: warehouses.length })}</p>
         </div>
         <Button onClick={() => setModalOpen(true)}>
           <Plus className="w-4 h-4" />
-          Nouveau site
+          {t("newSite")}
         </Button>
       </div>
 
@@ -94,37 +96,37 @@ export default function EntrepotsClient({ warehouses: initial }: Props) {
           className="border-2 border-dashed border-gray-200 rounded-xl p-5 flex items-center justify-center gap-2 text-gray-400 hover:border-blue-300 hover:text-blue-500 transition-colors"
         >
           <Plus className="w-5 h-5" />
-          <span className="text-sm font-medium">Ajouter un site</span>
+          <span className="text-sm font-medium">{t("addSite")}</span>
         </button>
       </div>
 
-      <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title="Supprimer le site ?">
+      <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title={t("confirmDeleteTitle")}>
         <div className="space-y-4">
-          <p className="text-sm text-gray-600">Ce site sera désactivé et n'apparaîtra plus dans les mouvements de stock. Les données existantes sont conservées.</p>
+          <p className="text-sm text-gray-600">{t("confirmDeleteDescription")}</p>
           <div className="flex justify-end gap-3">
-            <Button variant="secondary" onClick={() => setConfirmDeleteId(null)}>Annuler</Button>
+            <Button variant="secondary" onClick={() => setConfirmDeleteId(null)}>{t("cancel")}</Button>
             <button
               onClick={() => confirmDeleteId && handleDelete(confirmDeleteId)}
               disabled={deleting}
               className="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition"
             >
-              {deleting ? "Suppression…" : "Supprimer"}
+              {deleting ? t("deleting") : t("delete")}
             </button>
           </div>
         </div>
       </Modal>
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Nouveau site de stockage">
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={t("newSiteModalTitle")}>
         <div className="space-y-4">
-          <Input label="Nom du site" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Dépôt Conakry principal" required />
-          <Input label="Ville" value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} placeholder="Conakry" />
-          <Input label="Adresse" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="Zone industrielle de Kaloum..." />
+          <Input label={t("labelName")} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder={t("placeholderName")} required />
+          <Input label={t("labelCity")} value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} placeholder={t("placeholderCity")} />
+          <Input label={t("labelAddress")} value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder={t("placeholderAddress")} />
           {saveError && (
             <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{saveError}</p>
           )}
           <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" onClick={() => setModalOpen(false)}>Annuler</Button>
-            <Button onClick={handleSave} disabled={!form.name || saving}>{saving ? "Enregistrement…" : "Enregistrer"}</Button>
+            <Button variant="secondary" onClick={() => setModalOpen(false)}>{t("cancel")}</Button>
+            <Button onClick={handleSave} disabled={!form.name || saving}>{saving ? t("saving") : t("save")}</Button>
           </div>
         </div>
       </Modal>

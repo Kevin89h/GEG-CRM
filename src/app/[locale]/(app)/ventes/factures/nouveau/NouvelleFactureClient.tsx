@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Plus, Trash2, ChevronDown } from "lucide-react"
+import { useTranslations } from "next-intl"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { formatNumber } from "@/lib/utils"
 
@@ -35,6 +36,7 @@ function AccountPicker({ accounts, value, onSelect }: {
   value: string
   onSelect: (id: string, name: string) => void
 }) {
+  const t = useTranslations("factures")
   const [query, setQuery] = useState("")
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -55,7 +57,7 @@ function AccountPicker({ accounts, value, onSelect }: {
         className="flex items-center gap-2 min-w-[260px] cursor-pointer border border-gray-200 rounded-lg px-3 py-2 bg-white hover:border-gray-300 transition-colors"
       >
         <span className={`flex-1 text-sm ${selected ? "text-gray-900 font-medium" : "text-gray-400"}`}>
-          {selected ? selected.name : "Choisir un client…"}
+          {selected ? selected.name : t("chooseClient")}
         </span>
         <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
       </div>
@@ -65,13 +67,13 @@ function AccountPicker({ accounts, value, onSelect }: {
             <input
               autoFocus
               className="w-full text-sm px-3 py-1.5 rounded-lg border border-gray-200 outline-none focus:border-blue-400"
-              placeholder="Rechercher…"
+              placeholder={t("search")}
               value={query}
               onChange={e => setQuery(e.target.value)}
             />
           </div>
           <div className="max-h-56 overflow-y-auto">
-            {filtered.length === 0 && <p className="text-sm text-gray-400 px-3 py-2">Aucun résultat</p>}
+            {filtered.length === 0 && <p className="text-sm text-gray-400 px-3 py-2">{t("noResults")}</p>}
             {filtered.map(a => (
               <div key={a.id} onMouseDown={() => { onSelect(a.id, a.name); setOpen(false) }}
                 className="px-3 py-2 text-sm text-gray-800 hover:bg-blue-50 cursor-pointer">
@@ -91,6 +93,7 @@ function ProductPicker({ products, value, onChange, lineIndex }: {
   onChange: (lineIndex: number, product: Product | null, raw: string) => void
   lineIndex: number
 }) {
+  const t = useTranslations("factures")
   const [query, setQuery] = useState("")
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
@@ -115,7 +118,7 @@ function ProductPicker({ products, value, onChange, lineIndex }: {
     <div ref={ref} className="relative">
       <input
         className="w-full text-sm px-2 py-1 outline-none bg-transparent placeholder-gray-300"
-        placeholder="Chercher un produit…"
+        placeholder={t("searchProduct")}
         value={query}
         onFocus={() => setOpen(true)}
         onChange={e => { setQuery(e.target.value); setOpen(true); onChange(lineIndex, null, e.target.value) }}
@@ -138,6 +141,7 @@ function ProductPicker({ products, value, onChange, lineIndex }: {
 }
 
 export default function NouvelleFactureClient({ locale, accounts, products, treasuryAccounts }: Props) {
+  const t = useTranslations("factures")
   const router = useRouter()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -182,11 +186,11 @@ export default function NouvelleFactureClient({ locale, accounts, products, trea
   }
 
   async function handleSave(status: "draft" | "sent") {
-    if (!accountId) { setError("Veuillez choisir un client"); return }
+    if (!accountId) { setError(t("errorChooseClient")); return }
     setSaving(true); setError(null)
     const { supabase, db } = getCompanyClientBrowser()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setError("Non authentifié"); setSaving(false); return }
+    if (!user) { setError(t("errorNotAuthenticated")); setSaving(false); return }
 
     const year = new Date().getFullYear()
     const { count } = await db.from("invoices").select("*", { count: "exact", head: true })
@@ -204,7 +208,7 @@ export default function NouvelleFactureClient({ locale, accounts, products, trea
       user_id: user.id,
     }]).select("id").single()
 
-    if (invErr || !invoice) { setError(invErr?.message ?? "Erreur"); setSaving(false); return }
+    if (invErr || !invoice) { setError(invErr?.message ?? t("errorGeneric")); setSaving(false); return }
 
     const lineRows = lines
       .filter(l => l.kind === "note" ? l.description.trim() : l.description.trim() || l.product_id)
@@ -231,20 +235,20 @@ export default function NouvelleFactureClient({ locale, accounts, products, trea
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Nouvelle facture</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Facture client</p>
+          <h1 className="text-2xl font-bold text-gray-900">{t("newInvoice")}</h1>
+          <p className="text-sm text-gray-500 mt-0.5">{t("clientInvoice")}</p>
         </div>
         <div className="flex gap-2">
           <button onClick={() => router.back()} className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">
-            Annuler
+            {t("cancel")}
           </button>
           <button onClick={() => handleSave("draft")} disabled={saving}
             className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 transition-colors disabled:opacity-50">
-            Enregistrer brouillon
+            {t("saveDraft")}
           </button>
           <button onClick={() => handleSave("sent")} disabled={saving}
             className="px-4 py-2 text-sm font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition-colors disabled:opacity-50">
-            {saving ? "Enregistrement…" : "Valider la facture"}
+            {saving ? t("saving") : t("validateInvoice")}
           </button>
         </div>
       </div>
@@ -256,22 +260,22 @@ export default function NouvelleFactureClient({ locale, accounts, products, trea
         {/* Client + infos */}
         <div className="grid grid-cols-2 gap-6">
           <div>
-            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Client *</label>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t("client")} *</label>
             <AccountPicker accounts={accounts} value={accountId} onSelect={(id) => setAccountId(id)} />
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Date</label>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t("date")}</label>
               <input type="date" value={issueDate} onChange={e => setIssueDate(e.target.value)}
                 className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-900 focus:outline-none focus:border-blue-400" />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Échéance</label>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t("dueDate")}</label>
               <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
                 className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-900 focus:outline-none focus:border-blue-400" />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Devise</label>
+              <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t("currency")}</label>
               <select value={currency} onChange={e => setCurrency(e.target.value as "GNF"|"USD"|"EUR")}
                 className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-900 focus:outline-none focus:border-blue-400 bg-white">
                 <option value="GNF">GNF</option>
@@ -287,11 +291,11 @@ export default function NouvelleFactureClient({ locale, accounts, products, trea
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100">
-                <th className="text-left py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide w-[40%]">Produit / Description</th>
-                <th className="text-right py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide w-20">Qté</th>
-                <th className="text-right py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide w-28">Prix unit.</th>
-                <th className="text-right py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide w-20">Remise %</th>
-                <th className="text-right py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide w-28">Sous-total</th>
+                <th className="text-left py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide w-[40%]">{t("colProductDescription")}</th>
+                <th className="text-right py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide w-20">{t("colQty")}</th>
+                <th className="text-right py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide w-28">{t("colUnitPrice")}</th>
+                <th className="text-right py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide w-20">{t("colDiscount")}</th>
+                <th className="text-right py-2 text-xs font-semibold text-gray-400 uppercase tracking-wide w-28">{t("colSubtotal")}</th>
                 <th className="w-8"></th>
               </tr>
             </thead>
@@ -302,7 +306,7 @@ export default function NouvelleFactureClient({ locale, accounts, products, trea
                     <td colSpan={5} className="py-2">
                       <input
                         className="w-full text-sm px-2 py-1 italic text-gray-500 outline-none bg-transparent placeholder-gray-300"
-                        placeholder="Note…"
+                        placeholder={t("notePlaceholder")}
                         value={line.description}
                         onChange={e => updateLine(line.id, "description", e.target.value)}
                       />
@@ -349,10 +353,10 @@ export default function NouvelleFactureClient({ locale, accounts, products, trea
 
           <div className="flex gap-4 mt-3">
             <button onClick={addProductLine} className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-500 font-medium">
-              <Plus className="w-4 h-4" /> Ajouter un produit
+              <Plus className="w-4 h-4" /> {t("addProduct")}
             </button>
             <button onClick={addNoteLine} className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-600">
-              <Plus className="w-4 h-4" /> Ajouter une note
+              <Plus className="w-4 h-4" /> {t("addNote")}
             </button>
           </div>
         </div>
@@ -361,7 +365,7 @@ export default function NouvelleFactureClient({ locale, accounts, products, trea
         <div className="flex justify-end pt-2 border-t border-gray-100">
           <div className="text-right space-y-1">
             <div className="flex justify-between gap-16 text-sm text-gray-500">
-              <span>Total HT</span>
+              <span>{t("totalHT")}</span>
               <span className="font-medium text-gray-900">{formatNumber(totals)} {currency}</span>
             </div>
           </div>
@@ -369,10 +373,10 @@ export default function NouvelleFactureClient({ locale, accounts, products, trea
 
         {/* Notes */}
         <div>
-          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Notes internes</label>
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t("internalNotes")}</label>
           <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}
             className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-900 placeholder-gray-300 focus:outline-none focus:border-blue-400 resize-none"
-            placeholder="Conditions, informations supplémentaires…" />
+            placeholder={t("notesPlaceholder")} />
         </div>
       </div>
     </div>

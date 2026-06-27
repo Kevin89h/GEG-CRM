@@ -3,6 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
+import { useTranslations } from "next-intl"
 import { Package, ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight, SlidersHorizontal, Warehouse as WarehouseIcon, Plus } from "lucide-react"
 import { Badge } from "@/components/ui/Badge"
 import type { Warehouse } from "@/types"
@@ -26,6 +27,7 @@ const categoryColors: Record<string, "blue" | "yellow" | "gray" | "green" | "pur
 
 export default function StockDashboard({ levels, warehouses, products }: Props) {
   const { locale } = useParams<{ locale: string }>()
+  const t = useTranslations("stock")
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>("all")
   const [search, setSearch] = useState("")
 
@@ -56,25 +58,25 @@ export default function StockDashboard({ levels, warehouses, products }: Props) 
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold text-gray-900">Stock</h1>
-          <p className="text-gray-500 text-sm mt-0.5">{totalProducts} produits · {warehouses.length} sites</p>
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900">{t("title")}</h1>
+          <p className="text-gray-500 text-sm mt-0.5">{totalProducts} {t("products")} · {warehouses.length} {t("sites")}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href={`/${locale}/stock/entrepots`} className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition">
             <WarehouseIcon className="w-4 h-4" />
-            <span className="hidden sm:inline">Entrepôts</span>
+            <span className="hidden sm:inline">{t("warehouses")}</span>
           </Link>
           <Link href={`/${locale}/stock/produits`} className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition">
             <Package className="w-4 h-4" />
-            <span className="hidden sm:inline">Produits</span>
+            <span className="hidden sm:inline">{t("products")}</span>
           </Link>
           <Link href={`/${locale}/stock/mouvements`} className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition">
             <SlidersHorizontal className="w-4 h-4" />
-            <span className="hidden sm:inline">Mouvements</span>
+            <span className="hidden sm:inline">{t("movements")}</span>
           </Link>
           <Link href={`/${locale}/stock/mouvements/nouveau`} className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition">
             <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">Mouvement</span>
+            <span className="hidden sm:inline">{t("movement")}</span>
           </Link>
         </div>
       </div>
@@ -82,9 +84,9 @@ export default function StockDashboard({ levels, warehouses, products }: Props) 
       {/* Quick actions */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         {[
-          { label: "Entrée stock", icon: ArrowDownToLine, color: "text-emerald-600 bg-emerald-50", href: `/${locale}/stock/mouvements/nouveau?type=in` },
-          { label: "Sortie stock", icon: ArrowUpFromLine, color: "text-red-600 bg-red-50", href: `/${locale}/stock/mouvements/nouveau?type=out` },
-          { label: "Transfert", icon: ArrowLeftRight, color: "text-blue-600 bg-blue-50", href: `/${locale}/stock/mouvements/nouveau?type=transfer` },
+          { label: t("stockIn"), icon: ArrowDownToLine, color: "text-emerald-600 bg-emerald-50", href: `/${locale}/stock/mouvements/nouveau?type=in` },
+          { label: t("stockOut"), icon: ArrowUpFromLine, color: "text-red-600 bg-red-50", href: `/${locale}/stock/mouvements/nouveau?type=out` },
+          { label: t("transfer"), icon: ArrowLeftRight, color: "text-blue-600 bg-blue-50", href: `/${locale}/stock/mouvements/nouveau?type=transfer` },
         ].map(({ label, icon: Icon, color, href }) => (
           <Link key={label} href={href} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 flex items-center gap-3 hover:shadow-md transition-shadow">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${color}`}>
@@ -100,7 +102,7 @@ export default function StockDashboard({ levels, warehouses, products }: Props) 
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="Rechercher un produit..."
+          placeholder={t("searchPlaceholder")}
           className="w-full sm:max-w-xs px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
         />
         <div className="flex gap-2 flex-wrap">
@@ -108,7 +110,7 @@ export default function StockDashboard({ levels, warehouses, products }: Props) 
             onClick={() => setSelectedWarehouse("all")}
             className={`px-3 py-2 text-xs rounded-lg font-medium transition ${selectedWarehouse === "all" ? "bg-blue-600 text-white" : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"}`}
           >
-            Tous les sites
+            {t("allSites")}
           </button>
           {warehouses.map(w => (
             <button
@@ -126,24 +128,24 @@ export default function StockDashboard({ levels, warehouses, products }: Props) 
       {rows.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
           <Package className="w-10 h-10 mx-auto mb-3 opacity-30" />
-          <p>Aucun stock enregistré</p>
-          <p className="text-xs mt-1">Commencez par ajouter des produits et des entrepôts</p>
+          <p>{t("noStock")}</p>
+          <p className="text-xs mt-1">{t("noStockHint")}</p>
         </div>
       ) : (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="text-left px-4 py-3 font-medium text-gray-600 min-w-[200px]">Produit</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Réf.</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Format</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600 min-w-[200px]">{t("colProduct")}</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colRef")}</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colUnit")}</th>
                 {filteredWarehouses.map(w => (
                   <th key={w.id} className="text-right px-4 py-3 font-medium text-gray-600 min-w-[100px]">
                     {w.name}
                     {w.city && <span className="block text-xs font-normal text-gray-400">{w.city}</span>}
                   </th>
                 ))}
-                <th className="text-right px-4 py-3 font-medium text-gray-700 bg-blue-50/60">Total</th>
+                <th className="text-right px-4 py-3 font-medium text-gray-700 bg-blue-50/60">{t("colTotal")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">

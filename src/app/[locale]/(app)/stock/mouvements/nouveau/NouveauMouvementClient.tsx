@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight, SlidersHorizontal, AlertTriangle, Skull, Trash2, ArrowLeft } from "lucide-react"
 import Link from "next/link"
+import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
@@ -26,55 +27,57 @@ interface Props {
 
 type MoveType = "in" | "out" | "transfer" | "adjustment" | "damaged" | "lost" | "destroyed"
 
-const typeConfig: Record<MoveType, { label: string; icon: React.ElementType; color: string; description: string; needsFrom: boolean; needsTo: boolean }> = {
-  in: {
-    label: "Entrée", icon: ArrowDownToLine,
-    color: "border-emerald-500 bg-emerald-50 text-emerald-700",
-    description: "Réception de marchandises dans un entrepôt",
-    needsFrom: false, needsTo: true,
-  },
-  out: {
-    label: "Sortie", icon: ArrowUpFromLine,
-    color: "border-red-400 bg-red-50 text-red-700",
-    description: "Expédition ou consommation depuis un entrepôt",
-    needsFrom: true, needsTo: false,
-  },
-  transfer: {
-    label: "Transfert", icon: ArrowLeftRight,
-    color: "border-blue-500 bg-blue-50 text-blue-700",
-    description: "Déplacement entre deux sites de stockage",
-    needsFrom: true, needsTo: true,
-  },
-  adjustment: {
-    label: "Ajustement", icon: SlidersHorizontal,
-    color: "border-amber-400 bg-amber-50 text-amber-700",
-    description: "Correction manuelle après inventaire (fixe la valeur absolue)",
-    needsFrom: false, needsTo: true,
-  },
-  damaged: {
-    label: "Endommagé", icon: AlertTriangle,
-    color: "border-yellow-500 bg-yellow-50 text-yellow-700",
-    description: "Marchandises endommagées, retirées du stock vendable",
-    needsFrom: true, needsTo: false,
-  },
-  lost: {
-    label: "Perdu", icon: Skull,
-    color: "border-red-500 bg-red-50 text-red-700",
-    description: "Stock perdu ou volé",
-    needsFrom: true, needsTo: false,
-  },
-  destroyed: {
-    label: "Détruit / Rebus", icon: Trash2,
-    color: "border-gray-500 bg-gray-50 text-gray-700",
-    description: "Produits détruits, mis au rebut ou invendables",
-    needsFrom: true, needsTo: false,
-  },
-}
-
 const VALID_TYPES: MoveType[] = ["in", "out", "transfer", "adjustment", "damaged", "lost", "destroyed"]
 
 export default function NouveauMouvementClient({ warehouses, products, initialType, locale }: Props) {
   const router = useRouter()
+  const t = useTranslations("mouvements")
+
+  const typeConfig: Record<MoveType, { label: string; icon: React.ElementType; color: string; description: string; needsFrom: boolean; needsTo: boolean }> = {
+    in: {
+      label: t("typeInLabel"), icon: ArrowDownToLine,
+      color: "border-emerald-500 bg-emerald-50 text-emerald-700",
+      description: t("typeInDescription"),
+      needsFrom: false, needsTo: true,
+    },
+    out: {
+      label: t("typeOutLabel"), icon: ArrowUpFromLine,
+      color: "border-red-400 bg-red-50 text-red-700",
+      description: t("typeOutDescription"),
+      needsFrom: true, needsTo: false,
+    },
+    transfer: {
+      label: t("typeTransferLabel"), icon: ArrowLeftRight,
+      color: "border-blue-500 bg-blue-50 text-blue-700",
+      description: t("typeTransferDescription"),
+      needsFrom: true, needsTo: true,
+    },
+    adjustment: {
+      label: t("typeAdjustmentLabel"), icon: SlidersHorizontal,
+      color: "border-amber-400 bg-amber-50 text-amber-700",
+      description: t("typeAdjustmentDescription"),
+      needsFrom: false, needsTo: true,
+    },
+    damaged: {
+      label: t("typeDamagedLabel"), icon: AlertTriangle,
+      color: "border-yellow-500 bg-yellow-50 text-yellow-700",
+      description: t("typeDamagedDescription"),
+      needsFrom: true, needsTo: false,
+    },
+    lost: {
+      label: t("typeLostLabel"), icon: Skull,
+      color: "border-red-500 bg-red-50 text-red-700",
+      description: t("typeLostDescription"),
+      needsFrom: true, needsTo: false,
+    },
+    destroyed: {
+      label: t("typeDestroyedLabel"), icon: Trash2,
+      color: "border-gray-500 bg-gray-50 text-gray-700",
+      description: t("typeDestroyedDescription"),
+      needsFrom: true, needsTo: false,
+    },
+  }
+
   const [type, setType] = useState<MoveType>(
     (VALID_TYPES.includes(initialType as MoveType) ? initialType : "in") as MoveType
   )
@@ -114,7 +117,7 @@ export default function NouveauMouvementClient({ warehouses, products, initialTy
     }
 
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setError("Non authentifié"); setSaving(false); return }
+    if (!user) { setError(t("errorNotAuthenticated")); setSaving(false); return }
     payload.user_id = user.id
 
     const { error: err } = await db.from("stock_moves").insert([payload])
@@ -136,11 +139,11 @@ export default function NouveauMouvementClient({ warehouses, products, initialTy
   return (
     <div className="max-w-2xl mx-auto">
       <Link href={`/${locale}/stock`} className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 mb-4 transition-colors">
-        <ArrowLeft className="w-4 h-4" /> Retour au stock
+        <ArrowLeft className="w-4 h-4" /> {t("backToStock")}
       </Link>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Nouveau mouvement</h1>
-        <p className="text-gray-500 text-sm mt-0.5">Enregistrer une entrée, sortie, perte, ou ajustement de stock</p>
+        <h1 className="text-2xl font-bold text-gray-900">{t("pageTitle")}</h1>
+        <p className="text-gray-500 text-sm mt-0.5">{t("pageSubtitle")}</p>
       </div>
 
       {/* Type selector — 2 columns grid */}
@@ -178,7 +181,7 @@ export default function NouveauMouvementClient({ warehouses, products, initialTy
       {/* Form */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 space-y-4">
         <Select
-          label="Produit"
+          label={t("labelProduct")}
           value={form.product_id}
           onChange={e => set("product_id", e.target.value)}
           options={products.map(p => ({
@@ -188,7 +191,7 @@ export default function NouveauMouvementClient({ warehouses, products, initialTy
         />
 
         <Input
-          label={`Quantité${selectedProduct?.unit ? ` (${selectedProduct.unit.name})` : ""}`}
+          label={`${t("labelQuantity")}${selectedProduct?.unit ? ` (${selectedProduct.unit.name})` : ""}`}
           type="number"
           min="0.001"
           step="any"
@@ -199,11 +202,11 @@ export default function NouveauMouvementClient({ warehouses, products, initialTy
 
         {cfg.needsFrom && (
           <Select
-            label={type === "transfer" ? "Site source" : "Site de stockage"}
+            label={type === "transfer" ? t("labelSiteSource") : t("labelStorageSite")}
             value={form.from_warehouse_id}
             onChange={e => set("from_warehouse_id", e.target.value)}
             options={[
-              { value: "", label: "Choisir un site…" },
+              { value: "", label: t("chooseSite") },
               ...warehouses.map(w => ({ value: w.id, label: w.city ? `${w.name} — ${w.city}` : w.name })),
             ]}
           />
@@ -211,31 +214,31 @@ export default function NouveauMouvementClient({ warehouses, products, initialTy
 
         {cfg.needsTo && (
           <Select
-            label={type === "transfer" ? "Site destination" : "Site de stockage"}
+            label={type === "transfer" ? t("labelSiteDestination") : t("labelStorageSite")}
             value={form.to_warehouse_id}
             onChange={e => set("to_warehouse_id", e.target.value)}
             options={[
-              { value: "", label: "Choisir un site…" },
+              { value: "", label: t("chooseSite") },
               ...warehouses.map(w => ({ value: w.id, label: w.city ? `${w.name} — ${w.city}` : w.name })),
             ]}
           />
         )}
 
         {type === "transfer" && form.from_warehouse_id && form.to_warehouse_id && form.from_warehouse_id === form.to_warehouse_id && (
-          <p className="text-xs text-red-600">Les sites source et destination doivent être différents.</p>
+          <p className="text-xs text-red-600">{t("errorSameWarehouse")}</p>
         )}
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Note (optionnel)</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">{t("labelNote")}</label>
           <textarea
             value={form.note}
             onChange={e => set("note", e.target.value)}
             rows={2}
             placeholder={
-              type === "damaged" ? "Raison des dommages, date incident..." :
-              type === "lost" ? "Circonstances de la perte..." :
-              type === "destroyed" ? "Raison de la destruction, lot n°..." :
-              "BL n°123, fournisseur, raison..."
+              type === "damaged" ? t("placeholderDamaged") :
+              type === "lost" ? t("placeholderLost") :
+              type === "destroyed" ? t("placeholderDestroyed") :
+              t("placeholderDefault")
             }
             className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
           />
@@ -244,9 +247,9 @@ export default function NouveauMouvementClient({ warehouses, products, initialTy
         {error && <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
 
         <div className="flex justify-end gap-3 pt-2">
-          <Button variant="secondary" onClick={() => router.back()}>Annuler</Button>
+          <Button variant="secondary" onClick={() => router.back()}>{t("cancel")}</Button>
           <Button onClick={handleSave} disabled={!isValid || saving}>
-            {saving ? "Enregistrement…" : "Enregistrer"}
+            {saving ? t("saving") : t("save")}
           </Button>
         </div>
       </div>

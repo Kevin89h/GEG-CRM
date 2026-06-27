@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Plus, Send, Printer, CheckCircle, ArrowLeft, Truck, RotateCcw, X } from "lucide-react"
 import Link from "next/link"
+import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
@@ -54,9 +55,6 @@ interface Invoice {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 interface Props { invoice: Invoice; locale: string; treasuryAccounts: TreasuryAccount[]; warehouses: Warehouse[]; deliveryNotes: DeliveryNote[]; docSettings?: Record<string, any> }
 
-const statusLabel: Record<string, string> = {
-  draft: "Brouillon", sent: "Envoyée", partial: "Paiement partiel", paid: "Payée", cancelled: "Annulée",
-}
 const statusColor: Record<string, string> = {
   draft: "bg-gray-100 text-gray-600",
   sent: "bg-amber-100 text-amber-700",
@@ -64,12 +62,10 @@ const statusColor: Record<string, string> = {
   paid: "bg-emerald-100 text-emerald-700",
   cancelled: "bg-red-100 text-red-600",
 }
-const methodLabel: Record<string, string> = {
-  cash: "Espèces", bank: "Virement", mobile: "Mobile money", cheque: "Chèque", other: "Autre",
-}
 
 export default function FactureDetailClient({ invoice: initial, locale, treasuryAccounts, warehouses, deliveryNotes: initialDNs, docSettings = {} }: Props) {
   const router = useRouter()
+  const t = useTranslations("factures")
   const [invoice, setInvoice] = useState(initial)
   const [deliveryNotes, setDeliveryNotes] = useState(initialDNs)
   const [modalOpen, setModalOpen] = useState(false)
@@ -86,6 +82,13 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
     notes: "",
     paid_at: new Date().toISOString().split("T")[0],
   })
+
+  const statusLabel: Record<string, string> = {
+    draft: t("statusDraft"), sent: t("statusSent"), partial: t("statusPartial"), paid: t("statusPaid"), cancelled: t("statusCancelled"),
+  }
+  const methodLabel: Record<string, string> = {
+    cash: t("methodCash"), bank: t("methodBank"), mobile: t("methodMobile"), cheque: t("methodCheque"), other: t("methodOther"),
+  }
 
   function lineTotal(l: Line) {
     return l.quantity * l.unit_price * (1 - l.discount / 100)
@@ -104,7 +107,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
     })
     if (!res.ok) {
       const json = await res.json()
-      setError(json.error ?? "Erreur serveur")
+      setError(json.error ?? t("serverError"))
       setSaving(false)
       return
     }
@@ -117,7 +120,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
   async function resetToDraft() { await updateStatus("draft") }
 
   async function cancelInvoice() {
-    if (!window.confirm("Annuler cette facture ?")) return
+    if (!window.confirm(t("confirmCancelInvoice"))) return
     await updateStatus("cancelled")
   }
 
@@ -159,14 +162,14 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
 
   async function savePayment() {
     const amount = parseFloat(paymentForm.amount)
-    if (!amount || amount <= 0) { setError("Montant invalide"); return }
+    if (!amount || amount <= 0) { setError(t("invalidAmount")); return }
 
     setSaving(true)
     setError(null)
 
     const { supabase } = getCompanyClientBrowser()
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setError("Non authentifié"); setSaving(false); return }
+    if (!user) { setError(t("notAuthenticated")); setSaving(false); return }
 
     const res = await fetch(`/api/invoices/${invoice.id}/payments`, {
       method: "POST",
@@ -184,7 +187,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
     })
 
     const json = await res.json()
-    if (!res.ok || !json.payment) { setError(json.error ?? "Erreur serveur"); setSaving(false); return }
+    if (!res.ok || !json.payment) { setError(json.error ?? t("serverError")); setSaving(false); return }
 
     const newTotalPaid = invoice.total_paid + amount
     const newBalance = invoice.total_ht - newTotalPaid
@@ -208,10 +211,10 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
 
   // Stepper Odoo-style
   const STEPS = [
-    { key: "draft", label: "Brouillon" },
-    { key: "sent", label: "Comptabilisé" },
-    { key: "partial", label: "Partiellement réglée" },
-    { key: "paid", label: "Payée" },
+    { key: "draft", label: t("stepDraft") },
+    { key: "sent", label: t("stepAccounted") },
+    { key: "partial", label: t("stepPartiallySettled") },
+    { key: "paid", label: t("stepPaid") },
   ]
   function getStepIndex(s: string) {
     if (s === "draft") return 0
@@ -225,7 +228,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
   return (
     <div className="max-w-4xl mx-auto">
       <Link href={`/${locale}/ventes/factures`} className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 mb-4 transition-colors">
-        <ArrowLeft className="w-4 h-4" /> Retour aux factures
+        <ArrowLeft className="w-4 h-4" /> {t("backToInvoices")}
       </Link>
 
       {/* Barre d'actions style Odoo */}
@@ -234,27 +237,27 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
         <div className="flex flex-wrap items-center gap-2">
           {["sent", "partial", "paid", "cancelled"].includes(invoice.status) && (
             <Button variant="secondary" onClick={resetToDraft} disabled={saving}>
-              <RotateCcw className="w-4 h-4" /> Remettre en brouillon
+              <RotateCcw className="w-4 h-4" /> {t("resetToDraft")}
             </Button>
           )}
           {["draft", "sent", "partial"].includes(invoice.status) && (
             <Button variant="danger" onClick={cancelInvoice} disabled={saving}>
-              <X className="w-4 h-4" /> Annuler
+              <X className="w-4 h-4" /> {t("cancel")}
             </Button>
           )}
           {invoice.status === "draft" && (
             <Button onClick={() => setConfirmModalOpen(true)} disabled={saving}>
-              <Send className="w-4 h-4" /> Confirmer & envoyer
+              <Send className="w-4 h-4" /> {t("confirmAndSend")}
             </Button>
           )}
           {!isPaid && !isCancelled && invoice.status !== "draft" && (
             <Button onClick={() => setModalOpen(true)}>
-              <Plus className="w-4 h-4" /> Enregistrer un paiement
+              <Plus className="w-4 h-4" /> {t("registerPayment")}
             </Button>
           )}
           {isPaid && (
             <div className="flex items-center gap-2 text-emerald-600 font-medium text-sm px-3 py-2 bg-emerald-50 rounded-lg border border-emerald-200">
-              <CheckCircle className="w-4 h-4" /> Soldée
+              <CheckCircle className="w-4 h-4" /> {t("settled")}
             </div>
           )}
         </div>
@@ -262,7 +265,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
         {/* Stepper droite */}
         {isCancelled ? (
           <span className="text-xs px-3 py-1.5 rounded-full font-semibold bg-red-100 text-red-700 border border-red-200">
-            Annulée
+            {t("statusCancelled")}
           </span>
         ) : (
           <div className="flex items-center gap-1 overflow-x-auto">
@@ -299,11 +302,11 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
         </div>
         <div className="flex gap-2">
           <a href={`/${locale}/ventes/factures/${invoice.id}/pdf`} target="_blank" className="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">
-            <Printer className="w-4 h-4" /> PDF / Imprimer
+            <Printer className="w-4 h-4" /> {t("printPdf")}
           </a>
           {!isCancelled && invoice.status !== "draft" && (
             <Button variant="secondary" onClick={createDeliveryNote} disabled={creatingBL}>
-              <Truck className="w-4 h-4" /> {creatingBL ? "Création…" : "Bon de livraison"}
+              <Truck className="w-4 h-4" /> {creatingBL ? t("creating") : t("deliveryNote")}
             </Button>
           )}
         </div>
@@ -313,7 +316,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
       {invoice.status !== "draft" && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 mb-6">
           <div className="flex justify-between text-sm mb-2">
-            <span className="text-gray-500">Progression du paiement</span>
+            <span className="text-gray-500">{t("paymentProgress")}</span>
             <span className="font-medium text-gray-900">{progressPct.toFixed(0)}%</span>
           </div>
           <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden mb-4">
@@ -324,15 +327,15 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
           </div>
           <div className="grid grid-cols-3 gap-2 text-center">
             <div>
-              <p className="text-xs text-gray-400 mb-0.5">Total HT</p>
+              <p className="text-xs text-gray-400 mb-0.5">{t("totalHt")}</p>
               <p className="font-bold text-gray-900">{formatCurrency(invoice.total_ht, invoice.currency as "USD" | "GNF" | "EUR")}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-400 mb-0.5">Encaissé</p>
+              <p className="text-xs text-gray-400 mb-0.5">{t("collected")}</p>
               <p className="font-bold text-emerald-600">{formatCurrency(invoice.total_paid, invoice.currency as "USD" | "GNF" | "EUR")}</p>
             </div>
             <div>
-              <p className="text-xs text-gray-400 mb-0.5">Restant dû</p>
+              <p className="text-xs text-gray-400 mb-0.5">{t("remaining")}</p>
               <p className={`font-bold ${invoice.balance > 0 ? "text-red-600" : "text-gray-400"}`}>
                 {formatCurrency(Math.max(invoice.balance, 0), invoice.currency as "USD" | "GNF" | "EUR")}
               </p>
@@ -345,17 +348,17 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 md:p-6 mb-6">
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
           <div>
-            <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Date d'émission</p>
+            <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">{t("issueDate")}</p>
             <p className="font-semibold text-gray-900">{formatDate(invoice.issue_date, locale)}</p>
           </div>
           <div>
-            <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Échéance</p>
+            <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">{t("dueDate")}</p>
             <p className={`font-semibold ${invoice.due_date && new Date(invoice.due_date) < new Date() && !isPaid ? "text-red-600" : "text-gray-900"}`}>
               {invoice.due_date ? formatDate(invoice.due_date, locale) : "—"}
             </p>
           </div>
           <div>
-            <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Devise</p>
+            <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">{t("currency")}</p>
             <p className="font-semibold text-gray-900">{invoice.currency}</p>
           </div>
         </div>
@@ -367,11 +370,11 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
-              <th className="text-left px-4 py-3 font-medium text-gray-600">Description</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-600">Qté</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-600 hidden sm:table-cell">Prix unit.</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-600 hidden sm:table-cell">Remise</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-600">Total HT</th>
+              <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colDescription")}</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-600">{t("colQty")}</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-600 hidden sm:table-cell">{t("colUnitPrice")}</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-600 hidden sm:table-cell">{t("colDiscount")}</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-600">{t("colTotalHt")}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
@@ -391,7 +394,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
         </div>
         <div className="border-t border-gray-100 px-4 py-3 flex justify-end">
           <p className="font-bold text-gray-900">
-            Total HT : {formatCurrency(invoice.total_ht, invoice.currency as "USD" | "GNF" | "EUR")}
+            {t("totalHtLabel")} : {formatCurrency(invoice.total_ht, invoice.currency as "USD" | "GNF" | "EUR")}
           </p>
         </div>
       </div>
@@ -399,15 +402,15 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
       {/* Historique des paiements */}
       {invoice.payments.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden mb-6">
-          <h2 className="font-semibold text-gray-800 px-5 py-4 border-b border-gray-50">Paiements reçus</h2>
+          <h2 className="font-semibold text-gray-800 px-5 py-4 border-b border-gray-50">{t("paymentsReceived")}</h2>
           <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Date</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Mode</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600 hidden sm:table-cell">Référence</th>
-                <th className="text-right px-4 py-3 font-medium text-gray-600">Montant</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colDate")}</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colMethod")}</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600 hidden sm:table-cell">{t("colReference")}</th>
+                <th className="text-right px-4 py-3 font-medium text-gray-600">{t("colAmount")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -431,7 +434,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
       {deliveryNotes.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden mb-6">
           <h2 className="font-semibold text-gray-800 px-5 py-4 border-b border-gray-50 flex items-center gap-2">
-            <Truck className="w-4 h-4 text-gray-400" /> Bons de livraison
+            <Truck className="w-4 h-4 text-gray-400" /> {t("deliveryNotes")}
           </h2>
           <div className="divide-y divide-gray-50">
             {deliveryNotes.map(dn => (
@@ -443,7 +446,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
                     : dn.status === "cancelled" ? "bg-red-100 text-red-600"
                     : "bg-gray-100 text-gray-600"
                   }`}>
-                    {dn.status === "delivered" ? "Livré" : dn.status === "cancelled" ? "Annulé" : "En cours"}
+                    {dn.status === "delivered" ? t("dnDelivered") : dn.status === "cancelled" ? t("dnCancelled") : t("dnInProgress")}
                   </span>
                   {dn.delivery_date && (
                     <span className="text-xs text-gray-400">{formatDate(dn.delivery_date, locale)}</span>
@@ -453,7 +456,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
                   href={`/${locale}/ventes/bons-livraison/${dn.id}`}
                   className="text-sm text-blue-600 hover:text-blue-500 font-medium"
                 >
-                  Ouvrir →
+                  {t("open")} →
                 </Link>
               </div>
             ))}
@@ -463,67 +466,67 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
 
       {invoice.notes && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-          <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">Notes</p>
+          <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">{t("notes")}</p>
           <p className="text-sm text-gray-700 whitespace-pre-wrap">{invoice.notes}</p>
         </div>
       )}
 
       {/* Modal confirmation */}
-      <Modal open={confirmModalOpen} onClose={() => { setConfirmModalOpen(false); setError(null) }} title="Confirmer la facture">
+      <Modal open={confirmModalOpen} onClose={() => { setConfirmModalOpen(false); setError(null) }} title={t("confirmInvoiceTitle")}>
         <div className="space-y-4">
           <p className="text-sm text-gray-600">
-            La facture passera au statut <strong>Comptabilisé</strong>. Le stock sera sorti lors de la confirmation du bon de livraison.
+            {t("confirmInvoiceBody1")} <strong>{t("stepAccounted")}</strong>. {t("confirmInvoiceBody2")}
           </p>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" onClick={() => { setConfirmModalOpen(false); setError(null) }}>Annuler</Button>
+            <Button variant="secondary" onClick={() => { setConfirmModalOpen(false); setError(null) }}>{t("cancel")}</Button>
             <Button onClick={confirmAndSend} disabled={saving}>
-              {saving ? "Confirmation…" : "Confirmer la facture"}
+              {saving ? t("confirming") : t("confirmInvoiceBtn")}
             </Button>
           </div>
         </div>
       </Modal>
 
       {/* Modal paiement — style Odoo */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Payer">
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={t("payModalTitle")}>
         <div className="space-y-0">
           {/* Grille 2 colonnes */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 py-2">
             {/* Colonne gauche */}
             <div className="space-y-4">
               <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Journal</p>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{t("journal")}</p>
                 {treasuryAccounts.length > 0 ? (
                   <select
                     value={paymentForm.treasury_account_id}
                     onChange={e => setPaymentForm(f => ({ ...f, treasury_account_id: e.target.value }))}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                   >
-                    <option value="">— Aucun journal —</option>
+                    <option value="">— {t("noJournal")} —</option>
                     {treasuryAccounts.map(a => (
                       <option key={a.id} value={a.id}>{a.name} ({a.currency})</option>
                     ))}
                   </select>
                 ) : (
-                  <p className="text-sm text-gray-400 italic">Aucun compte configuré</p>
+                  <p className="text-sm text-gray-400 italic">{t("noAccountConfigured")}</p>
                 )}
               </div>
               <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Mode de paiement</p>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{t("paymentMethod")}</p>
                 <select
                   value={paymentForm.method}
                   onChange={e => setPaymentForm(f => ({ ...f, method: e.target.value }))}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-800"
                 >
-                  <option value="bank">Virement bancaire</option>
-                  <option value="cash">Espèces</option>
-                  <option value="mobile">Orange Money</option>
-                  <option value="cheque">Chèque</option>
-                  <option value="other">Autre</option>
+                  <option value="bank">{t("methodBankTransfer")}</option>
+                  <option value="cash">{t("methodCash")}</option>
+                  <option value="mobile">{t("methodOrangeMoney")}</option>
+                  <option value="cheque">{t("methodCheque")}</option>
+                  <option value="other">{t("methodOther")}</option>
                 </select>
               </div>
               <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Référence</p>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{t("reference")}</p>
                 <input
                   type="text"
                   value={paymentForm.reference}
@@ -537,7 +540,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
             {/* Colonne droite */}
             <div className="space-y-4">
               <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Montant</p>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{t("amount")}</p>
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
@@ -559,7 +562,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
                 </div>
               </div>
               <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Date de règlement</p>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{t("settlementDate")}</p>
                 <input
                   type="date"
                   value={paymentForm.paid_at}
@@ -568,7 +571,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
                 />
               </div>
               <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Mémo</p>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{t("memo")}</p>
                 <input
                   type="text"
                   value={paymentForm.notes}
@@ -582,9 +585,9 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
 
           {invoice.balance > 0 && parseFloat(paymentForm.amount) < invoice.balance && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-700 mt-3">
-              Paiement partiel — il restera{" "}
+              {t("partialPaymentWarning")}{" "}
               <strong>{formatCurrency(invoice.balance - (parseFloat(paymentForm.amount) || 0), invoice.currency as "USD" | "GNF" | "EUR")}</strong>{" "}
-              dû après ce versement.
+              {t("partialPaymentWarningAfter")}
             </div>
           )}
 
@@ -592,9 +595,9 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
 
           <div className="flex gap-3 pt-4 border-t border-gray-100 mt-4">
             <Button onClick={savePayment} disabled={saving}>
-              {saving ? "Enregistrement…" : "Créer un paiement"}
+              {saving ? t("saving") : t("createPayment")}
             </Button>
-            <Button variant="secondary" onClick={() => setModalOpen(false)}>Ignorer</Button>
+            <Button variant="secondary" onClick={() => setModalOpen(false)}>{t("ignore")}</Button>
           </div>
         </div>
       </Modal>

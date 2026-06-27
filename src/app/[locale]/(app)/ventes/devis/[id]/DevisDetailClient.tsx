@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { useTranslations } from "next-intl"
 import { CheckCircle, Receipt, X, Printer, ArrowLeft, RotateCcw, Truck } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/Button"
@@ -39,30 +40,40 @@ interface Order {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 interface Props { order: Order; locale: string; docSettings?: Record<string, any>; stockByProduct: Record<string, number>; firstWarehouse: { id: string; name: string } | null; invoiceCount?: number; firstInvoiceId?: string | null; deliveryCount?: number }
 
-const PAYMENT_TERMS_LABELS: Record<string, string> = {
-  immediate: "Paiement immédiat", "15j": "15 jours", "30j": "30 jours",
-  "45j": "45 jours", "60j": "60 jours", avance: "Paiement à la commande",
-}
-
-// Stepper Odoo : Devis → Bon de commande → À facturer → Facturé
-const STEPS = [
-  { key: "draft", label: "Devis" },
-  { key: "confirmed", label: "Bon de commande" },
-  { key: "invoiced_pending", label: "À facturer" },
-  { key: "invoiced", label: "Facturé" },
-]
-
 function getStepIndex(status: string) {
   if (status === "draft") return 0
-  if (status === "confirmed") return 2  // "À facturer"
+  if (status === "confirmed") return 2
   if (status === "invoiced") return 3
   return -1 // cancelled
 }
 
 export default function DevisDetailClient({ order, locale, docSettings = {}, stockByProduct, firstWarehouse, invoiceCount = 0, firstInvoiceId = null, deliveryCount = 0 }: Props) {
+  const t = useTranslations("devis")
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [activeTab, setActiveTab] = useState<"lines" | "other" | "notes">("lines")
+
+  const PAYMENT_TERMS_LABELS: Record<string, string> = {
+    immediate: t("paymentImmediate"),
+    "15j": t("payment15j"),
+    "30j": t("payment30j"),
+    "45j": t("payment45j"),
+    "60j": t("payment60j"),
+    avance: t("paymentAdvance"),
+  }
+
+  const STEPS = [
+    { key: "draft", label: t("stepDraft") },
+    { key: "confirmed", label: t("stepConfirmed") },
+    { key: "invoiced_pending", label: t("stepToInvoice") },
+    { key: "invoiced", label: t("stepInvoiced") },
+  ]
+
+  const tabs = [
+    { key: "lines", label: t("tabLines") },
+    { key: "other", label: t("tabOther") },
+    { key: "notes", label: t("tabNotes") },
+  ] as const
 
   function getStockStatus(productId: string | null | undefined, qty: number): "ok" | "low" | "none" {
     if (!productId) return "ok"
@@ -139,7 +150,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
   }
 
   async function cancel() {
-    if (!window.confirm("Annuler ce devis ?")) return
+    if (!window.confirm(t("confirmCancel"))) return
     setLoading(true)
     if (order.status === "confirmed") {
       await restoreStock()
@@ -212,16 +223,10 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
   const isCancelled = order.status === "cancelled"
   const stepIndex = getStepIndex(order.status)
 
-  const tabs = [
-    { key: "lines", label: "Lignes de commande" },
-    { key: "other", label: "Autres informations" },
-    { key: "notes", label: "Notes" },
-  ] as const
-
   return (
     <div className="max-w-5xl mx-auto">
       <Link href={`/${locale}/ventes/devis`} className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 mb-4 transition-colors">
-        <ArrowLeft className="w-4 h-4" /> Retour aux devis
+        <ArrowLeft className="w-4 h-4" /> {t("backToQuotes")}
       </Link>
 
       {/* Header */}
@@ -230,10 +235,10 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
           <div className="flex items-center gap-3 mb-1">
             <h1 className="text-2xl font-bold text-gray-900 font-mono">{order.number}</h1>
             {isCancelled && (
-              <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-red-100 text-red-600">Annulé</span>
+              <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-red-100 text-red-600">{t("statusCancelled")}</span>
             )}
           </div>
-          <p className="text-gray-500 text-sm">Créé le {formatDate(order.created_at, locale)}</p>
+          <p className="text-gray-500 text-sm">{t("createdOn")} {formatDate(order.created_at, locale)}</p>
 
           {/* Smart buttons : factures & livraisons liées */}
           {(invoiceCount > 0 || deliveryCount > 0) && (
@@ -245,7 +250,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                 >
                   <Receipt className="w-4 h-4 text-blue-500" />
                   <span className="font-semibold text-blue-600">{invoiceCount}</span>
-                  <span>Facture{invoiceCount > 1 ? "s" : ""}</span>
+                  <span>{t("invoice")}{invoiceCount > 1 ? t("invoicePlural") : ""}</span>
                 </Link>
               )}
               {deliveryCount > 0 && (
@@ -255,7 +260,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                 >
                   <Truck className="w-4 h-4 text-emerald-500" />
                   <span className="font-semibold text-emerald-600">{deliveryCount}</span>
-                  <span>Livraison{deliveryCount > 1 ? "s" : ""}</span>
+                  <span>{t("delivery")}{deliveryCount > 1 ? t("deliveryPlural") : ""}</span>
                 </Link>
               )}
             </div>
@@ -269,7 +274,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
             target="_blank"
             className="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
           >
-            <Printer className="w-4 h-4" /> PDF / Imprimer
+            <Printer className="w-4 h-4" /> {t("printPdf")}
           </a>
           {order.status === "confirmed" && (
             <a
@@ -277,30 +282,30 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
               target="_blank"
               className="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
             >
-              <Receipt className="w-4 h-4" /> Bon de livraison
+              <Receipt className="w-4 h-4" /> {t("deliverySlip")}
             </a>
           )}
 
           {/* Remettre en brouillon : depuis confirmed, invoiced, cancelled */}
           {["confirmed", "invoiced", "cancelled"].includes(order.status) && (
             <Button variant="secondary" onClick={resetToDraft} disabled={loading}>
-              <RotateCcw className="w-4 h-4" /> Remettre en brouillon
+              <RotateCcw className="w-4 h-4" /> {t("resetToDraft")}
             </Button>
           )}
           {/* Annuler : depuis draft, confirmed, invoiced */}
           {["draft", "confirmed", "invoiced"].includes(order.status) && (
             <Button variant="danger" onClick={cancel} disabled={loading}>
-              <X className="w-4 h-4" /> Annuler
+              <X className="w-4 h-4" /> {t("cancel")}
             </Button>
           )}
           {order.status === "draft" && (
             <Button onClick={confirm} disabled={loading}>
-              <CheckCircle className="w-4 h-4" /> Confirmer
+              <CheckCircle className="w-4 h-4" /> {t("confirm")}
             </Button>
           )}
           {order.status === "confirmed" && (
             <Button onClick={createInvoice} disabled={loading}>
-              <Receipt className="w-4 h-4" /> {loading ? "Création…" : "Créer une facture"}
+              <Receipt className="w-4 h-4" /> {loading ? t("creating") : t("createInvoice")}
             </Button>
           )}
         </div>
@@ -343,26 +348,26 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 mb-4">
         <div className="grid grid-cols-2 gap-x-8 gap-y-4">
           <div className="space-y-4">
-            <Field label="Client" value={order.account?.name} />
+            <Field label={t("fieldClient")} value={order.account?.name} />
             {order.contact && (
-              <Field label="Contact" value={`${order.contact.first_name} ${order.contact.last_name}`} />
+              <Field label={t("fieldContact")} value={`${order.contact.first_name} ${order.contact.last_name}`} />
             )}
             {order.salesperson && (
-              <Field label="Vendeur" value={order.salesperson.full_name} />
+              <Field label={t("fieldSalesperson")} value={order.salesperson.full_name} />
             )}
             {order.client_order_ref && (
-              <Field label="Réf. commande client" value={order.client_order_ref} mono />
+              <Field label={t("fieldClientRef")} value={order.client_order_ref} mono />
             )}
           </div>
           <div className="space-y-4">
-            <Field label="Date de commande" value={order.date_order ? formatDate(order.date_order, locale) : formatDate(order.created_at, locale)} />
+            <Field label={t("fieldOrderDate")} value={order.date_order ? formatDate(order.date_order, locale) : formatDate(order.created_at, locale)} />
             {order.valid_until && (
-              <Field label="Date d'expiration" value={formatDate(order.valid_until, locale)} />
+              <Field label={t("fieldExpiry")} value={formatDate(order.valid_until, locale)} />
             )}
             {order.payment_terms && (
-              <Field label="Conditions de paiement" value={PAYMENT_TERMS_LABELS[order.payment_terms] ?? order.payment_terms} />
+              <Field label={t("fieldPaymentTerms")} value={PAYMENT_TERMS_LABELS[order.payment_terms] ?? order.payment_terms} />
             )}
-            <Field label="Devise" value={order.currency} />
+            <Field label={t("fieldCurrency")} value={order.currency} />
           </div>
         </div>
       </div>
@@ -370,17 +375,17 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
       {/* Onglets */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="flex border-b border-gray-100">
-          {tabs.map(t => (
+          {tabs.map(tab => (
             <button
-              key={t.key}
-              onClick={() => setActiveTab(t.key)}
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
               className={`px-5 py-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
-                activeTab === t.key
+                activeTab === tab.key
                   ? "border-blue-600 text-blue-600"
                   : "border-transparent text-gray-500 hover:text-gray-700"
               }`}
             >
-              {t.label}
+              {tab.label}
             </button>
           ))}
         </div>
@@ -390,12 +395,12 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Description</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">Qté</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">Prix unit.</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">Remise</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">Stock</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">Sous-total</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colDescription")}</th>
+                  <th className="text-right px-4 py-3 font-medium text-gray-600">{t("colQty")}</th>
+                  <th className="text-right px-4 py-3 font-medium text-gray-600">{t("colUnitPrice")}</th>
+                  <th className="text-right px-4 py-3 font-medium text-gray-600">{t("colDiscount")}</th>
+                  <th className="text-right px-4 py-3 font-medium text-gray-600">{t("colStock")}</th>
+                  <th className="text-right px-4 py-3 font-medium text-gray-600">{t("colSubtotal")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -413,9 +418,9 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                         const pid = (l as unknown as { product_id: string }).product_id
                         const status = getStockStatus(pid, l.quantity)
                         if (!pid) return <span className="text-gray-300 text-xs">—</span>
-                        if (status === "ok") return <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">✓ En stock</span>
-                        if (status === "low") return <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">⚠ Partiel</span>
-                        return <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-medium">✗ Rupture</span>
+                        if (status === "ok") return <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">✓ {t("stockOk")}</span>
+                        if (status === "low") return <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">⚠ {t("stockLow")}</span>
+                        return <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-medium">✗ {t("stockNone")}</span>
                       })()}
                     </td>
                     <td className="px-4 py-3 text-right font-semibold text-gray-900">
@@ -429,7 +434,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
             <div className="border-t border-gray-100 px-6 py-4 flex justify-end">
               <div className="w-64 space-y-2">
                 <div className="flex justify-between text-sm text-gray-500">
-                  <span>Total HT</span>
+                  <span>{t("totalHT")}</span>
                   <span className="font-bold text-gray-900">
                     {formatNumber(total)} {order.currency}
                   </span>
@@ -441,7 +446,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
 
         {activeTab === "other" && (
           <div className="p-6 text-sm text-gray-500">
-            Aucune information supplémentaire.
+            {t("noAdditionalInfo")}
           </div>
         )}
 
@@ -450,7 +455,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
             {order.notes ? (
               <p className="text-sm text-gray-700 whitespace-pre-wrap">{order.notes}</p>
             ) : (
-              <p className="text-sm text-gray-400 italic">Aucune note.</p>
+              <p className="text-sm text-gray-400 italic">{t("noNotes")}</p>
             )}
           </div>
         )}

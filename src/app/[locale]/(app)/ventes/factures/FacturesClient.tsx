@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
+import { useTranslations } from "next-intl"
 import {
   Plus, Search, ChevronLeft, ChevronRight, LayoutList, LayoutGrid,
   Receipt, Clock,
@@ -27,29 +28,7 @@ interface Props {
   invoices: Invoice[]
 }
 
-const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; dot: string }> = {
-  draft:   { label: "Brouillon",           bg: "bg-gray-50",    text: "text-gray-600",    dot: "bg-gray-400" },
-  sent:    { label: "Comptabilisé",        bg: "bg-blue-50",    text: "text-blue-700",    dot: "bg-blue-500" },
-  partial: { label: "Partiellement réglé", bg: "bg-amber-50",   text: "text-amber-700",   dot: "bg-amber-400" },
-  paid:    { label: "Payée",               bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-500" },
-  cancelled: { label: "Annulée",           bg: "bg-red-50",     text: "text-red-700",     dot: "bg-red-400" },
-}
-
 type Tab = "ouvertes" | "payees" | "brouillons" | "tout"
-
-function relativeDate(dateStr: string | null): { label: string; overdue: boolean } {
-  if (!dateStr) return { label: "—", overdue: false }
-  const d = new Date(dateStr)
-  const now = new Date()
-  now.setHours(0, 0, 0, 0)
-  const diff = Math.round((d.getTime() - now.getTime()) / 86400000)
-  if (diff === 0) return { label: "Aujourd'hui", overdue: false }
-  if (diff === -1) return { label: "Hier", overdue: true }
-  if (diff === 1) return { label: "Demain", overdue: false }
-  if (diff < 0) return { label: `Il y a ${Math.abs(diff)} j`, overdue: true }
-  if (diff <= 30) return { label: `Dans ${diff} j`, overdue: false }
-  return { label: formatDate(dateStr, "fr"), overdue: false }
-}
 
 function fmtMulti(byCur: Record<string, number>) {
   return Object.entries(byCur)
@@ -61,6 +40,29 @@ function fmtMulti(byCur: Record<string, number>) {
 export default function FacturesClient({ invoices }: Props) {
   const params = useParams()
   const locale = params.locale as string
+  const t = useTranslations("factures")
+
+  const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; dot: string }> = {
+    draft:     { label: t("statusDraft"),     bg: "bg-gray-50",    text: "text-gray-600",    dot: "bg-gray-400" },
+    sent:      { label: t("statusSent"),      bg: "bg-blue-50",    text: "text-blue-700",    dot: "bg-blue-500" },
+    partial:   { label: t("statusPartial"),   bg: "bg-amber-50",   text: "text-amber-700",   dot: "bg-amber-400" },
+    paid:      { label: t("statusPaid"),      bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-500" },
+    cancelled: { label: t("statusCancelled"), bg: "bg-red-50",     text: "text-red-700",     dot: "bg-red-400" },
+  }
+
+  function relativeDate(dateStr: string | null): { label: string; overdue: boolean } {
+    if (!dateStr) return { label: "—", overdue: false }
+    const d = new Date(dateStr)
+    const now = new Date()
+    now.setHours(0, 0, 0, 0)
+    const diff = Math.round((d.getTime() - now.getTime()) / 86400000)
+    if (diff === 0) return { label: t("today"), overdue: false }
+    if (diff === -1) return { label: t("yesterday"), overdue: true }
+    if (diff === 1) return { label: t("tomorrow"), overdue: false }
+    if (diff < 0) return { label: t("daysAgo", { count: Math.abs(diff) }), overdue: true }
+    if (diff <= 30) return { label: t("inDays", { count: diff }), overdue: false }
+    return { label: formatDate(dateStr, "fr"), overdue: false }
+  }
 
   const [tab, setTab] = useState<Tab>("ouvertes")
   const [search, setSearch] = useState("")
@@ -109,10 +111,10 @@ export default function FacturesClient({ invoices }: Props) {
   function goPage(n: number) { setPage(Math.min(Math.max(1, n), totalPages)) }
 
   const TABS: { key: Tab; label: string; count: number }[] = [
-    { key: "ouvertes",   label: "Ouvertes",   count: stats.ouvertes },
-    { key: "payees",     label: "Payées",     count: stats.payees },
-    { key: "brouillons", label: "Brouillons", count: stats.brouillons },
-    { key: "tout",       label: "Tout",       count: stats.total },
+    { key: "ouvertes",   label: t("tabOpen"),    count: stats.ouvertes },
+    { key: "payees",     label: t("tabPaid"),    count: stats.payees },
+    { key: "brouillons", label: t("tabDraft"),   count: stats.brouillons },
+    { key: "tout",       label: t("tabAll"),     count: stats.total },
   ]
 
   const showPayments = tab !== "brouillons"
@@ -125,22 +127,22 @@ export default function FacturesClient({ invoices }: Props) {
           href={`/${locale}/ventes/factures/nouveau`}
           className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded bg-[#7c3aed] text-white hover:bg-[#6d28d9] transition"
         >
-          <Plus className="w-3.5 h-3.5" /> Nouveau
+          <Plus className="w-3.5 h-3.5" /> {t("new")}
         </Link>
 
         <div className="flex items-center gap-1 ml-2">
-          {TABS.map(t => (
+          {TABS.map(tab => (
             <button
-              key={t.key}
-              onClick={() => { setTab(t.key); setPage(1) }}
+              key={tab.key}
+              onClick={() => { setTab(tab.key); setPage(1) }}
               className={`px-3 py-1.5 text-sm rounded transition font-medium ${
-                tab === t.key
+                tab.key === tab.key
                   ? "bg-gray-100 text-gray-900"
                   : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
               }`}
             >
-              {t.label}
-              <span className="ml-1.5 text-xs text-gray-400">({t.count})</span>
+              {tab.label}
+              <span className="ml-1.5 text-xs text-gray-400">({tab.count})</span>
             </button>
           ))}
         </div>
@@ -150,7 +152,7 @@ export default function FacturesClient({ invoices }: Props) {
           <input
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1) }}
-            placeholder="Rechercher..."
+            placeholder={t("searchPlaceholder")}
             className="pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 w-60"
           />
         </div>
@@ -175,10 +177,10 @@ export default function FacturesClient({ invoices }: Props) {
       <div className="bg-white border-b border-gray-200 px-6 py-3">
         <div className="flex items-stretch gap-1">
           {[
-            { label: "Ouvertes",   value: stats.ouvertes, color: stats.ouvertes > 0 ? "text-blue-600" : "text-gray-300",   bg: stats.ouvertes > 0 ? "bg-blue-50" : "" },
-            { label: "En retard",  value: stats.enRetard, color: stats.enRetard > 0 ? "text-red-600" : "text-gray-300",    bg: stats.enRetard > 0 ? "bg-red-50" : "" },
-            { label: "Payées",     value: stats.payees,   color: stats.payees > 0 ? "text-emerald-600" : "text-gray-300",  bg: stats.payees > 0 ? "bg-emerald-50" : "" },
-            { label: "Brouillons", value: stats.brouillons, color: stats.brouillons > 0 ? "text-gray-600" : "text-gray-300", bg: "" },
+            { label: t("statOpen"),    value: stats.ouvertes,   color: stats.ouvertes > 0 ? "text-blue-600" : "text-gray-300",    bg: stats.ouvertes > 0 ? "bg-blue-50" : "" },
+            { label: t("statOverdue"), value: stats.enRetard,   color: stats.enRetard > 0 ? "text-red-600" : "text-gray-300",     bg: stats.enRetard > 0 ? "bg-red-50" : "" },
+            { label: t("statPaid"),    value: stats.payees,     color: stats.payees > 0 ? "text-emerald-600" : "text-gray-300",   bg: stats.payees > 0 ? "bg-emerald-50" : "" },
+            { label: t("statDraft"),   value: stats.brouillons, color: stats.brouillons > 0 ? "text-gray-600" : "text-gray-300",  bg: "" },
           ].map(s => (
             <div key={s.label} className={`flex-1 flex flex-col items-center py-3 px-4 rounded-lg mx-1 ${s.bg}`}>
               <span className={`text-2xl font-bold tabular-nums ${s.color}`}>{s.value}</span>
@@ -187,7 +189,7 @@ export default function FacturesClient({ invoices }: Props) {
           ))}
           <div className="w-px bg-gray-200 mx-3" />
           <div className="flex flex-col items-end justify-center px-4">
-            <span className="text-xs text-gray-400">À encaisser</span>
+            <span className="text-xs text-gray-400">{t("toCollect")}</span>
             <span className="text-lg font-bold text-red-600 tabular-nums">{stats.unpaidTotal}</span>
           </div>
         </div>
@@ -198,7 +200,7 @@ export default function FacturesClient({ invoices }: Props) {
         {paged.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-200 py-20 text-center text-gray-400">
             <Receipt className="w-10 h-10 mx-auto mb-3 opacity-30" />
-            <p className="text-sm">Aucune facture trouvée</p>
+            <p className="text-sm">{t("noInvoiceFound")}</p>
           </div>
         ) : (
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
@@ -208,15 +210,15 @@ export default function FacturesClient({ invoices }: Props) {
                   <th className="w-8 px-4 py-3">
                     <input type="checkbox" className="rounded border-gray-300" />
                   </th>
-                  <th className="text-left px-4 py-3">Numéro</th>
-                  <th className="text-left px-4 py-3">Client</th>
-                  <th className="text-left px-4 py-3">Date de facture</th>
-                  <th className="text-left px-4 py-3">Échéance</th>
-                  <th className="text-left px-4 py-3">Activités</th>
-                  <th className="text-right px-4 py-3">Hors taxes</th>
-                  {showPayments && <th className="text-right px-4 py-3">Encaissé</th>}
-                  {showPayments && <th className="text-right px-4 py-3">Montant dû</th>}
-                  <th className="text-left px-4 py-3">Statut</th>
+                  <th className="text-left px-4 py-3">{t("colNumber")}</th>
+                  <th className="text-left px-4 py-3">{t("colClient")}</th>
+                  <th className="text-left px-4 py-3">{t("colIssueDate")}</th>
+                  <th className="text-left px-4 py-3">{t("colDueDate")}</th>
+                  <th className="text-left px-4 py-3">{t("colActivities")}</th>
+                  <th className="text-right px-4 py-3">{t("colHt")}</th>
+                  {showPayments && <th className="text-right px-4 py-3">{t("colCollected")}</th>}
+                  {showPayments && <th className="text-right px-4 py-3">{t("colAmountDue")}</th>}
+                  <th className="text-left px-4 py-3">{t("colStatus")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -282,7 +284,7 @@ export default function FacturesClient({ invoices }: Props) {
                 <tfoot>
                   <tr className="bg-gray-50 border-t border-gray-200">
                     <td colSpan={showPayments ? 7 : 6} className="px-4 py-3 text-xs text-gray-500 font-semibold">
-                      Total dû ({displayed.filter(i => i.balance > 0).length} facture{displayed.filter(i => i.balance > 0).length !== 1 ? "s" : ""})
+                      {t("totalDue", { count: displayed.filter(i => i.balance > 0).length })}
                     </td>
                     {showPayments && (
                       <td className="px-4 py-3 text-right text-xs font-bold text-red-600 tabular-nums">
@@ -300,12 +302,12 @@ export default function FacturesClient({ invoices }: Props) {
 
             {displayed.length > pageSize && (
               <div className="border-t border-gray-100 px-4 py-3 flex items-center justify-between text-xs text-gray-500">
-                <span>{displayed.length} enregistrements</span>
+                <span>{t("records", { count: displayed.length })}</span>
                 <div className="flex items-center gap-1">
                   <button onClick={() => goPage(page - 1)} disabled={page === 1} className="px-2 py-1 rounded hover:bg-gray-100 disabled:opacity-30">
                     <ChevronLeft className="w-3.5 h-3.5" />
                   </button>
-                  <span>Page {page} / {totalPages}</span>
+                  <span>{t("page", { page, total: totalPages })}</span>
                   <button onClick={() => goPage(page + 1)} disabled={page === totalPages} className="px-2 py-1 rounded hover:bg-gray-100 disabled:opacity-30">
                     <ChevronRight className="w-3.5 h-3.5" />
                   </button>
