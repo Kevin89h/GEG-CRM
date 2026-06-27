@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Warehouse as WarehouseIcon, MapPin, Trash2 } from "lucide-react"
+import { Plus, Warehouse as WarehouseIcon, MapPin, X } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { Modal } from "@/components/ui/Modal"
 import { Input } from "@/components/ui/Input"
@@ -64,12 +64,18 @@ export default function EntrepotsClient({ warehouses: initial }: Props) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {warehouses.map(w => (
-          <div key={w.id} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+          <div key={w.id} className="relative bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+            <button
+              onClick={() => setConfirmDeleteId(w.id)}
+              className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full bg-red-100 text-red-500 hover:bg-red-200 transition-colors"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
                 <WarehouseIcon className="w-5 h-5 text-blue-600" />
               </div>
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 pr-4">
                 <h3 className="font-semibold text-gray-900">{w.name}</h3>
                 {(w.city || w.address) && (
                   <p className="text-sm text-gray-500 flex items-center gap-1 mt-0.5">
@@ -78,12 +84,6 @@ export default function EntrepotsClient({ warehouses: initial }: Props) {
                   </p>
                 )}
               </div>
-              <button
-                onClick={() => setConfirmDeleteId(w.id)}
-                className="ml-2 p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
             </div>
           </div>
         ))}
