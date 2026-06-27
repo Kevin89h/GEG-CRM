@@ -37,11 +37,11 @@ export default function LoginPage() {
         {/* Logo / Brand */}
         <div className="text-center mb-8">
           <Image
-            src="/geg-logo.png"
+            src="/geg-logo-white.svg"
             alt="GEG Logo"
-            width={200}
+            width={220}
             height={80}
-            className="mx-auto mb-4 brightness-0 invert"
+            className="mx-auto mb-4"
             priority
           />
           <p className="text-blue-300 mt-1 text-sm">CRM</p>

@@ -261,7 +261,7 @@ export default function AccountDetailClient({ account, orders, invoices, locale 
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         {[
           { label: "Total commandé", value: fmtMulti(totalOrdered), icon: ShoppingCart, color: "text-blue-600", bg: "bg-blue-50", sub: `${filteredOrders.length} commande${filteredOrders.length !== 1 ? "s" : ""}` },
           { label: "Total facturé", value: fmtMulti(totalInvoiced), icon: Receipt, color: "text-purple-600", bg: "bg-purple-50", sub: `${filteredInvoices.length} facture${filteredInvoices.length !== 1 ? "s" : ""}` },

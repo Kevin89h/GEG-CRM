@@ -113,9 +113,9 @@ export default function AchatsClient({ orders }: Props) {
   ]
 
   return (
-    <div className="-m-6 min-h-screen bg-gray-50/50">
+    <div className="-mx-4 -my-4 md:-m-6 min-h-screen bg-gray-50/50">
       {/* Top toolbar */}
-      <div className="bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-3">
+      <div className="bg-white border-b border-gray-200 px-4 py-3 flex flex-wrap items-center gap-2">
         <Link
           href={`/${locale}/achats/nouveau`}
           className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded bg-[#7c3aed] text-white hover:bg-[#6d28d9] transition"
@@ -124,12 +124,12 @@ export default function AchatsClient({ orders }: Props) {
         </Link>
 
         {/* Tabs */}
-        <div className="flex items-center gap-1 ml-2">
+        <div className="flex items-center gap-1 overflow-x-auto">
           {TABS.map(t => (
             <button
               key={t.key}
               onClick={() => { setTab(t.key); setPage(1) }}
-              className={`px-3 py-1.5 text-sm rounded transition font-medium ${
+              className={`whitespace-nowrap px-3 py-1.5 text-sm rounded transition font-medium ${
                 tab === t.key
                   ? "bg-gray-100 text-gray-900"
                   : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
@@ -148,13 +148,13 @@ export default function AchatsClient({ orders }: Props) {
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1) }}
             placeholder="Rechercher..."
-            className="pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 w-60"
+            className="pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 w-full sm:w-60"
           />
         </div>
 
         {/* Pagination */}
         <div className="flex items-center gap-1 text-xs text-gray-500">
-          <span>{(page - 1) * pageSize + 1}-{Math.min(page * pageSize, displayed.length)} / {displayed.length}</span>
+          <span className="hidden sm:inline">{(page - 1) * pageSize + 1}-{Math.min(page * pageSize, displayed.length)} / {displayed.length}</span>
           <button onClick={() => goPage(page - 1)} disabled={page === 1} className="p-1 rounded hover:bg-gray-100 disabled:opacity-30">
             <ChevronLeft className="w-4 h-4" />
           </button>
@@ -172,8 +172,8 @@ export default function AchatsClient({ orders }: Props) {
       </div>
 
       {/* Stats bar */}
-      <div className="bg-white border-b border-gray-200 px-6">
-        <table className="w-full text-sm">
+      <div className="bg-white border-b border-gray-200 px-4 overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
           <thead>
             <tr className="text-xs text-gray-400 uppercase tracking-wide">
               <th className="py-2 pr-6 font-medium text-left w-16"></th>
@@ -224,7 +224,7 @@ export default function AchatsClient({ orders }: Props) {
       </div>
 
       {/* Main table */}
-      <div className="px-6 py-4">
+      <div className="px-4 py-4">
         {paged.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-200 py-20 text-center text-gray-400">
             <FileText className="w-10 h-10 mx-auto mb-3 opacity-30" />
@@ -232,18 +232,19 @@ export default function AchatsClient({ orders }: Props) {
           </div>
         ) : (
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-xs text-gray-500 font-medium">
-                  <th className="w-8 px-4 py-3">
+                  <th className="w-8 px-4 py-3 hidden sm:table-cell">
                     <input type="checkbox" className="rounded border-gray-300" />
                   </th>
                   <th className="text-left px-4 py-3">Référence</th>
                   <th className="text-left px-4 py-3">Fournisseur</th>
-                  <th className="text-left px-4 py-3">Société</th>
-                  <th className="text-left px-4 py-3">Acheteur</th>
-                  <th className="text-left px-4 py-3">Échéance de commande</th>
-                  <th className="text-left px-4 py-3">Activités</th>
+                  <th className="text-left px-4 py-3 hidden md:table-cell">Société</th>
+                  <th className="text-left px-4 py-3 hidden md:table-cell">Acheteur</th>
+                  <th className="text-left px-4 py-3 hidden sm:table-cell">Échéance</th>
+                  <th className="text-left px-4 py-3 hidden lg:table-cell">Activités</th>
                   <th className="text-right px-4 py-3">Total</th>
                   <th className="text-left px-4 py-3">Statut</th>
                 </tr>
@@ -254,7 +255,7 @@ export default function AchatsClient({ orders }: Props) {
                   const date = relativeDate(o.expected_date, locale)
                   return (
                     <tr key={o.id} className="hover:bg-blue-50/20 transition-colors group">
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 hidden sm:table-cell">
                         <input type="checkbox" className="rounded border-gray-300" />
                       </td>
                       <td className="px-4 py-3">
@@ -266,18 +267,18 @@ export default function AchatsClient({ orders }: Props) {
                         </Link>
                       </td>
                       <td className="px-4 py-3 font-medium text-gray-900">{o.supplier_name}</td>
-                      <td className="px-4 py-3 text-gray-500">GEG SAS Guinée</td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 text-gray-500 hidden md:table-cell">GEG SAS Guinée</td>
+                      <td className="px-4 py-3 hidden md:table-cell">
                         <div className="w-6 h-6 rounded-full bg-green-600 flex items-center justify-center text-white text-[10px] font-bold">
                           L
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 hidden sm:table-cell">
                         <span className={`text-xs ${date.overdue ? "text-red-600 font-medium" : "text-gray-500"}`}>
                           {date.label}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 hidden lg:table-cell">
                         <Clock className="w-4 h-4 text-gray-300" />
                       </td>
                       <td className="px-4 py-3 text-right font-semibold text-gray-900 text-xs tabular-nums">
@@ -296,6 +297,7 @@ export default function AchatsClient({ orders }: Props) {
                 })}
               </tbody>
             </table>
+            </div>
 
             {/* Footer */}
             {displayed.length > pageSize && (

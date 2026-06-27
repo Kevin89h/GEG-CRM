@@ -1,10 +1,18 @@
 import { createCompanyClient } from "@/lib/company"
+import { createClient } from "@/lib/supabase/server"
 import { notFound } from "next/navigation"
 import ProductDetailClient from "./ProductDetailClient"
 
 export default async function ProductDetailPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params
   const { db } = await createCompanyClient()
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: profile } = user
+    ? await supabase.from("profiles").select("role").eq("id", user.id).single()
+    : { data: null }
+  const isAdmin = profile?.role === "admin"
 
   const [
     { data: product },
@@ -13,6 +21,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     { data: categories },
     { data: units },
     { data: warehouses },
+    { data: documents },
   ] = await Promise.all([
     db.from("products")
       .select("*, category:product_categories(id, name, color), unit:units(id, name, type)")
@@ -29,6 +38,10 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
     db.from("product_categories").select("id, name, color").order("name"),
     db.from("units").select("id, name, type").order("name"),
     db.from("warehouses").select("id, name").eq("is_active", true),
+    db.from("product_documents")
+      .select("id, type, name, url, file_size, created_at")
+      .eq("product_id", id)
+      .order("created_at", { ascending: false }),
   ])
 
   if (!product) notFound()
@@ -42,6 +55,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       product={product as Parameters<typeof ProductDetailClient>[0]["product"]}
       stockLevels={(stockLevels ?? []) as unknown as Parameters<typeof ProductDetailClient>[0]["stockLevels"]}
       moves={(moves ?? []) as unknown as Parameters<typeof ProductDetailClient>[0]["moves"]}
+      documents={documents ?? []}
       totalStock={totalStock}
       incoming={incoming}
       outgoing={outgoing}
@@ -49,6 +63,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       units={units ?? []}
       warehouses={warehouses ?? []}
       locale={locale}
+      isAdmin={isAdmin}
     />
   )
 }

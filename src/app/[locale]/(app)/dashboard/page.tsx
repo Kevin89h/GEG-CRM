@@ -100,35 +100,35 @@ export default async function DashboardPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-gray-900 mb-6">{td("title")}</h1>
+      <h1 className="text-xl md:text-2xl font-bold text-gray-900 mb-4 md:mb-6">{td("title")}</h1>
 
       {/* KPI ERP */}
-      <div className="grid grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4 mb-3 md:mb-4">
         {erpStats.map(({ label, value, sub, Icon, color, bg }) => (
-          <div key={label} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-            <div className="flex items-center justify-between mb-3">
+          <div key={label} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 md:p-5">
+            <div className="flex items-center justify-between mb-2 md:mb-3">
               <p className="text-sm text-gray-500 font-medium">{label}</p>
-              <div className={`w-9 h-9 rounded-lg ${bg} flex items-center justify-center`}>
-                <Icon className={`w-5 h-5 ${color}`} />
+              <div className={`w-8 h-8 md:w-9 md:h-9 rounded-lg ${bg} flex items-center justify-center`}>
+                <Icon className={`w-4 h-4 md:w-5 md:h-5 ${color}`} />
               </div>
             </div>
-            <p className="text-lg font-bold text-gray-900 leading-tight">{value}</p>
+            <p className="text-base md:text-lg font-bold text-gray-900 leading-tight">{value}</p>
             <p className="text-xs text-gray-400 mt-1">{sub}</p>
           </div>
         ))}
       </div>
 
       {/* KPI CRM */}
-      <div className="grid grid-cols-3 gap-4 mb-8">
+      <div className="grid grid-cols-3 gap-3 md:gap-4 mb-6 md:mb-8">
         {crmStats.map(({ label, value, Icon, color, bg }) => (
-          <div key={label} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-sm text-gray-500 font-medium">{label}</p>
-              <div className={`w-9 h-9 rounded-lg ${bg} flex items-center justify-center`}>
-                <Icon className={`w-5 h-5 ${color}`} />
+          <div key={label} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 md:p-5">
+            <div className="flex items-center justify-between mb-2 md:mb-3">
+              <p className="text-xs md:text-sm text-gray-500 font-medium leading-tight">{label}</p>
+              <div className={`w-8 h-8 md:w-9 md:h-9 rounded-lg ${bg} flex items-center justify-center flex-shrink-0`}>
+                <Icon className={`w-4 h-4 md:w-5 md:h-5 ${color}`} />
               </div>
             </div>
-            <p className="text-2xl font-bold text-gray-900">{value}</p>
+            <p className="text-xl md:text-2xl font-bold text-gray-900">{value}</p>
           </div>
         ))}
       </div>

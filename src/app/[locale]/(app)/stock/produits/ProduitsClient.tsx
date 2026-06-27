@@ -178,14 +178,14 @@ export default function ProduitsClient({ products: initial, categories, units }:
       {/* Modal nouveau produit */}
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Nouveau produit">
         <div className="space-y-4">
-          <div className="grid grid-cols-3 gap-3">
-            <div className="col-span-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="col-span-1 sm:col-span-2">
               <Input label="Nom du produit" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
             </div>
             <Input label="Référence" value={form.reference} onChange={e => setForm(f => ({ ...f, reference: e.target.value }))} placeholder="LUB-20L-001" />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Select
               label="Catégorie"
               value={form.category_id}
@@ -210,7 +210,7 @@ export default function ProduitsClient({ products: initial, categories, units }:
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="flex gap-2">
               <div className="flex-1">
                 <Input

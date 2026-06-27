@@ -174,7 +174,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setError("Non authentifié"); setSaving(false); return }
 
-    const { data: payment, error: err } = await supabase
+    const { data: payment, error: err } = await db
       .from("payments")
       .insert([{
         invoice_id: invoice.id,
@@ -236,9 +236,9 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
       </Link>
 
       {/* Barre d'actions style Odoo */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-5 py-3 mb-4 flex items-center justify-between gap-3">
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3 mb-4 flex flex-wrap items-center justify-between gap-3">
         {/* Boutons gauche */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {["sent", "partial", "paid", "cancelled"].includes(invoice.status) && (
             <Button variant="secondary" onClick={resetToDraft} disabled={saving}>
               <RotateCcw className="w-4 h-4" /> Remettre en brouillon
@@ -272,7 +272,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
             Annulée
           </span>
         ) : (
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 overflow-x-auto">
             {STEPS.map((step, i) => {
               const isActive = i === stepIndex
               const isDone = i < stepIndex
@@ -299,9 +299,9 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
       </div>
 
       {/* Header */}
-      <div className="flex items-start justify-between mb-4">
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 font-mono mb-0.5">{invoice.number}</h1>
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900 font-mono mb-0.5">{invoice.number}</h1>
           <p className="text-gray-500 text-sm">{invoice.account?.name ?? "—"}</p>
         </div>
         <div className="flex gap-2">
@@ -329,7 +329,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
               style={{ width: `${progressPct}%` }}
             />
           </div>
-          <div className="grid grid-cols-3 gap-4 text-center">
+          <div className="grid grid-cols-3 gap-2 text-center">
             <div>
               <p className="text-xs text-gray-400 mb-0.5">Total HT</p>
               <p className="font-bold text-gray-900">{formatCurrency(invoice.total_ht, invoice.currency as "USD" | "GNF" | "EUR")}</p>
@@ -349,8 +349,8 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
       )}
 
       {/* Info facture */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 mb-6">
-        <div className="grid grid-cols-3 gap-6 text-sm">
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 md:p-6 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
           <div>
             <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Date d'émission</p>
             <p className="font-semibold text-gray-900">{formatDate(invoice.issue_date, locale)}</p>
@@ -370,13 +370,14 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
 
       {/* Lignes */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden mb-6">
+        <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
               <th className="text-left px-4 py-3 font-medium text-gray-600">Description</th>
               <th className="text-right px-4 py-3 font-medium text-gray-600">Qté</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-600">Prix unit.</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-600">Remise</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-600 hidden sm:table-cell">Prix unit.</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-600 hidden sm:table-cell">Remise</th>
               <th className="text-right px-4 py-3 font-medium text-gray-600">Total HT</th>
             </tr>
           </thead>
@@ -385,8 +386,8 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
               <tr key={l.id}>
                 <td className="px-4 py-3 font-medium text-gray-900">{l.description}</td>
                 <td className="px-4 py-3 text-right text-gray-700">{formatNumber(l.quantity)}</td>
-                <td className="px-4 py-3 text-right text-gray-700">{formatNumber(l.unit_price, 2)}</td>
-                <td className="px-4 py-3 text-right text-gray-500">{l.discount > 0 ? `${l.discount}%` : "—"}</td>
+                <td className="px-4 py-3 text-right text-gray-700 hidden sm:table-cell">{formatNumber(l.unit_price, 2)}</td>
+                <td className="px-4 py-3 text-right text-gray-500 hidden sm:table-cell">{l.discount > 0 ? `${l.discount}%` : "—"}</td>
                 <td className="px-4 py-3 text-right font-semibold text-gray-900">
                   {formatNumber(lineTotal(l), 2)}
                 </td>
@@ -394,6 +395,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
             ))}
           </tbody>
         </table>
+        </div>
         <div className="border-t border-gray-100 px-4 py-3 flex justify-end">
           <p className="font-bold text-gray-900">
             Total HT : {formatCurrency(invoice.total_ht, invoice.currency as "USD" | "GNF" | "EUR")}
@@ -405,12 +407,13 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
       {invoice.payments.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden mb-6">
           <h2 className="font-semibold text-gray-800 px-5 py-4 border-b border-gray-50">Paiements reçus</h2>
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Date</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Mode</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Référence</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600 hidden sm:table-cell">Référence</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">Montant</th>
               </tr>
             </thead>
@@ -419,7 +422,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
                 <tr key={p.id}>
                   <td className="px-4 py-3 text-gray-600">{formatDate(p.paid_at, locale)}</td>
                   <td className="px-4 py-3 text-gray-600">{methodLabel[p.method] ?? p.method}</td>
-                  <td className="px-4 py-3 text-gray-500 font-mono text-xs">{p.reference ?? "—"}</td>
+                  <td className="px-4 py-3 text-gray-500 font-mono text-xs hidden sm:table-cell">{p.reference ?? "—"}</td>
                   <td className="px-4 py-3 text-right font-semibold text-emerald-700">
                     +{formatCurrency(p.amount, p.currency as "USD" | "GNF" | "EUR")}
                   </td>
@@ -427,6 +430,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
@@ -491,7 +495,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Payer">
         <div className="space-y-0">
           {/* Grille 2 colonnes */}
-          <div className="grid grid-cols-2 gap-x-8 gap-y-4 py-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 py-2">
             {/* Colonne gauche */}
             <div className="space-y-4">
               <div>
@@ -520,7 +524,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
                 >
                   <option value="bank">Virement bancaire</option>
                   <option value="cash">Espèces</option>
-                  <option value="mobile">Mobile money</option>
+                  <option value="mobile">Orange Money</option>
                   <option value="cheque">Chèque</option>
                   <option value="other">Autre</option>
                 </select>

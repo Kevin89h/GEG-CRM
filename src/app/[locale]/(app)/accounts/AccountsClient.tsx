@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useTranslations } from "next-intl"
 import { Plus, Search, Building2, Landmark, Briefcase } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import { Button } from "@/components/ui/Button"
 import { Badge } from "@/components/ui/Badge"
 import { Modal } from "@/components/ui/Modal"
@@ -27,6 +27,8 @@ const typeConfig: Record<AccountType, { label: string; color: "blue" | "purple" 
 export default function AccountsClient({ accounts: initial, employees }: Props) {
   const t = useTranslations("accounts")
   const router = useRouter()
+  const params = useParams()
+  const locale = (params.locale as string) ?? "fr"
   const [accounts, setAccounts] = useState(initial)
   const [search, setSearch] = useState("")
   const [filterType, setFilterType] = useState<AccountType | "all">("all")
@@ -48,7 +50,7 @@ export default function AccountsClient({ accounts: initial, employees }: Props) 
   async function handleSave() {
     setSaving(true)
     const { supabase, db } = getCompanyClientBrowser()
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from("accounts")
       .insert([{ ...form, salesperson_id: form.salesperson_id || null }])
       .select("*, contacts(count), deals(count)")
@@ -128,7 +130,7 @@ export default function AccountsClient({ accounts: initial, employees }: Props) 
                 return (
                   <tr
                     key={account.id}
-                    onClick={() => router.push(`accounts/${account.id}`)}
+                    onClick={() => router.push(`/${locale}/accounts/${account.id}`)}
                     className="hover:bg-blue-50/40 cursor-pointer transition-colors"
                   >
                     <td className="px-4 py-3">
@@ -178,7 +180,7 @@ export default function AccountsClient({ accounts: initial, employees }: Props) 
             value={form.industry}
             onChange={e => setForm(f => ({ ...f, industry: e.target.value }))}
           />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
               label={t("country")}
               value={form.country}
@@ -190,7 +192,7 @@ export default function AccountsClient({ accounts: initial, employees }: Props) 
               onChange={e => setForm(f => ({ ...f, city: e.target.value }))}
             />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
               label={t("phone")}
               value={form.phone}

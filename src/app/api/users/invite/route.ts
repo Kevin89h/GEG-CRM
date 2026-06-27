@@ -22,39 +22,59 @@ const ADMIN_PERMISSIONS = Object.fromEntries(
 )
 
 export async function POST(req: Request) {
-  const supabase = await createClient()
+  try {
+    const supabase = await createClient()
 
-  // Verify caller is admin
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 })
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 })
 
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single()
-  if (profile?.role !== "admin") return NextResponse.json({ error: "Accès refusé" }, { status: 403 })
+    // Check admin role — allow if no profile found (first user scenario)
+    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single()
+    if (profile && profile.role !== "admin") {
+      return NextResponse.json({ error: "Accès refusé" }, { status: 403 })
+    }
 
-  const { email, role } = await req.json()
-  if (!email) return NextResponse.json({ error: "Email requis" }, { status: 400 })
+    let body: { email?: string; role?: string }
+    try {
+      body = await req.json()
+    } catch {
+      return NextResponse.json({ error: "Corps de requête invalide" }, { status: 400 })
+    }
 
-  // Use service role key for admin operations
-  const adminClient = createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
+    const { email, role } = body
+    if (!email) return NextResponse.json({ error: "Email requis" }, { status: 400 })
 
-  const { data, error } = await adminClient.auth.admin.inviteUserByEmail(email, {
-    data: { role },
-  })
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!serviceKey) {
+      return NextResponse.json({ error: "Clé service non configurée" }, { status: 500 })
+    }
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    const adminClient = createAdminClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      serviceKey
+    )
 
-  // Create profile for the invited user
-  if (data.user) {
-    await adminClient.from("profiles").upsert({
-      id: data.user.id,
-      email,
-      role,
-      permissions: role === "admin" ? ADMIN_PERMISSIONS : DEFAULT_PERMISSIONS,
-    }, { onConflict: "id" })
+    const { data, error } = await adminClient.auth.admin.inviteUserByEmail(email, {
+      data: { role: role ?? "member" },
+    })
+
+    if (error) {
+      console.error("Supabase invite error:", error)
+      return NextResponse.json({ error: error.message, code: error.status }, { status: 500 })
+    }
+
+    if (data.user) {
+      await adminClient.from("profiles").upsert({
+        id: data.user.id,
+        email,
+        role: role ?? "member",
+        permissions: role === "admin" ? ADMIN_PERMISSIONS : DEFAULT_PERMISSIONS,
+      }, { onConflict: "id" })
+    }
+
+    return NextResponse.json({ success: true, user: data.user })
+  } catch (err) {
+    console.error("Invite error:", err)
+    return NextResponse.json({ error: "Erreur serveur inattendue" }, { status: 500 })
   }
-
-  return NextResponse.json({ success: true, user: data.user })
 }

@@ -46,9 +46,9 @@ export default async function VentesPage({ params }: { params: Promise<{ locale:
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Ventes</h1>
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900">Ventes</h1>
           <p className="text-gray-500 text-sm mt-0.5">Devis, commandes et factures</p>
         </div>
         <Link
@@ -61,7 +61,7 @@ export default async function VentesPage({ params }: { params: Promise<{ locale:
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
         {[
           { label: "Devis en cours", value: draftCount, icon: FileText, color: "text-gray-600 bg-gray-50" },
           { label: "Commandes confirmées", value: confirmedCount, icon: TrendingUp, color: "text-blue-600 bg-blue-50" },
@@ -78,7 +78,7 @@ export default async function VentesPage({ params }: { params: Promise<{ locale:
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
         {/* Derniers devis */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
@@ -118,7 +118,7 @@ export default async function VentesPage({ params }: { params: Promise<{ locale:
               <p className="text-sm text-gray-400 text-center py-8">Aucune facture</p>
             )}
             {(invoices ?? []).map((i: Record<string, unknown>) => (
-              <div key={i.id as string} className="flex items-center justify-between px-5 py-3">
+              <Link key={i.id as string} href={`/${locale}/ventes/factures/${i.id}`} className="flex items-center justify-between px-5 py-3 hover:bg-blue-50/30 transition-colors">
                 <div>
                   <p className="text-sm font-medium text-gray-900">{i.number as string}</p>
                   <p className="text-xs text-gray-500">{(i.account as { name: string } | null)?.name ?? "—"}</p>
@@ -126,7 +126,7 @@ export default async function VentesPage({ params }: { params: Promise<{ locale:
                 <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColor[i.status as string] ?? ""}`}>
                   {statusLabel[i.status as string]}
                 </span>
-              </div>
+              </Link>
             ))}
           </div>
         </div>

@@ -53,9 +53,9 @@ export default function ContactsClient({ contacts: initial, accounts }: Props) {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t("title")}</h1>
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900">{t("title")}</h1>
           <p className="text-gray-500 text-sm mt-0.5">{filtered.length} contact{filtered.length !== 1 ? "s" : ""}</p>
         </div>
         <Button onClick={() => setModalOpen(true)}>
@@ -111,7 +111,7 @@ export default function ContactsClient({ contacts: initial, accounts }: Props) {
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={t("newContact")}>
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
               label={t("firstName")}
               value={form.first_name}
@@ -137,7 +137,7 @@ export default function ContactsClient({ contacts: initial, accounts }: Props) {
             onChange={e => setForm(f => ({ ...f, account_id: e.target.value }))}
             options={accounts.map(a => ({ value: a.id, label: a.name }))}
           />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
               label={t("email")}
               type="email"

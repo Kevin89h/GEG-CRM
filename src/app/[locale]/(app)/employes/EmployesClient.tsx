@@ -286,21 +286,21 @@ export default function EmployesClient({ employees: initial, treasuryAccounts }:
       {/* Employee form modal */}
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editEmployee ? "Modifier l'employé" : "Nouvel employé"}>
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input label="Nom complet *" value={form.full_name} onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))} placeholder="Mamadou Diallo" />
             <Input label="Titre / Fonction" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="Commercial senior" />
           </div>
           <Input label="Description du poste" value={form.job_description} onChange={e => setForm(f => ({ ...f, job_description: e.target.value }))} placeholder="Responsable des ventes..." />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input label="Date d'embauche *" type="date" value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} />
             <Input label="Email" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="email@example.com" />
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Input label="Salaire mensuel" type="number" min="0" step="any" value={form.salary} onChange={e => setForm(f => ({ ...f, salary: e.target.value }))} placeholder="0" />
             <Select label="Devise salaire" value={form.salary_currency} onChange={e => setForm(f => ({ ...f, salary_currency: e.target.value }))} options={CURRENCIES} />
             <Input label="Taux commission (%)" type="number" min="0" max="100" step="0.1" value={form.commission_rate} onChange={e => setForm(f => ({ ...f, commission_rate: e.target.value }))} placeholder="0" />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input label="Téléphone" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+224 620 000 000" />
             <Input label="Notes" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optionnel" />
           </div>

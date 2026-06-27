@@ -265,6 +265,7 @@ export default function TresorerieClient({ accounts: initial, transactions: init
         {filtered.length === 0 ? (
           <p className="text-center py-12 text-gray-400 text-sm">Aucun mouvement</p>
         ) : (
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
@@ -305,13 +306,14 @@ export default function TresorerieClient({ accounts: initial, transactions: init
               })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 
       {/* Modal mouvement */}
       <Modal open={txModal} onClose={() => setTxModal(false)} title="Nouveau mouvement">
         <div className="space-y-4">
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             {(["credit", "debit", "transfer_out"] as const).map(type => (
               <button
                 key={type}
@@ -342,7 +344,7 @@ export default function TresorerieClient({ accounts: initial, transactions: init
             />
           )}
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
               label="Montant"
               type="number" min="0" step="any"
@@ -364,7 +366,7 @@ export default function TresorerieClient({ accounts: initial, transactions: init
             placeholder="Loyer, frais bancaires, recette vente..."
           />
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
               label="Référence"
               value={txForm.reference}
@@ -392,7 +394,7 @@ export default function TresorerieClient({ accounts: initial, transactions: init
       <Modal open={accountModal} onClose={() => setAccountModal(false)} title="Nouveau compte de trésorerie">
         <div className="space-y-4">
           <Input label="Nom du compte *" value={accForm.name} onChange={e => setAccForm(f => ({ ...f, name: e.target.value }))} placeholder="Ecobank GNF, Orange Money, Caisse principale…" />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Select
               label="Type"
               value={accForm.type}

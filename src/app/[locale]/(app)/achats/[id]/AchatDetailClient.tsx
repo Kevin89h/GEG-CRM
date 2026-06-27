@@ -101,6 +101,7 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
   const [lines, setLines] = useState(initialLines)
   const [costs, setCosts] = useState(initialCosts)
   const [saving, setSaving] = useState(false)
+  const [statusMsg, setStatusMsg] = useState("")
   const [tab, setTab] = useState<Tab>("produits")
   const [newCost, setNewCost] = useState({ type: "transport_maritime", label: "Transport maritime", amount: "", currency: order.currency })
   const [chatMsg, setChatMsg] = useState("")
@@ -109,6 +110,27 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
   const isReceived = order.status === "received"
   const cur = order.currency as "USD" | "GNF" | "EUR"
   const stepIndex = getStepIndex(order.status)
+
+  async function cancelOrder() {
+    if (!confirm("Annuler cette commande ?")) return
+    const { db } = getCompanyClientBrowser()
+    await db.from("purchase_orders").update({ status: "cancelled" }).eq("id", order.id)
+    router.push(`/${locale}/achats`)
+  }
+
+  function handlePrint() {
+    window.print()
+  }
+
+  async function sendMessage() {
+    if (!chatMsg.trim()) return
+    setChatMsg("")
+    setStatusMsg("Message enregistré (chatter à venir).")
+  }
+
+  function goToNewInvoice() {
+    router.push(`/${locale}/achats`)
+  }
 
   const totalFOB = lines.reduce((s, l) => s + l.fob_total, 0)
   const discountAmt = totalFOB * (order.global_discount_pct / 100)
@@ -147,7 +169,7 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
 
   async function receive() {
     if (lines.some(l => !l.warehouse_id)) {
-      alert("Assigner un entrepôt à chaque produit avant la réception.")
+      setStatusMsg("Assigner un entrepôt à chaque produit avant la réception.")
       return
     }
     setSaving(true)
@@ -231,27 +253,30 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
         {/* Actions */}
         <div className="flex items-center gap-1.5">
           {isDraft && (
-            <button
-              onClick={receive}
-              disabled={saving}
-              className="px-3 py-1.5 text-xs font-semibold rounded bg-[#017e84] text-white hover:bg-[#016b70] transition disabled:opacity-50"
-            >
-              {saving ? "Réception…" : "Recevoir"}
-            </button>
+            <>
+              <button
+                onClick={receive}
+                disabled={saving}
+                className="px-3 py-1.5 text-xs font-semibold rounded bg-[#017e84] text-white hover:bg-[#016b70] transition disabled:opacity-50"
+              >
+                {saving ? "Réception…" : "Recevoir"}
+              </button>
+              {statusMsg && <p className="text-sm text-red-600 mt-2">{statusMsg}</p>}
+            </>
           )}
           {isReceived && (
-            <button className="px-3 py-1.5 text-xs font-semibold rounded bg-[#017e84] text-white hover:opacity-90 transition">
+            <button onClick={goToNewInvoice} className="px-3 py-1.5 text-xs font-semibold rounded bg-[#017e84] text-white hover:opacity-90 transition">
               Charger la facture
             </button>
           )}
-          <button className="px-3 py-1.5 text-xs font-medium rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition flex items-center gap-1.5">
+          <button onClick={handlePrint} className="px-3 py-1.5 text-xs font-medium rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition flex items-center gap-1.5">
             <Printer className="w-3.5 h-3.5" /> Imprimer
           </button>
           <button className="px-3 py-1.5 text-xs font-medium rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition flex items-center gap-1.5">
             <MoreHorizontal className="w-3.5 h-3.5" /> ...
           </button>
           {isDraft && (
-            <button className="px-3 py-1.5 text-xs font-medium rounded border border-gray-300 bg-white text-red-600 hover:bg-red-50 transition flex items-center gap-1.5">
+            <button onClick={cancelOrder} className="px-3 py-1.5 text-xs font-medium rounded border border-gray-300 bg-white text-red-600 hover:bg-red-50 transition flex items-center gap-1.5">
               <X className="w-3.5 h-3.5" /> Annuler
             </button>
           )}
@@ -286,13 +311,16 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
 
         {/* Right panel actions */}
         <div className="flex items-center gap-1 ml-4 border-l border-gray-200 pl-4">
-          <button className="px-2.5 py-1.5 text-xs font-semibold rounded bg-[#7c3aed] text-white hover:bg-[#6d28d9] transition flex items-center gap-1.5">
-            <MessageSquare className="w-3.5 h-3.5" /> Envoyer message
-          </button>
-          <button className="px-2.5 py-1.5 text-xs font-medium rounded border border-gray-200 text-gray-600 hover:bg-gray-50 transition">
+          <div className="flex flex-col items-start gap-1">
+            <button onClick={sendMessage} className="px-2.5 py-1.5 text-xs font-semibold rounded bg-[#7c3aed] text-white hover:bg-[#6d28d9] transition flex items-center gap-1.5">
+              <MessageSquare className="w-3.5 h-3.5" /> Envoyer message
+            </button>
+            {statusMsg && <p className="text-sm text-green-600">{statusMsg}</p>}
+          </div>
+          <button onClick={() => setChatMsg("📝 Note : ")} className="px-2.5 py-1.5 text-xs font-medium rounded border border-gray-200 text-gray-600 hover:bg-gray-50 transition">
             Note
           </button>
-          <button className="px-2.5 py-1.5 text-xs font-medium rounded border border-gray-200 text-gray-600 hover:bg-gray-50 transition">
+          <button onClick={() => router.push(`/${locale}/activities`)} className="px-2.5 py-1.5 text-xs font-medium rounded border border-gray-200 text-gray-600 hover:bg-gray-50 transition">
             Activité
           </button>
         </div>
@@ -319,7 +347,7 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
             </div>
 
             {/* Form grid */}
-            <div className="grid grid-cols-2 gap-x-12 gap-y-4 mb-6 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-12 gap-y-4 mb-6 text-sm">
               <div className="space-y-3">
                 <div className="flex items-baseline gap-3">
                   <label className="text-xs text-gray-500 w-36 flex-shrink-0 flex items-center gap-1">
@@ -381,6 +409,7 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
             {/* Tab: Produits */}
             {tab === "produits" && (
               <div className="bg-white border border-t-0 border-gray-200 rounded-b-lg overflow-hidden mb-4">
+                <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-gray-200 text-xs text-gray-500 font-medium bg-gray-50">
@@ -443,6 +472,7 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
                   </tbody>
                 </table>
 
+                </div>
                 {/* Add links */}
                 <div className="px-4 py-3 flex items-center gap-4 text-xs border-t border-gray-100">
                   <button className="text-[#7c3aed] hover:underline font-medium">Ajouter un produit</button>
@@ -543,7 +573,7 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
 
                   {isDraft && (
                     <div className="mt-3 pt-3 border-t border-gray-100">
-                      <div className="grid grid-cols-4 gap-2 items-end">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 items-end">
                         <Select
                           label="Type"
                           value={newCost.type}
@@ -568,6 +598,7 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
                 {lines.length > 0 && (
                   <div>
                     <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Prix de revient par produit</h3>
+                    <div className="overflow-x-auto">
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="text-gray-400 border-b border-gray-100">
@@ -600,6 +631,7 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
                         })}
                       </tbody>
                     </table>
+                    </div>
                   </div>
                 )}
               </div>

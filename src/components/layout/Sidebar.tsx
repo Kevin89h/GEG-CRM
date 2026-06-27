@@ -19,6 +19,7 @@ import {
   Settings,
   UserCheck,
   FolderOpen,
+  Sparkles,
 } from "lucide-react"
 import { cn, initials } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
@@ -51,6 +52,7 @@ const navItems = [
   { key: "comptabilite", icon: Landmark, path: "comptabilite" },
   { key: "employes", icon: UserCheck, path: "employes" },
   { key: "documents", icon: FolderOpen, path: "documents" },
+  { key: "ai", icon: Sparkles, path: "ai" },
   { key: "settings", icon: Settings, path: "parametres/taux-de-change" },
 ] as const
 
@@ -77,7 +79,7 @@ export default function Sidebar({ locale, profile, companies, currentSchema }: P
     <aside className="w-64 flex-shrink-0 bg-slate-900 flex flex-col h-full">
       {/* Brand */}
       <div className="px-6 py-4 border-b border-slate-800">
-        <Image src="/geg-logo-wide.png" alt="GEG" width={160} height={42} className="object-contain" priority />
+        <Image src="/geg-logo-wide-white.svg" alt="GEG" width={160} height={42} className="object-contain" priority />
       </div>
 
       {/* Company switcher */}

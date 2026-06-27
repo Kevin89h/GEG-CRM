@@ -407,12 +407,12 @@ export default function ComptabiliteClient({ locale, clientStats, purchaseStats,
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Comptabilité</h1>
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900">Comptabilité</h1>
           <p className="text-gray-500 text-sm mt-0.5">Tableau de bord</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button onClick={() => setAccountModal(true)} className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-1.5">
             <Plus className="w-4 h-4" /> Nouveau compte
           </button>
@@ -435,7 +435,7 @@ export default function ComptabiliteClient({ locale, clientStats, purchaseStats,
       )}
 
       {/* Ligne 1 : Factures clients | Factures fournisseurs | Opérations diverses */}
-      <div className="grid grid-cols-3 gap-4 mb-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
         <InvoiceCard locale={locale} stats={clientStats} />
         <PurchaseCard locale={locale} stats={purchaseStats} />
 
@@ -503,7 +503,7 @@ export default function ComptabiliteClient({ locale, clientStats, purchaseStats,
       {/* Modal nouveau mouvement */}
       <Modal open={txModal} onClose={() => setTxModal(false)} title="Nouveau mouvement">
         <div className="space-y-4">
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 gap-2 min-w-0">
             {(["credit", "debit", "transfer_out"] as const).map(type => (
               <button key={type} onClick={() => setTxForm(f => ({ ...f, type }))}
                 className={`py-2 px-3 rounded-lg text-sm font-medium border transition ${txForm.type === type ? "bg-blue-600 text-white border-blue-600" : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"}`}
@@ -518,13 +518,13 @@ export default function ComptabiliteClient({ locale, clientStats, purchaseStats,
             <Select label="Compte destination" value={txForm.transfer_account_id} onChange={e => setTxForm(f => ({ ...f, transfer_account_id: e.target.value }))}
               options={[{ value: "", label: "Choisir…" }, ...accounts.filter(a => a.id !== txForm.account_id).map(a => ({ value: a.id, label: a.name }))]} />
           )}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input label="Montant" type="number" min="0" step="any" value={txForm.amount} onChange={e => setTxForm(f => ({ ...f, amount: e.target.value }))} />
             <Select label="Devise" value={txForm.currency} onChange={e => setTxForm(f => ({ ...f, currency: e.target.value as "GNF"|"USD"|"EUR" }))}
               options={[{ value: "GNF", label: "GNF" }, { value: "USD", label: "USD" }, { value: "EUR", label: "EUR" }]} />
           </div>
           <Input label="Description" value={txForm.description} onChange={e => setTxForm(f => ({ ...f, description: e.target.value }))} placeholder="Loyer, frais, virement client…" />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input label="Référence" value={txForm.reference} onChange={e => setTxForm(f => ({ ...f, reference: e.target.value }))} placeholder="N° chèque, reçu…" />
             <Input label="Date" type="date" value={txForm.date} onChange={e => setTxForm(f => ({ ...f, date: e.target.value }))} />
           </div>
@@ -541,7 +541,7 @@ export default function ComptabiliteClient({ locale, clientStats, purchaseStats,
       <Modal open={accountModal} onClose={() => setAccountModal(false)} title="Nouveau compte">
         <div className="space-y-4">
           <Input label="Nom du compte *" value={accForm.name} onChange={e => setAccForm(f => ({ ...f, name: e.target.value }))} placeholder="Ecobank GNF, Orange Money, Caisse…" />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Select label="Type" value={accForm.type} onChange={e => setAccForm(f => ({ ...f, type: e.target.value as "bank"|"mobile_money"|"cash" }))}
               options={[{ value: "bank", label: "Banque" }, { value: "mobile_money", label: "Mobile Money" }, { value: "cash", label: "Caisse" }]} />
             <Select label="Devise" value={accForm.currency} onChange={e => setAccForm(f => ({ ...f, currency: e.target.value as "GNF"|"USD"|"EUR" }))}

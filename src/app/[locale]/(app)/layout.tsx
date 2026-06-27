@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { getCompanySchema } from "@/lib/company"
 import Sidebar from "@/components/layout/Sidebar"
+import MobileHeader from "@/components/layout/MobileHeader"
 
 interface Props {
   children: React.ReactNode
@@ -20,7 +21,6 @@ export default async function AppLayout({ children, params }: Props) {
     getCompanySchema(),
   ])
 
-  // Charger les sociétés accessibles à cet utilisateur
   const companyAccess: string[] = profile?.company_access ?? []
   const { data: companies } = await supabase
     .from("companies")
@@ -29,16 +29,28 @@ export default async function AppLayout({ children, params }: Props) {
     .eq("is_active", true)
     .order("name")
 
+  const sharedProps = {
+    locale,
+    profile,
+    companies: companies ?? [],
+    currentSchema,
+  }
+
   return (
     <div className="flex h-full">
-      <Sidebar
-        locale={locale}
-        profile={profile}
-        companies={companies ?? []}
-        currentSchema={currentSchema}
-      />
-      <main className="flex-1 overflow-y-auto">
-        <div className="max-w-7xl mx-auto px-6 py-8">{children}</div>
+      {/* Desktop sidebar */}
+      <div className="hidden md:flex">
+        <Sidebar {...sharedProps} />
+      </div>
+
+      {/* Mobile header + drawer */}
+      <MobileHeader {...sharedProps} />
+
+      {/* Main content */}
+      <main className="flex-1 overflow-y-auto pt-14 md:pt-0">
+        <div className="max-w-7xl mx-auto px-4 py-4 md:px-6 md:py-8">
+          {children}
+        </div>
       </main>
     </div>
   )

@@ -54,33 +54,33 @@ export default function StockDashboard({ levels, warehouses, products }: Props) 
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Stock</h1>
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900">Stock</h1>
           <p className="text-gray-500 text-sm mt-0.5">{totalProducts} produits · {warehouses.length} sites</p>
         </div>
-        <div className="flex gap-2">
-          <Link href={`/${locale}/stock/entrepots`} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition">
+        <div className="flex flex-wrap gap-2">
+          <Link href={`/${locale}/stock/entrepots`} className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition">
             <WarehouseIcon className="w-4 h-4" />
-            Entrepôts
+            <span className="hidden sm:inline">Entrepôts</span>
           </Link>
-          <Link href={`/${locale}/stock/produits`} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition">
+          <Link href={`/${locale}/stock/produits`} className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition">
             <Package className="w-4 h-4" />
-            Produits
+            <span className="hidden sm:inline">Produits</span>
           </Link>
-          <Link href={`/${locale}/stock/mouvements`} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition">
+          <Link href={`/${locale}/stock/mouvements`} className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition">
             <SlidersHorizontal className="w-4 h-4" />
-            Mouvements
+            <span className="hidden sm:inline">Mouvements</span>
           </Link>
-          <Link href={`/${locale}/stock/mouvements/nouveau`} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition">
+          <Link href={`/${locale}/stock/mouvements/nouveau`} className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition">
             <Plus className="w-4 h-4" />
-            Mouvement
+            <span className="hidden sm:inline">Mouvement</span>
           </Link>
         </div>
       </div>
 
       {/* Quick actions */}
-      <div className="grid grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         {[
           { label: "Entrée stock", icon: ArrowDownToLine, color: "text-emerald-600 bg-emerald-50", href: `/${locale}/stock/mouvements/nouveau?type=in` },
           { label: "Sortie stock", icon: ArrowUpFromLine, color: "text-red-600 bg-red-50", href: `/${locale}/stock/mouvements/nouveau?type=out` },
@@ -96,12 +96,12 @@ export default function StockDashboard({ levels, warehouses, products }: Props) 
       </div>
 
       {/* Filters */}
-      <div className="flex gap-3 mb-4">
+      <div className="flex flex-col sm:flex-row gap-3 mb-4">
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Rechercher un produit..."
-          className="flex-1 max-w-xs px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+          className="w-full sm:max-w-xs px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
         />
         <div className="flex gap-2 flex-wrap">
           <button

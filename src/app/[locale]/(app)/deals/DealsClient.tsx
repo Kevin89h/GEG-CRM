@@ -47,7 +47,7 @@ export default function DealsClient({ deals: initial, accounts, profiles, curren
   async function handleSave() {
     setSaving(true)
     const { supabase, db } = getCompanyClientBrowser()
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from("deals")
       .insert([{
         ...form,
@@ -77,9 +77,9 @@ export default function DealsClient({ deals: initial, accounts, profiles, curren
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t("title")}</h1>
+          <h1 className="text-xl md:text-2xl font-bold text-gray-900">{t("title")}</h1>
           <p className="text-gray-500 text-sm mt-0.5">
             Pipeline: {formatCurrency(totalPipeline, "USD")}
           </p>
@@ -178,38 +178,40 @@ export default function DealsClient({ deals: initial, accounts, profiles, curren
               <p>{t("noDeals")}</p>
             </div>
           ) : (
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100">
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Titre</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">{t("account")}</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 hidden sm:table-cell">{t("account")}</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">{t("stage")}</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-600">{t("value")}</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">{t("probability")}</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">{t("closeDate")}</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 hidden md:table-cell">{t("probability")}</th>
+                  <th className="text-left px-4 py-3 font-medium text-gray-600 hidden md:table-cell">{t("closeDate")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {deals.map(deal => (
                   <tr key={deal.id} className="hover:bg-blue-50/40 transition-colors">
                     <td className="px-4 py-3 font-medium text-gray-900">{deal.title}</td>
-                    <td className="px-4 py-3 text-gray-600">{deal.account?.name ?? "—"}</td>
+                    <td className="px-4 py-3 text-gray-600 hidden sm:table-cell">{deal.account?.name ?? "—"}</td>
                     <td className="px-4 py-3">
                       <Badge variant={stageColors[deal.stage]}>{t(deal.stage)}</Badge>
                     </td>
                     <td className="px-4 py-3 text-gray-900 font-medium">
                       {deal.value ? formatCurrency(deal.value, deal.currency) : "—"}
                     </td>
-                    <td className="px-4 py-3 text-gray-600">
+                    <td className="px-4 py-3 text-gray-600 hidden md:table-cell">
                       {deal.probability != null ? `${deal.probability}%` : "—"}
                     </td>
-                    <td className="px-4 py-3 text-gray-600">
+                    <td className="px-4 py-3 text-gray-600 hidden md:table-cell">
                       {deal.close_date ? new Date(deal.close_date).toLocaleDateString("fr") : "—"}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            </div>
           )}
         </div>
       )}
@@ -229,7 +231,7 @@ export default function DealsClient({ deals: initial, accounts, profiles, curren
             onChange={e => setForm(f => ({ ...f, account_id: e.target.value }))}
             options={accounts.map(a => ({ value: a.id, label: a.name }))}
           />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Select
               label={t("stage")}
               value={form.stage}
