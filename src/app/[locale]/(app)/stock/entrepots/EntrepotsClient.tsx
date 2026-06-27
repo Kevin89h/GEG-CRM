@@ -14,17 +14,21 @@ export default function EntrepotsClient({ warehouses: initial }: Props) {
   const [warehouses, setWarehouses] = useState(initial)
   const [modalOpen, setModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState("")
   const [form, setForm] = useState({ name: "", city: "", address: "" })
 
   async function handleSave() {
     setSaving(true)
+    setSaveError("")
     const { db } = getCompanyClientBrowser()
     const { data, error } = await db
       .from("warehouses")
       .insert([{ name: form.name, city: form.city || null, address: form.address || null, is_active: true }])
       .select("*")
       .single()
-    if (!error && data) {
+    if (error) {
+      setSaveError(error.message)
+    } else if (data) {
       setWarehouses(prev => [...prev, data])
       setModalOpen(false)
       setForm({ name: "", city: "", address: "" })
@@ -80,9 +84,12 @@ export default function EntrepotsClient({ warehouses: initial }: Props) {
           <Input label="Nom du site" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Dépôt Conakry principal" required />
           <Input label="Ville" value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} placeholder="Conakry" />
           <Input label="Adresse" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} placeholder="Zone industrielle de Kaloum..." />
+          {saveError && (
+            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{saveError}</p>
+          )}
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" onClick={() => setModalOpen(false)}>Annuler</Button>
-            <Button onClick={handleSave} disabled={!form.name || saving}>Enregistrer</Button>
+            <Button onClick={handleSave} disabled={!form.name || saving}>{saving ? "Enregistrement…" : "Enregistrer"}</Button>
           </div>
         </div>
       </Modal>
