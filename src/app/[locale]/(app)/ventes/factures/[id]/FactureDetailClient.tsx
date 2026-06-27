@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Plus, Send, Printer, CheckCircle, ArrowLeft, Package, Truck, RotateCcw, X } from "lucide-react"
+import { Plus, Send, Printer, CheckCircle, ArrowLeft, Truck, RotateCcw, X } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
@@ -94,38 +94,31 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
   const isPaid = invoice.status === "paid"
   const isCancelled = invoice.status === "cancelled"
 
-  async function confirmAndSend() {
+  async function updateStatus(status: string) {
     setSaving(true)
     setError(null)
-    const { db } = getCompanyClientBrowser()
-    const { error: err } = await db.from("invoices").update({ status: "sent" }).eq("id", invoice.id)
-    if (err) {
-      setError(err.message)
+    const res = await fetch(`/api/invoices/${invoice.id}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    })
+    if (!res.ok) {
+      const json = await res.json()
+      setError(json.error ?? "Erreur serveur")
       setSaving(false)
       return
     }
-    setInvoice(prev => ({ ...prev, status: "sent" }))
+    setInvoice(prev => ({ ...prev, status }))
     setConfirmModalOpen(false)
     setSaving(false)
   }
 
-  async function resetToDraft() {
-    setSaving(true)
-    setError(null)
-    const { db } = getCompanyClientBrowser()
-    await db.from("invoices").update({ status: "draft" }).eq("id", invoice.id)
-    setInvoice(prev => ({ ...prev, status: "draft" }))
-    setSaving(false)
-  }
+  async function confirmAndSend() { await updateStatus("sent") }
+  async function resetToDraft() { await updateStatus("draft") }
 
   async function cancelInvoice() {
     if (!window.confirm("Annuler cette facture ?")) return
-    setSaving(true)
-    setError(null)
-    const { db } = getCompanyClientBrowser()
-    await db.from("invoices").update({ status: "cancelled" }).eq("id", invoice.id)
-    setInvoice(prev => ({ ...prev, status: "cancelled" }))
-    setSaving(false)
+    await updateStatus("cancelled")
   }
 
   const hasStockLines = invoice.lines.some(l => l.product_id)
@@ -170,29 +163,29 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
 
     setSaving(true)
     setError(null)
-    const { supabase, db } = getCompanyClientBrowser()
+
+    const { supabase } = getCompanyClientBrowser()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setError("Non authentifié"); setSaving(false); return }
 
-    const { data: payment, error: err } = await db
-      .from("payments")
-      .insert([{
-        invoice_id: invoice.id,
+    const res = await fetch(`/api/invoices/${invoice.id}/payments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
         amount,
         currency: paymentForm.currency,
         method: paymentForm.method,
         treasury_account_id: paymentForm.treasury_account_id || null,
         reference: paymentForm.reference || null,
         notes: paymentForm.notes || null,
-        paid_at: new Date(paymentForm.paid_at).toISOString(),
+        paid_at: paymentForm.paid_at,
         user_id: user.id,
-      }])
-      .select("*")
-      .single()
+      }),
+    })
 
-    if (err || !payment) { setError(err?.message ?? "Erreur"); setSaving(false); return }
+    const json = await res.json()
+    if (!res.ok || !json.payment) { setError(json.error ?? "Erreur serveur"); setSaving(false); return }
 
-    // Mise à jour locale optimiste
     const newTotalPaid = invoice.total_paid + amount
     const newBalance = invoice.total_ht - newTotalPaid
     const newStatus = newBalance <= 0 ? "paid" : newTotalPaid > 0 ? "partial" : "sent"
@@ -202,7 +195,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
       total_paid: newTotalPaid,
       balance: newBalance,
       status: newStatus,
-      payments: [{ ...payment }, ...prev.payments],
+      payments: [json.payment, ...prev.payments],
     }))
     setModalOpen(false)
     setPaymentForm(f => ({ ...f, amount: String(Math.max(newBalance, 0).toFixed(2)) }))

@@ -4,6 +4,7 @@ import { Building2, TrendingUp, CalendarCheck, Receipt, Landmark, Package } from
 import { Badge } from "@/components/ui/Badge"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import type { DealStage } from "@/types"
+import DashboardCharts from "./DashboardCharts"
 
 const stageColors: Record<DealStage, "gray" | "blue" | "yellow" | "purple" | "green" | "red"> = {
   lead: "gray", qualified: "blue", proposal: "yellow",
@@ -33,6 +34,7 @@ export default async function DashboardPage() {
     { data: invoiceStats },
     { data: treasuryStats },
     { data: stockStats },
+    { data: allInvoices },
   ] = await Promise.all([
     supabase.from("accounts").select("*", { count: "exact", head: true }),
     supabase.from("deals")
@@ -49,6 +51,7 @@ export default async function DashboardPage() {
     supabase.from("invoice_totals").select("balance, currency").in("status", ["sent", "partial"]),
     supabase.from("treasury_balances").select("balance, currency").eq("is_active", true),
     supabase.from("stock_levels").select("quantity, product:products(buy_price, currency)"),
+    supabase.from("invoice_totals").select("status"),
   ])
 
   const openDeals = (deals ?? []).filter((d: Record<string, unknown>) => !["won", "lost"].includes(d.stage as string))
@@ -70,6 +73,49 @@ export default async function DashboardPage() {
     if (!product?.buy_price) return sum
     return sum + Number(s.quantity) * product.buy_price
   }, 0)
+
+  // Pipeline chart data
+  const STAGE_META: Record<string, { label: string; color: string; order: number }> = {
+    lead:        { label: "Lead",         color: "#94a3b8", order: 0 },
+    qualified:   { label: "Qualifié",     color: "#60a5fa", order: 1 },
+    proposal:    { label: "Proposition",  color: "#fbbf24", order: 2 },
+    negotiation: { label: "Négociation",  color: "#a78bfa", order: 3 },
+    won:         { label: "Gagné",        color: "#34d399", order: 4 },
+  }
+  const pipelineByStage: Record<string, { value: number; count: number }> = {}
+  for (const d of (deals ?? []) as Array<{ stage: string; value: number | null; currency: string }>) {
+    if (d.stage === "lost") continue
+    if (!pipelineByStage[d.stage]) pipelineByStage[d.stage] = { value: 0, count: 0 }
+    pipelineByStage[d.stage].value += d.value ?? 0
+    pipelineByStage[d.stage].count += 1
+  }
+  const pipeline = Object.entries(STAGE_META)
+    .sort((a, b) => a[1].order - b[1].order)
+    .map(([stage, meta]) => ({
+      stage,
+      label: meta.label,
+      color: meta.color,
+      value: pipelineByStage[stage]?.value ?? 0,
+      count: pipelineByStage[stage]?.count ?? 0,
+    }))
+
+  // Invoice status chart data
+  const STATUS_META: Record<string, { label: string; color: string }> = {
+    draft:     { label: "Brouillon",   color: "#94a3b8" },
+    sent:      { label: "Envoyée",     color: "#fbbf24" },
+    partial:   { label: "Partiel",     color: "#60a5fa" },
+    paid:      { label: "Payée",       color: "#34d399" },
+    cancelled: { label: "Annulée",     color: "#f87171" },
+  }
+  const invoiceByStatus: Record<string, number> = {}
+  for (const inv of (allInvoices ?? []) as Array<{ status: string }>) {
+    invoiceByStatus[inv.status] = (invoiceByStatus[inv.status] ?? 0) + 1
+  }
+  const invoiceStatus = Object.entries(STATUS_META).map(([status, meta]) => ({
+    label: meta.label,
+    color: meta.color,
+    value: invoiceByStatus[status] ?? 0,
+  }))
 
   const erpStats = [
     {
@@ -132,6 +178,8 @@ export default async function DashboardPage() {
           </div>
         ))}
       </div>
+
+      <DashboardCharts pipeline={pipeline} invoiceStatus={invoiceStatus} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
