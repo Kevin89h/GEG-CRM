@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Warehouse as WarehouseIcon, MapPin } from "lucide-react"
+import { Plus, Warehouse as WarehouseIcon, MapPin, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { Modal } from "@/components/ui/Modal"
 import { Input } from "@/components/ui/Input"
@@ -15,6 +15,8 @@ export default function EntrepotsClient({ warehouses: initial }: Props) {
   const [modalOpen, setModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState("")
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
   const [form, setForm] = useState({ name: "", city: "", address: "" })
 
   async function handleSave() {
@@ -34,6 +36,15 @@ export default function EntrepotsClient({ warehouses: initial }: Props) {
       setForm({ name: "", city: "", address: "" })
     }
     setSaving(false)
+  }
+
+  async function handleDelete(id: string) {
+    setDeleting(true)
+    const { db } = getCompanyClientBrowser()
+    await db.from("warehouses").update({ is_active: false }).eq("id", id)
+    setWarehouses(prev => prev.filter(w => w.id !== id))
+    setConfirmDeleteId(null)
+    setDeleting(false)
   }
 
   return (
@@ -56,7 +67,7 @@ export default function EntrepotsClient({ warehouses: initial }: Props) {
               <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
                 <WarehouseIcon className="w-5 h-5 text-blue-600" />
               </div>
-              <div>
+              <div className="flex-1 min-w-0">
                 <h3 className="font-semibold text-gray-900">{w.name}</h3>
                 {(w.city || w.address) && (
                   <p className="text-sm text-gray-500 flex items-center gap-1 mt-0.5">
@@ -65,6 +76,12 @@ export default function EntrepotsClient({ warehouses: initial }: Props) {
                   </p>
                 )}
               </div>
+              <button
+                onClick={() => setConfirmDeleteId(w.id)}
+                className="ml-2 p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
             </div>
           </div>
         ))}
@@ -78,6 +95,22 @@ export default function EntrepotsClient({ warehouses: initial }: Props) {
           <span className="text-sm font-medium">Ajouter un site</span>
         </button>
       </div>
+
+      <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title="Supprimer le site ?">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">Ce site sera désactivé et n'apparaîtra plus dans les mouvements de stock. Les données existantes sont conservées.</p>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setConfirmDeleteId(null)}>Annuler</Button>
+            <button
+              onClick={() => confirmDeleteId && handleDelete(confirmDeleteId)}
+              disabled={deleting}
+              className="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition"
+            >
+              {deleting ? "Suppression…" : "Supprimer"}
+            </button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title="Nouveau site de stockage">
         <div className="space-y-4">
