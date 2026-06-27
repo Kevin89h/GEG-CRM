@@ -58,7 +58,7 @@ export default function ActivitiesClient({ activities: initial, accounts, deals,
   async function handleSave() {
     setSaving(true)
     const { supabase, db } = getCompanyClientBrowser()
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from("activities")
       .insert([{
         ...form,

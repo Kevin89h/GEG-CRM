@@ -37,8 +37,8 @@ export default function ContactsClient({ contacts: initial, accounts }: Props) {
 
   async function handleSave() {
     setSaving(true)
-    const { supabase, db } = getCompanyClientBrowser()
-    const { data, error } = await supabase
+    const { db } = getCompanyClientBrowser()
+    const { data, error } = await db
       .from("contacts")
       .insert([form])
       .select("*, account:accounts(id, name, type)")

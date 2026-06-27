@@ -136,7 +136,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setCreatingBL(false); return }
 
-    const { data: dn } = await supabase
+    const { data: dn } = await db
       .from("delivery_notes")
       .insert([{
         number: "",

@@ -108,7 +108,7 @@ export default function DocumentsClient({ documents: initial, categories, accoun
 
       const { data: { publicUrl } } = supabase.storage.from("documents").getPublicUrl(path)
 
-      const { data, error: dbError } = await supabase
+      const { data, error: dbError } = await db
         .from("documents")
         .insert({
           name: docName.trim(),
