@@ -6,7 +6,7 @@ import Link from "next/link"
 import {
   ArrowLeft, Package, TrendingUp, TrendingDown, Warehouse,
   Edit2, Save, X, ChevronRight, BarChart3, ShoppingCart, ShoppingBag,
-  FileText, Shield, Upload, Trash2, Download, Lock, Eye,
+  FileText, Shield, Upload, Trash2, Download, Lock, Eye, AlertTriangle,
 } from "lucide-react"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { createClient } from "@/lib/supabase/client"
@@ -112,6 +112,8 @@ export default function ProductDetailClient({
   const [documents, setDocuments] = useState<ProductDocument[]>(initialDocs)
   const [uploading, setUploading] = useState(false)
   const [uploadType, setUploadType] = useState<"technical_sheet" | "safety_data_sheet" | "other">("technical_sheet")
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [form, setForm] = useState({
@@ -231,6 +233,13 @@ export default function ProductDetailClient({
     }
   }
 
+  async function deleteProduct() {
+    setDeleting(true)
+    const { db } = getCompanyClientBrowser()
+    await db.from("products").delete().eq("id", product.id)
+    router.push(`/${locale}/stock/produits`)
+  }
+
   async function deleteDocument(docId: string, url: string) {
     const { db } = getCompanyClientBrowser()
     const supabase = createClient()
@@ -279,9 +288,15 @@ export default function ProductDetailClient({
               </Button>
             </>
           ) : (
-            <Button variant="secondary" onClick={() => setEditing(true)}>
-              <Edit2 className="w-4 h-4" /> <span className="hidden sm:inline">Modifier</span>
-            </Button>
+            <>
+              <button onClick={() => setConfirmDelete(true)}
+                className="p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition">
+                <Trash2 className="w-4 h-4" />
+              </button>
+              <Button variant="secondary" onClick={() => setEditing(true)}>
+                <Edit2 className="w-4 h-4" /> <span className="hidden sm:inline">Modifier</span>
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -777,6 +792,36 @@ export default function ProductDetailClient({
           </div>
         </div>
       </div>
+
+      {/* Confirm delete modal */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Supprimer ce produit ?</h3>
+                <p className="text-sm text-gray-500 mt-0.5">Cette action est irréversible.</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600 bg-gray-50 rounded-lg px-4 py-3 mb-5">
+              <span className="font-semibold">{product.name}</span> sera définitivement supprimé, ainsi que tous ses mouvements de stock et documents.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmDelete(false)}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition">
+                Annuler
+              </button>
+              <button onClick={deleteProduct} disabled={deleting}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-600 rounded-xl hover:bg-red-700 transition disabled:opacity-50">
+                {deleting ? "Suppression…" : "Supprimer"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

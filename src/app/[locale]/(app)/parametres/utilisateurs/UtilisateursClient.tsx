@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Users, Plus, X, Shield, ChevronDown, ChevronUp, Check, Mail, Loader2 } from "lucide-react"
+import { Users, Plus, X, Shield, ChevronDown, ChevronUp, Check, Mail, Loader2, Trash2, RefreshCw, AlertTriangle } from "lucide-react"
 import { Badge } from "@/components/ui/Badge"
 
 interface Permission {
@@ -81,6 +81,10 @@ export default function UtilisateursClient({ users: initial }: Props) {
   const [inviting, setInviting] = useState(false)
   const [inviteError, setInviteError] = useState("")
   const [inviteSuccess, setInviteSuccess] = useState("")
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [resendingId, setResendingId] = useState<string | null>(null)
+  const [resendSuccess, setResendSuccess] = useState<string | null>(null)
 
   function toggleExpand(id: string) {
     setExpandedId(prev => prev === id ? null : id)
@@ -116,6 +120,32 @@ export default function UtilisateursClient({ users: initial }: Props) {
     } finally {
       setSaving(null)
     }
+  }
+
+  async function handleDelete(userId: string) {
+    setDeleting(true)
+    const res = await fetch("/api/users/delete", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId }),
+    })
+    if (res.ok) {
+      setUsers(prev => prev.filter(u => u.id !== userId))
+      setConfirmDeleteId(null)
+    }
+    setDeleting(false)
+  }
+
+  async function handleResendInvite(user: UserProfile) {
+    setResendingId(user.id)
+    setResendSuccess(null)
+    const res = await fetch("/api/users/resend-invite", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: user.email, role: user.role }),
+    })
+    if (res.ok) setResendSuccess(user.id)
+    setResendingId(null)
   }
 
   async function handleInvite() {
@@ -209,6 +239,38 @@ export default function UtilisateursClient({ users: initial }: Props) {
         </button>
       </div>
 
+      {/* Confirm delete modal */}
+      {confirmDeleteId && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-gray-900">Supprimer cet utilisateur ?</h3>
+                <p className="text-sm text-gray-500 mt-0.5">
+                  {users.find(u => u.id === confirmDeleteId)?.email}
+                </p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-600 bg-gray-50 rounded-lg px-4 py-3 mb-5">
+              L'utilisateur perdra immédiatement l'accès au CRM. Cette action est irréversible.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmDeleteId(null)}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition">
+                Annuler
+              </button>
+              <button onClick={() => handleDelete(confirmDeleteId)} disabled={deleting}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-600 rounded-xl hover:bg-red-700 transition disabled:opacity-50">
+                {deleting ? "Suppression…" : "Supprimer"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* User list */}
       <div className="space-y-3">
         {users.map(user => (
@@ -228,8 +290,27 @@ export default function UtilisateursClient({ users: initial }: Props) {
               <button onClick={() => toggleExpand(user.id)}
                 className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-blue-600 transition px-2 py-1.5 rounded-lg hover:bg-blue-50">
                 <Shield className="w-3.5 h-3.5" />
-                Permissions
+                <span className="hidden sm:inline">Permissions</span>
                 {expandedId === user.id ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
+              <button
+                onClick={() => handleResendInvite(user)}
+                disabled={resendingId === user.id}
+                title="Renvoyer l'invitation"
+                className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition disabled:opacity-40"
+              >
+                {resendingId === user.id
+                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  : resendSuccess === user.id
+                  ? <Check className="w-3.5 h-3.5 text-emerald-500" />
+                  : <RefreshCw className="w-3.5 h-3.5" />}
+              </button>
+              <button
+                onClick={() => setConfirmDeleteId(user.id)}
+                title="Supprimer l'utilisateur"
+                className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
               </button>
             </div>
 

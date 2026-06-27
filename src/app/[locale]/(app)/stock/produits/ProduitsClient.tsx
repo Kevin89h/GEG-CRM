@@ -45,6 +45,7 @@ export default function ProduitsClient({ products: initial, categories, units }:
   const [filterCat, setFilterCat] = useState("all")
   const [modalOpen, setModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState("")
   const CURRENCIES = ["GNF", "USD", "EUR"] as const
   type Currency = "USD" | "GNF" | "EUR"
 
@@ -65,21 +66,29 @@ export default function ProduitsClient({ products: initial, categories, units }:
 
   async function handleSave() {
     setSaving(true)
-    const { supabase, db } = getCompanyClientBrowser()
-    const { data, error } = await supabase
+    setSaveError("")
+    const { db } = getCompanyClientBrowser()
+    const { data, error } = await db
       .from("products")
       .insert([{
-        ...form,
-        buy_price: form.buy_price ? parseFloat(form.buy_price) : null,
-        sell_price: form.sell_price ? parseFloat(form.sell_price) : null,
+        name: form.name,
         reference: form.reference || null,
         description: form.description || null,
+        category_id: form.category_id || null,
+        unit_id: form.unit_id || null,
+        buy_price: form.buy_price ? parseFloat(form.buy_price) : null,
+        buy_price_currency: form.buy_price_currency,
+        sell_price: form.sell_price ? parseFloat(form.sell_price) : null,
+        currency: form.currency,
       }])
       .select("*, category:product_categories(id, name, color), unit:units(id, name, type)")
       .single()
-    if (!error && data) {
+    if (error) {
+      setSaveError(error.message)
+    } else if (data) {
       setProducts(prev => [data, ...prev])
       setModalOpen(false)
+      setSaveError("")
       setForm({ reference: "", name: "", description: "", category_id: categories[0]?.id ?? "", unit_id: units[0]?.id ?? "", buy_price: "", buy_price_currency: "GNF", sell_price: "", currency: "GNF" })
     }
     setSaving(false)
@@ -245,9 +254,14 @@ export default function ProduitsClient({ products: initial, categories, units }:
             </div>
           </div>
 
+          {saveError && (
+            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{saveError}</p>
+          )}
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" onClick={() => setModalOpen(false)}>Annuler</Button>
-            <Button onClick={handleSave} disabled={!form.name || saving}>Enregistrer</Button>
+            <Button onClick={handleSave} disabled={!form.name || saving}>
+              {saving ? "Enregistrement…" : "Enregistrer"}
+            </Button>
           </div>
         </div>
       </Modal>
