@@ -5,7 +5,6 @@ import { Plus, Warehouse as WarehouseIcon, MapPin, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { Modal } from "@/components/ui/Modal"
 import { Input } from "@/components/ui/Input"
-import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import type { Warehouse } from "@/types"
 
 interface Props { warehouses: Warehouse[] }
@@ -22,16 +21,16 @@ export default function EntrepotsClient({ warehouses: initial }: Props) {
   async function handleSave() {
     setSaving(true)
     setSaveError("")
-    const { db } = getCompanyClientBrowser()
-    const { data, error } = await db
-      .from("warehouses")
-      .insert([{ name: form.name, city: form.city || null, address: form.address || null, is_active: true }])
-      .select("*")
-      .single()
-    if (error) {
-      setSaveError(error.message)
-    } else if (data) {
-      setWarehouses(prev => [...prev, data])
+    const res = await fetch("/api/warehouses", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: form.name, city: form.city, address: form.address }),
+    })
+    const json = await res.json()
+    if (!res.ok) {
+      setSaveError(json.error ?? "Erreur serveur")
+    } else {
+      setWarehouses(prev => [...prev, json.data])
       setModalOpen(false)
       setForm({ name: "", city: "", address: "" })
     }
@@ -40,8 +39,11 @@ export default function EntrepotsClient({ warehouses: initial }: Props) {
 
   async function handleDelete(id: string) {
     setDeleting(true)
-    const { db } = getCompanyClientBrowser()
-    await db.from("warehouses").update({ is_active: false }).eq("id", id)
+    await fetch("/api/warehouses", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    })
     setWarehouses(prev => prev.filter(w => w.id !== id))
     setConfirmDeleteId(null)
     setDeleting(false)
