@@ -89,7 +89,7 @@ export default function NouvelAchatClient({ products, locale }: Props) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setError("Non authentifié"); setSaving(false); return }
 
-    const { data: order, error: err } = await supabase
+    const { data: order, error: err } = await db
       .from("purchase_orders")
       .insert([{
         number: "",
