@@ -18,10 +18,10 @@ export default function EntrepotsClient({ warehouses: initial }: Props) {
 
   async function handleSave() {
     setSaving(true)
-    const { supabase, db } = getCompanyClientBrowser()
-    const { data, error } = await supabase
+    const { db } = getCompanyClientBrowser()
+    const { data, error } = await db
       .from("warehouses")
-      .insert([{ ...form, city: form.city || null, address: form.address || null }])
+      .insert([{ name: form.name, city: form.city || null, address: form.address || null, is_active: true }])
       .select("*")
       .single()
     if (!error && data) {
