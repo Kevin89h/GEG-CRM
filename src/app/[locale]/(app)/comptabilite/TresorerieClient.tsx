@@ -177,7 +177,7 @@ export default function TresorerieClient({ accounts: initial, transactions: init
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Trésorerie</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Comptabilité</h1>
           <p className="text-gray-500 text-sm mt-0.5">Soldes en temps réel</p>
         </div>
         <div className="flex gap-2">
