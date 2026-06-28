@@ -325,7 +325,8 @@ Pour créer un devis :
       usage: currentResponse.usage,
     })
   } catch (err) {
-    console.error("AI chat error:", err)
-    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
+    const message = err instanceof Error ? err.message : String(err)
+    console.error("AI chat error:", message)
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
