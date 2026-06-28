@@ -16,6 +16,15 @@ export default function LoginPage() {
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
 
+  // Detect invite token in URL hash and redirect to accept-invite page
+  useState(() => {
+    if (typeof window === "undefined") return
+    const hash = window.location.hash
+    if (hash.includes("type=invite")) {
+      router.replace(`/${locale}/accept-invite${hash}`)
+    }
+  })
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)

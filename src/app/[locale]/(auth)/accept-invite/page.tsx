@@ -16,17 +16,20 @@ export default function AcceptInvitePage() {
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
-    // Wait for Supabase to exchange the code from the URL and establish the session
     const supabase = createClient()
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_IN" || event === "USER_UPDATED") {
-        setReady(true)
-      }
-    })
-    // Also check if already signed in (code already exchanged)
+
+    // Check existing session first
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) setReady(true)
     })
+
+    // Listen for auth state changes (handles both PKCE code and implicit hash token)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_IN" || event === "USER_UPDATED" || event === "PASSWORD_RECOVERY") {
+        setReady(true)
+      }
+    })
+
     return () => subscription.unsubscribe()
   }, [])
 
