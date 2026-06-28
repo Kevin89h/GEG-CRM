@@ -54,7 +54,7 @@ export async function GET(req: Request) {
 
   // 2. Montant encaissé hier
   const { data: payments } = await db
-    .from("invoice_payments")
+    .from("payments")
     .select("amount, currency")
     .gte("payment_date", from)
     .lt("payment_date", to)
@@ -74,10 +74,10 @@ export async function GET(req: Request) {
   // 4. Valeur stock total (quantité × prix de vente)
   const { data: stockLevels } = await db
     .from("stock_levels")
-    .select("quantity, product:products(sale_price, currency)")
+    .select("quantity, product:products(sell_price, currency)")
 
   const valeurStock = stockLevels?.reduce((s, sl) => {
-    const price = Number((sl.product as { sale_price?: number } | null)?.sale_price ?? 0)
+    const price = Number((sl.product as { sell_price?: number } | null)?.sell_price ?? 0)
     return s + Number(sl.quantity ?? 0) * price
   }, 0) ?? 0
 

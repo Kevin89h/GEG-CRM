@@ -100,7 +100,7 @@ async function executeTool(name: string, input: Record<string, unknown>) {
 
   if (name === "search_products") {
     const q = (input.query as string).toLowerCase()
-    const { data } = await db.from("products").select("id, name, unit, sale_price, currency").ilike("name", `%${q}%`).limit(5)
+    const { data } = await db.from("products").select("id, name, sell_price, currency, unit:units(name)").ilike("name", `%${q}%`).limit(5)
     return data ?? []
   }
 
@@ -157,6 +157,7 @@ async function executeTool(name: string, input: Record<string, unknown>) {
       currency: input.currency ?? "GNF",
       lines_count: lines.length,
       url: `/fr/ventes/devis/${order.id}`,
+
     }
   }
 
