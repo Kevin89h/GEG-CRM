@@ -16,20 +16,47 @@ export default function AcceptInvitePage() {
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
+    // Capture hash BEFORE createClient() clears it (createBrowserClient processes hash on init)
+    const rawHash = window.location.hash.slice(1)
+    const hashParams = rawHash ? new URLSearchParams(rawHash) : null
+    const accessToken = hashParams?.get("access_token") ?? null
+    const refreshToken = hashParams?.get("refresh_token") ?? null
+
     const supabase = createClient()
 
-    // Check existing session first
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) setReady(true)
-    })
-
-    // Listen for auth state changes (handles both PKCE code and implicit hash token)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "SIGNED_IN" || event === "USER_UPDATED" || event === "PASSWORD_RECOVERY") {
+    // Listen first to catch the SIGNED_IN event fired by createClient() hash processing
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session && (event === "SIGNED_IN" || event === "USER_UPDATED" || event === "INITIAL_SESSION")) {
         setReady(true)
       }
     })
 
+    async function init() {
+      // If hash tokens are still in the URL, establish the session explicitly
+      if (accessToken && refreshToken) {
+        const { error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+        if (!error) {
+          setReady(true)
+          window.history.replaceState(null, "", window.location.pathname)
+          return
+        }
+      }
+
+      // Retry getSession() — may need a few ticks after createClient() processes the hash
+      for (let i = 0; i < 8; i++) {
+        await new Promise(r => setTimeout(r, 300))
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session) {
+          setReady(true)
+          return
+        }
+      }
+
+      // If still no session after retries, show an error
+      setError("Le lien d'invitation a expiré ou est invalide. Demandez un nouvel accès à votre administrateur.")
+    }
+
+    init()
     return () => subscription.unsubscribe()
   }, [])
 
@@ -83,9 +110,17 @@ export default function AcceptInvitePage() {
               ✅ Compte activé ! Redirection vers le tableau de bord…
             </div>
           ) : !ready ? (
-            <div className="text-slate-400 text-sm text-center py-6">
-              <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-              Vérification du lien d'invitation…
+            <div className="text-center py-6">
+              {error ? (
+                <p className="text-red-400 text-sm bg-red-400/10 border border-red-400/20 rounded-lg px-3 py-3">
+                  {error}
+                </p>
+              ) : (
+                <>
+                  <div className="w-6 h-6 border-2 border-blue-400 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+                  <p className="text-slate-400 text-sm">Vérification du lien d'invitation…</p>
+                </>
+              )}
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
