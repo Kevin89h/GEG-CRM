@@ -153,11 +153,15 @@ export default function Sidebar({ locale, profile, companies, currentSchema }: P
 
         {/* Profile */}
         {profile && (
-          <div className="flex items-center gap-3 px-3 py-2 mt-2">
-            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
-              <span className="text-white text-xs font-semibold">
-                {initials(profile.full_name || profile.email)}
-              </span>
+          <Link href={`/${locale}/profil`} className="flex items-center gap-3 px-3 py-2 mt-2 rounded-lg hover:bg-slate-800 transition-colors">
+            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0 overflow-hidden">
+              {profile.avatar_url ? (
+                <img src={profile.avatar_url} alt={profile.full_name || profile.email} className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-white text-xs font-semibold">
+                  {initials(profile.full_name || profile.email)}
+                </span>
+              )}
             </div>
             <div className="min-w-0">
               <p className="text-white text-xs font-medium truncate">
@@ -165,7 +169,7 @@ export default function Sidebar({ locale, profile, companies, currentSchema }: P
               </p>
               <p className="text-slate-500 text-xs capitalize">{profile.role?.replace("_", " ")}</p>
             </div>
-          </div>
+          </Link>
         )}
       </div>
     </aside>

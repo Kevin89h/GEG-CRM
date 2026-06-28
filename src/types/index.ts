@@ -148,6 +148,8 @@ export interface Profile {
   full_name: string | null
   role: UserRole
   avatar_url: string | null
+  phone: string | null
+  job_title: string | null
 }
 
 export type AccountWithContacts = Account & { contacts: Contact[] }
