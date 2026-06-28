@@ -4,8 +4,7 @@ import { Building2, TrendingUp, CalendarCheck, Receipt, Landmark, Package } from
 import { Badge } from "@/components/ui/Badge"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import type { DealStage } from "@/types"
-import dynamic from "next/dynamic"
-const DashboardCharts = dynamic(() => import("./DashboardCharts"), { ssr: false })
+import DashboardCharts from "./DashboardChartsWrapper"
 
 const stageColors: Record<DealStage, "gray" | "blue" | "yellow" | "purple" | "green" | "red"> = {
   lead: "gray", qualified: "blue", proposal: "yellow",

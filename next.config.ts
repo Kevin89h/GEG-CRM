@@ -6,14 +6,6 @@ const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 const nextConfig: NextConfig = {
   compress: true,
 
-  // Tree-shake lucide-react — only import used icons
-  modularizeImports: {
-    "lucide-react": {
-      transform: "lucide-react/dist/esm/icons/{{kebabCase member}}",
-      skipDefaultConversion: true,
-    },
-  },
-
   images: {
     formats: ["image/avif", "image/webp"],
     minimumCacheTTL: 86400,
