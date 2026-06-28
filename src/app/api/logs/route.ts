@@ -48,7 +48,7 @@ export async function GET(req: Request) {
   if (error) {
     // Table may not exist yet — return empty result instead of crashing
     if (error.code === "42P01" || error.message?.includes("does not exist")) {
-      return NextResponse.json({ logs: [], total: 0, lastLogins, needsMigration: true })
+      return NextResponse.json({ logs: [], total: 0, lastLogins: {}, needsMigration: true })
     }
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
