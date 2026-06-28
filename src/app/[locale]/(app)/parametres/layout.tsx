@@ -17,6 +17,7 @@ export default function ParametresLayout({ children }: Props) {
     { label: "Taux de change", href: `/${locale}/parametres/taux-de-change` },
     { label: "Documents", href: `/${locale}/parametres/documents` },
     { label: "Utilisateurs", href: `/${locale}/parametres/utilisateurs` },
+    { label: "Journal d'activité", href: `/${locale}/parametres/activite` },
   ]
 
   return (

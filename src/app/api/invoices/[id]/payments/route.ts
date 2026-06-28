@@ -1,4 +1,5 @@
 import { createCompanyClient } from "@/lib/company"
+import { logActivity } from "@/lib/activity-logger"
 import { NextResponse } from "next/server"
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -41,6 +42,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       await db.from("invoices").update({ status: newStatus }).eq("id", id)
     }
 
+    logActivity({ action: "payment", resource: "invoice", resourceId: id, label: `Paiement de ${amount} ${currency ?? ""} enregistré sur facture`, details: { amount, currency, method } })
     return NextResponse.json({ payment })
   } catch (err) {
     console.error("Payment error:", err)

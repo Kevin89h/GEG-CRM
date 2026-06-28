@@ -36,6 +36,8 @@ export default function LoginPage() {
       setLoading(false)
       return
     }
+    // Log connexion (fire-and-forget)
+    fetch("/api/auth/log-login", { method: "POST" }).catch(() => {})
     router.push(`/${locale}/dashboard`)
     router.refresh()
   }
