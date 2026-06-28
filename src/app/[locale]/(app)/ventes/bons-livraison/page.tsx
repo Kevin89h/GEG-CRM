@@ -76,7 +76,7 @@ export default async function BonsLivraisonPage() {
                   </td>
                   <td className="px-4 py-3 text-gray-500">{formatDate(b.created_at)}</td>
                   <td className="px-4 py-3">
-                    <Badge color={statusColors[b.status] ?? "gray"}>
+                    <Badge variant={statusColors[b.status] ?? "gray"}>
                       {statusLabels[b.status] ?? b.status}
                     </Badge>
                   </td>
