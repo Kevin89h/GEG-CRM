@@ -77,6 +77,7 @@ export default function ActivityClient({ users, lastLogins }: Props) {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
+  const [needsMigration, setNeedsMigration] = useState(false)
 
   const [filterUser, setFilterUser]     = useState("")
   const [filterAction, setFilterAction] = useState("")
@@ -94,6 +95,7 @@ export default function ActivityClient({ users, lastLogins }: Props) {
     const json = await res.json()
     setLogs(json.logs ?? [])
     setTotal(json.total ?? 0)
+    setNeedsMigration(json.needsMigration ?? false)
     setLoading(false)
   }, [filterUser, filterAction, filterResource])
 
@@ -136,6 +138,24 @@ export default function ActivityClient({ users, lastLogins }: Props) {
           Actualiser
         </button>
       </div>
+
+      {/* Migration banner */}
+      {needsMigration && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
+          <strong>⚠️ Table non créée.</strong> Exécute ce SQL dans le SQL Editor de Supabase pour activer les logs :
+          <pre className="mt-2 text-xs bg-amber-100 rounded p-2 overflow-x-auto whitespace-pre-wrap">{`CREATE TABLE IF NOT EXISTS geg_guinee.activity_logs (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  user_email text, user_name text,
+  action text NOT NULL, resource text NOT NULL,
+  resource_id text, label text, details jsonb,
+  created_at timestamptz DEFAULT now()
+);
+ALTER TABLE geg_guinee.activity_logs ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Admins can read logs" ON geg_guinee.activity_logs FOR SELECT
+  USING (EXISTS (SELECT 1 FROM public.profiles WHERE profiles.id = auth.uid() AND profiles.role = 'admin'));`}</pre>
+        </div>
+      )}
 
       {/* Dernières connexions */}
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">

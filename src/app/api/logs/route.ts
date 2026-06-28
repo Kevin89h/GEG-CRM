@@ -45,7 +45,13 @@ export async function GET(req: Request) {
   if (to)       query = query.lte("created_at", to)
 
   const { data, count, error } = await query
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    // Table may not exist yet — return empty result instead of crashing
+    if (error.code === "42P01" || error.message?.includes("does not exist")) {
+      return NextResponse.json({ logs: [], total: 0, lastLogins, needsMigration: true })
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
 
   // Fetch last login per user from auth.users via admin API
   const { data: authUsers } = await admin.auth.admin.listUsers({ perPage: 200 })

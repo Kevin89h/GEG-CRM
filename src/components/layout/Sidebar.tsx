@@ -20,6 +20,7 @@ import {
   UserCheck,
   FolderOpen,
   Sparkles,
+  Activity,
 } from "lucide-react"
 import { cn, initials } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
@@ -108,6 +109,26 @@ export default function Sidebar({ locale, profile, companies, currentSchema }: P
             </Link>
           )
         })}
+
+        {/* Journal d'activité — admins only */}
+        {profile?.role === "admin" && (() => {
+          const href = `/${locale}/parametres/activite`
+          const active = pathname.startsWith(href)
+          return (
+            <Link
+              href={href}
+              className={cn(
+                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                active
+                  ? "bg-blue-600 text-white"
+                  : "text-slate-400 hover:text-white hover:bg-slate-800"
+              )}
+            >
+              <Activity className="w-4 h-4 flex-shrink-0" />
+              Journal d'activité
+            </Link>
+          )
+        })()}
       </nav>
 
       {/* Bottom */}
