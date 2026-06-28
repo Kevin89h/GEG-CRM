@@ -54,8 +54,10 @@ export async function POST(req: Request) {
       serviceKey
     )
 
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://geg-crm.vercel.app"
     const { data, error } = await adminClient.auth.admin.inviteUserByEmail(email, {
       data: { role: role ?? "member" },
+      redirectTo: `${siteUrl}/fr/accept-invite`,
     })
 
     if (error) {
