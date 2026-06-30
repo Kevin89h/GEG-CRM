@@ -178,10 +178,12 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setLoading(false); return }
 
-    const year = new Date().getFullYear()
+    const now = new Date()
+    const year = now.getFullYear()
+    const month = String(now.getMonth() + 1).padStart(2, "0")
     const { count } = await db.from("invoices").select("*", { count: "exact", head: true })
     const seq = String((count ?? 0) + 1).padStart(4, "0")
-    const number = `FAC-${year}-${seq}-${Date.now().toString(36).toUpperCase()}`
+    const number = `FAC-${year}-${month}-${seq}`
 
     const today = new Date().toISOString().split("T")[0]
     const due = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]

@@ -379,10 +379,12 @@ export default function NouveauDevisClient({
     if (!user) { setError(t("nonAuthentifie")); setSaving(false); return }
 
     // Générer un numéro unique basé sur le timestamp
-    const year = new Date().getFullYear()
+    const now = new Date()
+    const year = now.getFullYear()
+    const month = String(now.getMonth() + 1).padStart(2, "0")
     const { count } = await db.from("sales_orders").select("*", { count: "exact", head: true })
     const seq = String((count ?? 0) + 1).padStart(4, "0")
-    const number = `SO-${year}-${seq}-${Date.now().toString(36).toUpperCase()}`
+    const number = `DEV-${year}-${month}-${seq}`
 
     const payload: Record<string, unknown> = {
       number,
