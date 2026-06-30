@@ -9,22 +9,40 @@ interface Line {
   quantity: number
   unit_price: number
   discount: number
+  tva_rate?: number | null
   product: { name: string; reference: string | null } | null
+}
+
+interface BankDetails {
+  name?: string
+  account?: string
+  swift?: string
+  iban?: string
+  tva_key?: string
+}
+
+interface TreasuryAccount {
+  name: string
+  institution: string
+  account_number: string
+  currency: string
 }
 
 interface DocSettings {
   company_name?: string | null
   tagline?: string | null
   address_line1?: string | null
+  address_line2?: string | null
   city?: string | null
+  country?: string | null
   phone?: string | null
+  email?: string | null
+  website?: string | null
   nif?: string | null
+  rccm?: string | null
   logo_url?: string | null
-  bank_name?: string | null
-  bank_account?: string | null
-  bank_iban?: string | null
   footer_text?: string | null
-  tva_rate?: number | null
+  bank_details?: BankDetails | null
   brand_color?: string | null
 }
 
@@ -35,89 +53,185 @@ interface Props {
   issueDate: string
   dueDate: string | null
   notes: string | null
+  sourceRef: string | null
   accountName: string
+  accountCity: string | null
   accountCountry: string | null
+  accountPhone: string | null
   lines: Line[]
+  payments: { amount: number; paid_at: string }[]
+  bankAccounts: TreasuryAccount[]
+  qrSvg: string
   locale: string
   docSettings?: DocSettings | null
 }
 
 export default function FacturePrintPage({
-  number, status, currency, issueDate, dueDate, notes,
-  accountName, lines, locale, docSettings,
+  number, status, currency, issueDate, dueDate, notes, sourceRef,
+  accountName, accountCity, accountCountry, accountPhone,
+  lines, payments, bankAccounts, qrSvg, locale, docSettings,
 }: Props) {
   useEffect(() => {
-    document.title = `FACTURE - ${number}`
+    document.title = `Facture ${number}`
   }, [number])
 
-  const tvaRate = docSettings?.tva_rate ?? 18
   const color = docSettings?.brand_color ?? "#1e3a5f"
-
-  const totalHT = lines.reduce((s, l) => s + l.quantity * l.unit_price * (1 - (l.discount ?? 0) / 100), 0)
-  const tvaAmt = totalHT * tvaRate / 100
-  const totalTTC = totalHT + tvaAmt
-
-  const companyName = docSettings?.company_name ?? "GEG Guinée"
+  const colorLight = color + "18"
+  const companyName = docSettings?.company_name ?? "Global Energy Group SAS"
   const tagline = docSettings?.tagline ?? "Beyond Limits."
-  const addr1 = docSettings?.address_line1 ?? ""
-  const city = docSettings?.city ?? "Conakry"
-  const phone = docSettings?.phone ?? ""
-  const nif = docSettings?.nif ?? ""
-  const logoUrl = docSettings?.logo_url ?? "/geg-logo.png"
-  const bankName = docSettings?.bank_name ?? ""
-  const bankAccount = docSettings?.bank_account ?? ""
-  const bankIban = docSettings?.bank_iban ?? ""
+  const addr1 = docSettings?.address_line1 ?? "Imm. Marbella"
+  const addr2 = docSettings?.address_line2 ?? null
+  const city = docSettings?.city ?? "Lambanyii - Conakry"
+  const phone = docSettings?.phone ?? "+224 622 95 87 07"
+  const email = docSettings?.email ?? null
+  const website = docSettings?.website ?? "www.globalenergy.group"
+  const nif = docSettings?.nif ?? "446243099"
+  const rccm = docSettings?.rccm ?? null
+  const logoUrl = docSettings?.logo_url ?? null
 
-  const statusLabels: Record<string, string> = {
-    draft: "Brouillon", sent: "Émise", partial: "Part. réglée", paid: "Payée", cancelled: "Annulée",
+  // Extra swift/tva_key info from doc_settings.bank_details (not in treasury_accounts)
+  const bankMeta = (docSettings?.bank_details as BankDetails | null) ?? {}
+
+  // Group treasury accounts by currency, filter out Caisse
+  const grouped: Record<string, TreasuryAccount[]> = {}
+  for (const acc of bankAccounts) {
+    if (!grouped[acc.currency]) grouped[acc.currency] = []
+    grouped[acc.currency].push(acc)
   }
+  // Order: GNF first, then EUR, then USD, then others
+  const currencyOrder = ["GNF", "EUR", "USD"]
+  const sortedCurrencies = [
+    ...currencyOrder.filter(c => grouped[c]),
+    ...Object.keys(grouped).filter(c => !currencyOrder.includes(c)),
+  ]
+
+  const hasTva = lines.some(l => (l.tva_rate ?? 0) > 0)
+  const defaultTva = hasTva ? 18 : 0
+
+  const totalHT = lines.reduce((s, l) =>
+    s + l.quantity * l.unit_price * (1 - (l.discount ?? 0) / 100), 0)
+
+  const tvaByRate: Record<number, number> = {}
+  for (const l of lines) {
+    const rate = l.tva_rate ?? defaultTva
+    if (rate > 0) {
+      const sub = l.quantity * l.unit_price * (1 - (l.discount ?? 0) / 100)
+      tvaByRate[rate] = (tvaByRate[rate] ?? 0) + sub * rate / 100
+    }
+  }
+  const totalTva = Object.values(tvaByRate).reduce((s, v) => s + v, 0)
+  const totalTTC = totalHT + totalTva
+  const totalPaid = payments.reduce((s, p) => s + p.amount, 0)
+  const balance = totalTTC - totalPaid
+
+  const cur = currency === "GNF" ? "FG" : currency
+  const fmtAmt = (n: number) => `${Math.round(n).toLocaleString("fr-FR")} ${cur}`
+
+  const statusConfig: Record<string, { label: string; bg: string; text: string }> = {
+    draft:     { label: "Brouillon",      bg: "#f3f4f6", text: "#6b7280" },
+    sent:      { label: "Émise",          bg: "#eff6ff", text: "#1d4ed8" },
+    partial:   { label: "Part. réglée",   bg: "#fffbeb", text: "#b45309" },
+    paid:      { label: "Payée",          bg: "#f0fdf4", text: "#15803d" },
+    cancelled: { label: "Annulée",        bg: "#fef2f2", text: "#b91c1c" },
+  }
+  const sc = statusConfig[status] ?? statusConfig.sent
+
+  const qrHtml = { __html: qrSvg }
 
   return (
     <>
       <style>{`
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 11px; color: #111; background: #e8e8e8; }
+        html, body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 11px; color: #111; background: #d4d4d4; }
         .no-print { position: fixed; top: 16px; right: 16px; display: flex; gap: 8px; z-index: 999; }
-        .btn { padding: 10px 20px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; }
+        .btn { padding: 10px 22px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: opacity .15s; }
+        .btn:hover { opacity: .85; }
         .btn-primary { background: ${color}; color: white; }
-        .btn-secondary { background: #e0e0e0; color: #333; }
-        .page { max-width: 210mm; margin: 20px auto; padding: 14mm 16mm 16mm; min-height: 297mm; background: white; box-shadow: 0 4px 24px rgba(0,0,0,0.15); display: flex; flex-direction: column; }
-        .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
-        .header-left .tagline { font-size: 18px; font-weight: 900; color: ${color}; letter-spacing: -0.5px; margin-bottom: 14px; }
-        .header-right { text-align: right; }
-        .header-right .logo-img { height: 48px; object-fit: contain; margin-bottom: 6px; display: block; margin-left: auto; }
-        .header-right .logo-fallback { font-size: 22px; font-weight: 900; color: ${color}; margin-bottom: 4px; }
-        .header-right .co-name { font-size: 11px; font-weight: 700; color: #111; }
-        .header-right .co-detail { font-size: 10px; color: #555; line-height: 1.5; }
-        .client-row { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 16px; }
-        .client-name { font-size: 13px; font-weight: 700; color: #111; }
-        .doc-number { font-size: 26px; font-weight: 900; color: #111; letter-spacing: -0.5px; }
-        .meta-bar { border: 1px solid #ddd; border-radius: 6px; display: flex; margin-bottom: 20px; overflow: hidden; }
-        .meta-cell { flex: 1; padding: 8px 14px; border-right: 1px solid #ddd; }
+        .btn-secondary { background: #e5e5e5; color: #333; }
+
+        .page { max-width: 210mm; margin: 24px auto; background: white; box-shadow: 0 8px 40px rgba(0,0,0,.22); display: flex; flex-direction: column; overflow: hidden; }
+
+        .stripe { height: 5px; background: linear-gradient(90deg, ${color} 0%, ${color}99 100%); }
+
+        .header { display: flex; justify-content: space-between; align-items: flex-start; padding: 18px 20px 14px; border-bottom: 1px solid #e8e8e8; }
+        .tagline { font-size: 21px; font-weight: 900; color: ${color}; letter-spacing: -.5px; line-height: 1; margin-bottom: 12px; }
+        .co-detail { font-size: 9.5px; color: #666; line-height: 1.65; }
+        .co-detail a { color: ${color}; text-decoration: none; font-weight: 600; }
+        .company-right { text-align: right; }
+        .logo { height: 48px; object-fit: contain; display: block; margin-left: auto; margin-bottom: 6px; }
+        .logo-initials { font-size: 26px; font-weight: 900; color: ${color}; letter-spacing: -1px; margin-bottom: 4px; }
+        .co-name { font-size: 11.5px; font-weight: 800; color: #111; }
+        .co-addr { font-size: 9.5px; color: #666; line-height: 1.6; margin-top: 2px; }
+
+        .title-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 16px 20px 0; gap: 20px; }
+        .bill-to-label { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #aaa; margin-bottom: 4px; }
+        .bill-to-name { font-size: 15px; font-weight: 900; color: #111; }
+        .bill-to-detail { font-size: 10px; color: #666; margin-top: 3px; line-height: 1.5; }
+        .doc-info { text-align: right; }
+        .doc-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #aaa; margin-bottom: 4px; }
+        .doc-number { font-size: 30px; font-weight: 900; color: #111; letter-spacing: -1px; line-height: 1; }
+        .status-badge { display: inline-block; margin-top: 6px; padding: 3px 10px; border-radius: 20px; font-size: 10px; font-weight: 700; background: ${sc.bg}; color: ${sc.text}; }
+
+        .meta-bar { display: flex; margin: 14px 20px; border-radius: 8px; overflow: hidden; border: 1px solid #e8e8e8; background: #fafafa; }
+        .meta-cell { flex: 1; padding: 10px 14px; border-right: 1px solid #e8e8e8; }
         .meta-cell:last-child { border-right: none; }
-        .meta-cell label { display: block; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: ${color}; margin-bottom: 3px; }
-        .meta-cell span { font-size: 11px; font-weight: 600; color: #111; }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 12px; font-size: 10.5px; }
-        thead tr { background: #f5f5f5; }
-        thead th { padding: 8px 10px; text-align: left; font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #333; border-top: 1px solid #ccc; border-bottom: 1px solid #ccc; }
-        .th-right { text-align: right; }
-        tbody tr { border-bottom: 1px solid #eeeeee; }
-        tbody td { padding: 8px 10px; vertical-align: middle; }
-        .td-right { text-align: right; }
-        .totals-wrap { display: flex; justify-content: flex-end; margin-bottom: 16px; }
-        .totals-table { width: 300px; font-size: 11px; border-collapse: collapse; }
-        .totals-table td { padding: 5px 10px; }
-        .totals-table .tr-ht td { color: #555; }
-        .totals-table .tr-tva td { color: #555; }
-        .totals-table .tr-total { background: #f0f0f0; }
-        .totals-table .tr-total td { font-weight: 800; font-size: 12px; border-top: 1px solid #ccc; }
-        .totals-table .td-label { text-align: left; }
-        .totals-table .td-val { text-align: right; white-space: nowrap; }
-        .notes-box { background: #fafafa; border-left: 3px solid ${color}; padding: 8px 12px; font-size: 10px; color: #555; line-height: 1.5; margin-bottom: 12px; }
-        .bank-section { margin-top: auto; border-top: 1px solid #ccc; padding-top: 12px; font-size: 10px; }
-        .bank-section .bank-title { font-weight: 700; font-size: 11px; margin-bottom: 4px; }
+        .meta-cell label { display: block; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: ${color}; margin-bottom: 4px; }
+        .meta-cell span { font-size: 11px; font-weight: 700; color: #111; }
+
+        .table-wrap { padding: 0 20px; }
+        table { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+        thead tr { background: ${color}; }
+        thead th { padding: 9px 10px; text-align: left; font-size: 8.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: white; }
+        .th-r { text-align: right; }
+        tbody tr { border-bottom: 1px solid #f0f0f0; }
+        tbody tr:last-child { border-bottom: 2px solid #e0e0e0; }
+        tbody td { padding: 9px 10px; vertical-align: top; }
+        .td-r { text-align: right; }
+        .td-desc { font-weight: 600; color: #111; line-height: 1.4; }
+        .td-muted { font-size: 9.5px; color: #888; margin-top: 2px; }
+
+        /* BOTTOM SECTION */
+        .bottom { display: flex; justify-content: space-between; align-items: flex-start; padding: 16px 20px; gap: 16px; }
+
+        /* QR */
+        .qr-block { display: flex; flex-direction: column; align-items: center; gap: 5px; flex-shrink: 0; }
+        .qr-wrap { border: 2px solid ${color}20; border-radius: 10px; padding: 7px; background: white; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+        .qr-wrap svg { display: block; width: 80px; height: 80px; }
+        .qr-label { font-size: 7.5px; color: #aaa; text-transform: uppercase; letter-spacing: .5px; font-weight: 600; text-align: center; }
+        .qr-number { font-size: 7.5px; color: ${color}; font-weight: 700; text-align: center; }
+
+        /* BANK ACCOUNTS */
+        .bank-section { flex: 1; min-width: 0; }
+        .bank-section-title { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: #888; margin-bottom: 8px; }
+        .bank-currency-group { margin-bottom: 8px; }
+        .bank-currency-label { font-size: 8px; font-weight: 700; color: white; background: ${color}; padding: 2px 7px; border-radius: 10px; display: inline-block; margin-bottom: 5px; }
+        .bank-table { width: 100%; border-collapse: collapse; }
+        .bank-table td { font-size: 9px; color: #444; padding: 2px 6px; line-height: 1.6; }
+        .bank-table td:first-child { font-weight: 700; color: #111; white-space: nowrap; }
+        .bank-table td:last-child { color: #666; font-family: monospace; font-size: 9px; }
+        .bank-swift { font-size: 8.5px; color: #999; margin-top: 2px; }
+
+        /* TOTALS */
+        .totals-block { flex-shrink: 0; width: 230px; }
+        .payment-comm { font-size: 9px; color: #999; margin-bottom: 8px; font-style: italic; }
+        .payment-comm strong { color: ${color}; }
+        .tot-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 10.5px; color: #555; border-bottom: 1px solid #f0f0f0; }
+        .tot-ht { color: #666; }
+        .tot-tva { color: #666; }
+        .tot-ttc { font-weight: 800; font-size: 13px; color: #111; border-bottom: 2px solid ${color} !important; border-top: 1px solid #ddd; padding: 7px 0; }
+        .tot-paid { color: #059669; font-size: 10px; }
+        .tot-balance { font-weight: 800; font-size: 12px; color: #dc2626; padding-top: 6px; border-bottom: none !important; }
+        .tot-cleared { font-weight: 800; font-size: 12px; color: #059669; padding-top: 6px; border-bottom: none !important; }
+
+        .notes-box { margin: 0 20px 12px; border-left: 3px solid ${color}; background: ${colorLight}; padding: 9px 13px; font-size: 10px; color: #555; line-height: 1.6; border-radius: 0 6px 6px 0; }
+
+        .footer-bar { background: ${color}; padding: 9px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .footer-item { display: flex; align-items: center; gap: 5px; color: rgba(255,255,255,.85); font-size: 9px; }
+        .footer-item strong { color: white; font-size: 9.5px; }
+        .footer-divider { width: 1px; height: 16px; background: rgba(255,255,255,.2); }
+
         @media print {
-          body { background: white; }
+          html, body { background: white; }
           .no-print { display: none !important; }
           .page { margin: 0; box-shadow: none; }
           @page { size: A4; margin: 0; }
@@ -130,109 +244,214 @@ export default function FacturePrintPage({
       </div>
 
       <div className="page">
+        <div className="stripe" />
+
         <div className="header">
-          <div className="header-left">
+          <div>
             <div className="tagline">{tagline}</div>
-          </div>
-          <div className="header-right">
-            {logoUrl
-              ? <img src={logoUrl} alt="Logo" className="logo-img" />
-              : <div className="logo-fallback">{companyName.split(" ").map((w: string) => w[0]).join("").slice(0, 3)}</div>
-            }
-            <div className="co-name">{companyName}</div>
             <div className="co-detail">
-              {addr1 && <>{addr1}<br /></>}
+              {addr1}{addr2 ? `, ${addr2}` : ""}<br />
               {city}<br />
               {phone && <>Tél. : {phone}<br /></>}
-              {nif && <>NIF : {nif}</>}
+              {email && <>{email}<br /></>}
+              {website && <a href={`https://${website.replace(/^https?:\/\//, "")}`}>{website}</a>}
+            </div>
+          </div>
+          <div className="company-right">
+            {logoUrl
+              ? <img src={logoUrl} alt={companyName} className="logo" />
+              : <div className="logo-initials">
+                  {companyName.split(" ").map((w: string) => w[0]).join("").slice(0, 3)}
+                </div>
+            }
+            <div className="co-name">{companyName}</div>
+            <div className="co-addr">
+              {nif && <>NIF : {nif}<br /></>}
+              {rccm && <>RCCM : {rccm}</>}
             </div>
           </div>
         </div>
 
-        <div className="client-row">
-          <div className="client-name">{accountName}</div>
-          <div className="doc-number">Facture # {number}</div>
+        <div className="title-row">
+          <div>
+            <div className="bill-to-label">Facturé à</div>
+            <div className="bill-to-name">{accountName}</div>
+            {(accountCity || accountCountry) && (
+              <div className="bill-to-detail">
+                {[accountCity, accountCountry].filter(Boolean).join(", ")}
+              </div>
+            )}
+            {accountPhone && <div className="bill-to-detail">{accountPhone}</div>}
+          </div>
+          <div className="doc-info">
+            <div className="doc-label">Facture</div>
+            <div className="doc-number">{number}</div>
+            <div><span className="status-badge">{sc.label}</span></div>
+          </div>
         </div>
 
         <div className="meta-bar">
           <div className="meta-cell">
-            <label>Date de facture</label>
+            <label>Date de la facture</label>
             <span>{formatDate(issueDate, locale)}</span>
           </div>
           {dueDate && (
             <div className="meta-cell">
-              <label>Échéance</label>
+              <label>Date d&apos;échéance</label>
               <span>{formatDate(dueDate, locale)}</span>
             </div>
           )}
-          <div className="meta-cell">
-            <label>Statut</label>
-            <span>{statusLabels[status] ?? status}</span>
-          </div>
+          {sourceRef && (
+            <div className="meta-cell">
+              <label>Référence</label>
+              <span>{sourceRef}</span>
+            </div>
+          )}
           <div className="meta-cell">
             <label>Devise</label>
             <span>{currency}</span>
           </div>
         </div>
 
-        <table>
-          <thead>
-            <tr>
-              <th style={{ width: "42%" }}>Description</th>
-              <th className="th-right" style={{ width: "12%" }}>Quantité</th>
-              <th className="th-right" style={{ width: "20%" }}>Prix unitaire</th>
-              <th className="th-right" style={{ width: "12%" }}>TVA</th>
-              <th className="th-right" style={{ width: "14%" }}>Montant</th>
-            </tr>
-          </thead>
-          <tbody>
-            {lines.map(l => {
-              const sub = l.quantity * l.unit_price * (1 - (l.discount ?? 0) / 100)
-              return (
-                <tr key={l.id}>
-                  <td>{l.description}</td>
-                  <td className="td-right">{formatNumber(l.quantity, 2)} Unité</td>
-                  <td className="td-right">{formatNumber(l.unit_price, 2)} {currency}</td>
-                  <td className="td-right">{tvaRate > 0 ? `TVA ${tvaRate}% (vente)` : "—"}</td>
-                  <td className="td-right" style={{ fontWeight: 600 }}>{formatNumber(sub, 2)} {currency}</td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-
-        <div className="totals-wrap">
-          <table className="totals-table">
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th style={{ width: hasTva ? "42%" : "52%" }}>Description</th>
+                <th className="th-r" style={{ width: "11%" }}>Qté</th>
+                <th className="th-r" style={{ width: "18%" }}>Prix unitaire</th>
+                {hasTva && <th className="th-r" style={{ width: "13%" }}>Taxes</th>}
+                <th className="th-r" style={{ width: hasTva ? "16%" : "19%" }}>Montant</th>
+              </tr>
+            </thead>
             <tbody>
-              <tr className="tr-ht">
-                <td className="td-label">Montant hors taxes</td>
-                <td className="td-val">{formatNumber(totalHT, 2)} {currency}</td>
-              </tr>
-              {tvaAmt > 0 && (
-                <tr className="tr-tva">
-                  <td className="td-label">TVA {tvaRate}% sur {formatNumber(totalHT, 2)} {currency}</td>
-                  <td className="td-val">{formatNumber(tvaAmt, 2)} {currency}</td>
-                </tr>
-              )}
-              <tr className="tr-total">
-                <td className="td-label">Total</td>
-                <td className="td-val">{formatNumber(totalTTC, 2)} {currency}</td>
-              </tr>
+              {lines.map(l => {
+                const disc = 1 - (l.discount ?? 0) / 100
+                const sub = l.quantity * l.unit_price * disc
+                const rate = l.tva_rate ?? defaultTva
+                return (
+                  <tr key={l.id}>
+                    <td>
+                      <div className="td-desc">{l.description}</div>
+                      {l.discount > 0 && (
+                        <div className="td-muted">Remise {l.discount}%</div>
+                      )}
+                    </td>
+                    <td className="td-r">{formatNumber(l.quantity, 2)} U</td>
+                    <td className="td-r">{formatNumber(l.unit_price, 0)} {cur}</td>
+                    {hasTva && (
+                      <td className="td-r" style={{ fontSize: "9px", color: "#888" }}>
+                        {rate > 0 ? `TVA ${rate}%` : "—"}
+                      </td>
+                    )}
+                    <td className="td-r" style={{ fontWeight: 700 }}>
+                      {formatNumber(sub, 0)} {cur}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
 
         {notes && <div className="notes-box">{notes}</div>}
 
-        {(bankName || bankAccount) && (
-          <div className="bank-section">
-            <div className="bank-title">Paiement à :</div>
-            <div>{companyName}</div>
-            {bankName && <div>Nom de la Banque: {bankName}</div>}
-            {bankAccount && <div>N° de Compte : {bankAccount}</div>}
-            {bankIban && <div>IBAN : {bankIban}</div>}
+        <div className="bottom">
+          {/* QR CODE */}
+          <div className="qr-block">
+            <div className="qr-wrap" dangerouslySetInnerHTML={{ __html: qrSvg }} />
+            <div className="qr-label">Scanner pour vérifier</div>
+            <div className="qr-number">{number}</div>
           </div>
-        )}
+
+          {/* BANK ACCOUNTS grouped by currency */}
+          <div className="bank-section">
+            <div className="bank-section-title">Coordonnées bancaires</div>
+            {sortedCurrencies.map(cur => (
+              <div className="bank-currency-group" key={cur}>
+                <span className="bank-currency-label">{cur}</span>
+                <table className="bank-table">
+                  <tbody>
+                    {grouped[cur].map(acc => (
+                      <tr key={acc.name}>
+                        <td>{acc.institution}</td>
+                        <td>{acc.account_number}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {cur === "GNF" && bankMeta.swift && (
+                  <div className="bank-swift">Swift : {bankMeta.swift}{bankMeta.tva_key ? ` · Clé TVA : ${bankMeta.tva_key}` : ""}</div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* TOTALS */}
+          <div className="totals-block">
+            <div className="payment-comm">
+              Communication : <strong>{number}</strong>
+            </div>
+            {hasTva && (
+              <div className="tot-row tot-ht">
+                <span>Montant hors taxes</span>
+                <span>{fmtAmt(totalHT)}</span>
+              </div>
+            )}
+            {Object.entries(tvaByRate).map(([rate, amt]) => (
+              <div className="tot-row tot-tva" key={rate}>
+                <span>TVA {rate}%</span>
+                <span>{fmtAmt(amt)}</span>
+              </div>
+            ))}
+            <div className="tot-row tot-ttc">
+              <span>Total</span>
+              <span>{fmtAmt(totalTTC)}</span>
+            </div>
+            {payments.map((p, i) => (
+              <div className="tot-row tot-paid" key={i}>
+                <span>Versement {formatDate(p.paid_at.slice(0, 10), locale)}</span>
+                <span>− {fmtAmt(p.amount)}</span>
+              </div>
+            ))}
+            {payments.length > 0 && (
+              <div className={`tot-row ${balance <= 0 ? "tot-cleared" : "tot-balance"}`}>
+                <span>Solde dû</span>
+                <span>{balance <= 0 ? "✓ Soldé" : fmtAmt(balance)}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="footer-bar">
+          {phone && (
+            <div className="footer-item">
+              <span>📞</span>
+              <strong>{phone}</strong>
+            </div>
+          )}
+          {phone && email && <div className="footer-divider" />}
+          {email && (
+            <div className="footer-item">
+              <span>✉</span>
+              <strong>{email}</strong>
+            </div>
+          )}
+          {(phone || email) && website && <div className="footer-divider" />}
+          {website && (
+            <div className="footer-item">
+              <span>🌐</span>
+              <strong>{website}</strong>
+            </div>
+          )}
+          {website && nif && <div className="footer-divider" />}
+          {nif && (
+            <div className="footer-item">
+              <span style={{ opacity: .7 }}>NIF</span>
+              <strong>{nif}</strong>
+            </div>
+          )}
+        </div>
       </div>
     </>
   )

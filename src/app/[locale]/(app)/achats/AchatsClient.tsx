@@ -7,6 +7,7 @@ import { useTranslations } from "next-intl"
 import {
   Plus, Search, LayoutList, LayoutGrid, ChevronLeft, ChevronRight,
   Clock, CheckCircle2, XCircle, FileText, AlertTriangle, Calendar,
+  ChevronUp, ChevronDown, ChevronsUpDown,
 } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils"
 
@@ -58,10 +59,25 @@ export default function AchatsClient({ orders }: Props) {
     return { label: formatDate(dateStr, locale), overdue: false }
   }
 
+  type SortField = "number" | "supplier_name" | "order_date" | "expected_date" | "total"
+  type SortDir = "asc" | "desc"
+
   const [tab, setTab] = useState<Tab>("all")
   const [search, setSearch] = useState("")
-  const [page, setPage] = useState(1)
-  const pageSize = 20
+  const [sortField, setSortField] = useState<SortField>("order_date")
+  const [sortDir, setSortDir] = useState<SortDir>("desc")
+
+  function handleSort(field: SortField) {
+    if (sortField === field) setSortDir(d => d === "asc" ? "desc" : "asc")
+    else { setSortField(field); setSortDir("asc") }
+  }
+
+  function SortIcon({ field }: { field: SortField }) {
+    if (sortField !== field) return <ChevronsUpDown className="w-3 h-3 ml-1 opacity-30" />
+    return sortDir === "asc"
+      ? <ChevronUp className="w-3 h-3 ml-1 text-blue-500" />
+      : <ChevronDown className="w-3 h-3 ml-1 text-blue-500" />
+  }
 
   const today = new Date(new Date().toDateString())
 
@@ -100,13 +116,19 @@ export default function AchatsClient({ orders }: Props) {
         o.supplier_name.toLowerCase().includes(q)
       )
     }
+    const dir = sortDir === "asc" ? 1 : -1
+    base = [...base].sort((a, b) => {
+      switch (sortField) {
+        case "number":        return dir * (a.number ?? "").localeCompare(b.number ?? "")
+        case "supplier_name": return dir * a.supplier_name.localeCompare(b.supplier_name)
+        case "order_date":    return dir * ((a.order_date ?? "") < (b.order_date ?? "") ? -1 : 1)
+        case "expected_date": return dir * ((a.expected_date ?? "") < (b.expected_date ?? "") ? -1 : 1)
+        case "total":         return dir * (a.total - b.total)
+        default: return 0
+      }
+    })
     return base
-  }, [tab, search, orders, rfqOrders, poOrders])
-
-  const totalPages = Math.max(1, Math.ceil(displayed.length / pageSize))
-  const paged = displayed.slice((page - 1) * pageSize, page * pageSize)
-
-  function goPage(n: number) { setPage(Math.min(Math.max(1, n), totalPages)) }
+  }, [tab, search, sortField, sortDir, orders, rfqOrders, poOrders])
 
   const TABS: { key: Tab; label: string; count: number }[] = [
     { key: "all", label: t("tabAll"),  count: orders.length },
@@ -130,7 +152,7 @@ export default function AchatsClient({ orders }: Props) {
           {TABS.map(tab => (
             <button
               key={tab.key}
-              onClick={() => { setTab(tab.key); setPage(1) }}
+              onClick={() => { setTab(tab.key);  }}
               className={`whitespace-nowrap px-3 py-1.5 text-sm rounded transition font-medium ${
                 tab.key === tab.key
                   ? "bg-gray-100 text-gray-900"
@@ -148,22 +170,13 @@ export default function AchatsClient({ orders }: Props) {
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
           <input
             value={search}
-            onChange={e => { setSearch(e.target.value); setPage(1) }}
+            onChange={e => { setSearch(e.target.value);  }}
             placeholder={t("searchPlaceholder")}
             className="pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 w-full sm:w-60"
           />
         </div>
 
-        {/* Pagination */}
-        <div className="flex items-center gap-1 text-xs text-gray-500">
-          <span className="hidden sm:inline">{(page - 1) * pageSize + 1}-{Math.min(page * pageSize, displayed.length)} / {displayed.length}</span>
-          <button onClick={() => goPage(page - 1)} disabled={page === 1} className="p-1 rounded hover:bg-gray-100 disabled:opacity-30">
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <button onClick={() => goPage(page + 1)} disabled={page === totalPages} className="p-1 rounded hover:bg-gray-100 disabled:opacity-30">
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
+        <span className="text-xs text-gray-400">{displayed.length} commande{displayed.length !== 1 ? "s" : ""}</span>
 
         {/* View toggles */}
         <div className="flex items-center gap-0.5 border border-gray-200 rounded p-0.5">
@@ -227,32 +240,48 @@ export default function AchatsClient({ orders }: Props) {
 
       {/* Main table */}
       <div className="px-4 py-4">
-        {paged.length === 0 ? (
+        {displayed.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-200 py-20 text-center text-gray-400">
             <FileText className="w-10 h-10 mx-auto mb-3 opacity-30" />
             <p className="text-sm">{t("emptyOrders")}</p>
           </div>
         ) : (
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-320px)]">
             <table className="w-full text-sm">
-              <thead>
+              <thead className="sticky top-0 z-10">
                 <tr className="bg-gray-50 border-b border-gray-200 text-xs text-gray-500 font-medium">
                   <th className="w-8 px-4 py-3 hidden sm:table-cell">
                     <input type="checkbox" className="rounded border-gray-300" />
                   </th>
-                  <th className="text-left px-4 py-3">{t("colReference")}</th>
-                  <th className="text-left px-4 py-3">{t("colSupplier")}</th>
+                  <th className="text-left px-4 py-3">
+                    <button onClick={() => handleSort("number")} className="flex items-center hover:text-gray-900 transition">
+                      {t("colReference")} <SortIcon field="number" />
+                    </button>
+                  </th>
+                  <th className="text-left px-4 py-3">
+                    <button onClick={() => handleSort("supplier_name")} className="flex items-center hover:text-gray-900 transition">
+                      {t("colSupplier")} <SortIcon field="supplier_name" />
+                    </button>
+                  </th>
                   <th className="text-left px-4 py-3 hidden md:table-cell">{t("colCompany")}</th>
                   <th className="text-left px-4 py-3 hidden md:table-cell">{t("colBuyer")}</th>
-                  <th className="text-left px-4 py-3 hidden sm:table-cell">{t("colDueDate")}</th>
+                  <th className="text-left px-4 py-3 hidden sm:table-cell">
+                    <button onClick={() => handleSort("expected_date")} className="flex items-center hover:text-gray-900 transition">
+                      {t("colDueDate")} <SortIcon field="expected_date" />
+                    </button>
+                  </th>
                   <th className="text-left px-4 py-3 hidden lg:table-cell">{t("colActivities")}</th>
-                  <th className="text-right px-4 py-3">{t("colTotal")}</th>
+                  <th className="text-right px-4 py-3">
+                    <button onClick={() => handleSort("total")} className="flex items-center ml-auto hover:text-gray-900 transition">
+                      {t("colTotal")} <SortIcon field="total" />
+                    </button>
+                  </th>
                   <th className="text-left px-4 py-3">{t("colStatus")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {paged.map(o => {
+                {displayed.map(o => {
                   const cfg = STATUS_CONFIG[o.status] ?? STATUS_CONFIG.draft
                   const date = relativeDate(o.expected_date, locale)
                   return (
@@ -301,21 +330,6 @@ export default function AchatsClient({ orders }: Props) {
             </table>
             </div>
 
-            {/* Footer */}
-            {displayed.length > pageSize && (
-              <div className="border-t border-gray-100 px-4 py-3 flex items-center justify-between text-xs text-gray-500">
-                <span>{t("footerRecords", { count: displayed.length })}</span>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => goPage(page - 1)} disabled={page === 1} className="px-2 py-1 rounded hover:bg-gray-100 disabled:opacity-30">
-                    <ChevronLeft className="w-3.5 h-3.5" />
-                  </button>
-                  <span>{t("footerPage", { page, totalPages })}</span>
-                  <button onClick={() => goPage(page + 1)} disabled={page === totalPages} className="px-2 py-1 rounded hover:bg-gray-100 disabled:opacity-30">
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>

@@ -6,7 +6,7 @@ import { useParams } from "next/navigation"
 import { useTranslations } from "next-intl"
 import {
   Plus, Search, ChevronLeft, ChevronRight, LayoutList, LayoutGrid,
-  Receipt, Clock,
+  Receipt, Clock, ChevronUp, ChevronDown, ChevronsUpDown, AlertTriangle,
 } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils"
 
@@ -64,10 +64,32 @@ export default function FacturesClient({ invoices }: Props) {
     return { label: formatDate(dateStr, "fr"), overdue: false }
   }
 
+  type SortField = "number" | "client_name" | "issue_date" | "due_date" | "total_ht" | "balance"
+  type SortDir = "asc" | "desc"
+
   const [tab, setTab] = useState<Tab>("ouvertes")
   const [search, setSearch] = useState("")
-  const [page, setPage] = useState(1)
-  const pageSize = 20
+  const [filterCurrency, setFilterCurrency] = useState<string>("all")
+  const [filterOverdue, setFilterOverdue] = useState(false)
+  const [sortField, setSortField] = useState<SortField>("issue_date")
+  const [sortDir, setSortDir] = useState<SortDir>("desc")
+
+  function handleSort(field: SortField) {
+    if (sortField === field) setSortDir(d => d === "asc" ? "desc" : "asc")
+    else { setSortField(field); setSortDir("asc") }
+  }
+
+  function SortIcon({ field }: { field: SortField }) {
+    if (sortField !== field) return <ChevronsUpDown className="w-3 h-3 ml-1 opacity-30" />
+    return sortDir === "asc"
+      ? <ChevronUp className="w-3 h-3 ml-1 text-blue-500" />
+      : <ChevronDown className="w-3 h-3 ml-1 text-blue-500" />
+  }
+
+  const currencies = useMemo(() => {
+    const set = new Set(invoices.map(i => i.currency).filter(Boolean))
+    return Array.from(set).sort()
+  }, [invoices])
 
   const openStatuses = ["sent", "partial"]
 
@@ -96,6 +118,7 @@ export default function FacturesClient({ invoices }: Props) {
     else if (tab === "payees") base = invoices.filter(i => i.status === "paid")
     else if (tab === "brouillons") base = invoices.filter(i => i.status === "draft")
     else base = invoices
+
     if (search) {
       const q = search.toLowerCase()
       base = base.filter(i =>
@@ -103,12 +126,26 @@ export default function FacturesClient({ invoices }: Props) {
         i.client_name.toLowerCase().includes(q)
       )
     }
-    return base
-  }, [tab, search, invoices])
+    if (filterCurrency !== "all") base = base.filter(i => i.currency === filterCurrency)
+    if (filterOverdue) {
+      const today = new Date(); today.setHours(0,0,0,0)
+      base = base.filter(i => openStatuses.includes(i.status) && i.due_date && new Date(i.due_date) < today)
+    }
 
-  const totalPages = Math.max(1, Math.ceil(displayed.length / pageSize))
-  const paged = displayed.slice((page - 1) * pageSize, page * pageSize)
-  function goPage(n: number) { setPage(Math.min(Math.max(1, n), totalPages)) }
+    const dir = sortDir === "asc" ? 1 : -1
+    base = [...base].sort((a, b) => {
+      switch (sortField) {
+        case "number":      return dir * a.number.localeCompare(b.number)
+        case "client_name": return dir * (a.client_name ?? "").localeCompare(b.client_name ?? "")
+        case "issue_date":  return dir * ((a.issue_date ?? "") < (b.issue_date ?? "") ? -1 : 1)
+        case "due_date":    return dir * ((a.due_date ?? "") < (b.due_date ?? "") ? -1 : 1)
+        case "total_ht":    return dir * (a.total_ht - b.total_ht)
+        case "balance":     return dir * (a.balance - b.balance)
+        default: return 0
+      }
+    })
+    return base
+  }, [tab, search, filterCurrency, filterOverdue, sortField, sortDir, invoices])
 
   const TABS: { key: Tab; label: string; count: number }[] = [
     { key: "ouvertes",   label: t("tabOpen"),    count: stats.ouvertes },
@@ -134,7 +171,7 @@ export default function FacturesClient({ invoices }: Props) {
           {TABS.map(tab => (
             <button
               key={tab.key}
-              onClick={() => { setTab(tab.key); setPage(1) }}
+              onClick={() => { setTab(tab.key);  }}
               className={`px-3 py-1.5 text-sm rounded transition font-medium ${
                 tab.key === tab.key
                   ? "bg-gray-100 text-gray-900"
@@ -147,25 +184,43 @@ export default function FacturesClient({ invoices }: Props) {
           ))}
         </div>
 
-        <div className="relative ml-auto">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-          <input
-            value={search}
-            onChange={e => { setSearch(e.target.value); setPage(1) }}
-            placeholder={t("searchPlaceholder")}
-            className="pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 w-60"
-          />
+        <div className="flex items-center gap-2 ml-auto">
+          {/* Currency filter */}
+          {currencies.length > 1 && (
+            <select
+              value={filterCurrency}
+              onChange={e => { setFilterCurrency(e.target.value);  }}
+              className="text-xs border border-gray-200 rounded px-2 py-1.5 bg-white text-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-400"
+            >
+              <option value="all">Toutes devises</option>
+              {currencies.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          )}
+
+          {/* Overdue filter */}
+          <button
+            onClick={() => { setFilterOverdue(v => !v);  }}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded border transition font-medium ${
+              filterOverdue
+                ? "bg-red-50 border-red-300 text-red-700"
+                : "border-gray-200 text-gray-500 hover:border-gray-300"
+            }`}
+          >
+            <AlertTriangle className="w-3 h-3" /> En retard
+          </button>
+
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+            <input
+              value={search}
+              onChange={e => { setSearch(e.target.value);  }}
+              placeholder={t("searchPlaceholder")}
+              className="pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 w-52"
+            />
+          </div>
         </div>
 
-        <div className="flex items-center gap-1 text-xs text-gray-500">
-          <span>{(page - 1) * pageSize + 1}-{Math.min(page * pageSize, displayed.length)} / {displayed.length}</span>
-          <button onClick={() => goPage(page - 1)} disabled={page === 1} className="p-1 rounded hover:bg-gray-100 disabled:opacity-30">
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <button onClick={() => goPage(page + 1)} disabled={page === totalPages} className="p-1 rounded hover:bg-gray-100 disabled:opacity-30">
-            <ChevronRight className="w-4 h-4" />
-          </button>
-        </div>
+        <span className="text-xs text-gray-400">{displayed.length} facture{displayed.length !== 1 ? "s" : ""}</span>
 
         <div className="flex items-center gap-0.5 border border-gray-200 rounded p-0.5">
           <button className="p-1.5 rounded bg-gray-100 text-gray-700"><LayoutList className="w-3.5 h-3.5" /></button>
@@ -197,32 +252,59 @@ export default function FacturesClient({ invoices }: Props) {
 
       {/* Table */}
       <div className="px-6 py-4">
-        {paged.length === 0 ? (
+        {displayed.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-200 py-20 text-center text-gray-400">
             <Receipt className="w-10 h-10 mx-auto mb-3 opacity-30" />
             <p className="text-sm">{t("noInvoiceFound")}</p>
           </div>
         ) : (
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+            <div className="overflow-y-auto max-h-[calc(100vh-280px)]">
             <table className="w-full text-sm">
-              <thead>
+              <thead className="sticky top-0 z-10">
                 <tr className="bg-gray-50 border-b border-gray-200 text-xs text-gray-500 font-medium">
                   <th className="w-8 px-4 py-3">
                     <input type="checkbox" className="rounded border-gray-300" />
                   </th>
-                  <th className="text-left px-4 py-3">{t("colNumber")}</th>
-                  <th className="text-left px-4 py-3">{t("colClient")}</th>
-                  <th className="text-left px-4 py-3">{t("colIssueDate")}</th>
-                  <th className="text-left px-4 py-3">{t("colDueDate")}</th>
+                  <th className="text-left px-4 py-3">
+                    <button onClick={() => handleSort("number")} className="flex items-center hover:text-gray-900 transition">
+                      {t("colNumber")} <SortIcon field="number" />
+                    </button>
+                  </th>
+                  <th className="text-left px-4 py-3">
+                    <button onClick={() => handleSort("client_name")} className="flex items-center hover:text-gray-900 transition">
+                      {t("colClient")} <SortIcon field="client_name" />
+                    </button>
+                  </th>
+                  <th className="text-left px-4 py-3">
+                    <button onClick={() => handleSort("issue_date")} className="flex items-center hover:text-gray-900 transition">
+                      {t("colIssueDate")} <SortIcon field="issue_date" />
+                    </button>
+                  </th>
+                  <th className="text-left px-4 py-3">
+                    <button onClick={() => handleSort("due_date")} className="flex items-center hover:text-gray-900 transition">
+                      {t("colDueDate")} <SortIcon field="due_date" />
+                    </button>
+                  </th>
                   <th className="text-left px-4 py-3">{t("colActivities")}</th>
-                  <th className="text-right px-4 py-3">{t("colHt")}</th>
+                  <th className="text-right px-4 py-3">
+                    <button onClick={() => handleSort("total_ht")} className="flex items-center ml-auto hover:text-gray-900 transition">
+                      {t("colHt")} <SortIcon field="total_ht" />
+                    </button>
+                  </th>
                   {showPayments && <th className="text-right px-4 py-3">{t("colCollected")}</th>}
-                  {showPayments && <th className="text-right px-4 py-3">{t("colAmountDue")}</th>}
+                  {showPayments && (
+                    <th className="text-right px-4 py-3">
+                      <button onClick={() => handleSort("balance")} className="flex items-center ml-auto hover:text-gray-900 transition">
+                        {t("colAmountDue")} <SortIcon field="balance" />
+                      </button>
+                    </th>
+                  )}
                   <th className="text-left px-4 py-3">{t("colStatus")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {paged.map(i => {
+                {displayed.map(i => {
                   const cfg = STATUS_CONFIG[i.status] ?? STATUS_CONFIG.draft
                   const due = relativeDate(i.due_date)
                   const isOpen = openStatuses.includes(i.status)
@@ -299,21 +381,7 @@ export default function FacturesClient({ invoices }: Props) {
                 </tfoot>
               )}
             </table>
-
-            {displayed.length > pageSize && (
-              <div className="border-t border-gray-100 px-4 py-3 flex items-center justify-between text-xs text-gray-500">
-                <span>{t("records", { count: displayed.length })}</span>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => goPage(page - 1)} disabled={page === 1} className="px-2 py-1 rounded hover:bg-gray-100 disabled:opacity-30">
-                    <ChevronLeft className="w-3.5 h-3.5" />
-                  </button>
-                  <span>{t("page", { page, total: totalPages })}</span>
-                  <button onClick={() => goPage(page + 1)} disabled={page === totalPages} className="px-2 py-1 rounded hover:bg-gray-100 disabled:opacity-30">
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            )}
+            </div>
           </div>
         )}
       </div>
