@@ -131,7 +131,7 @@ function PurchaseCard({ locale, stats }: { locale: string; stats: Props["purchas
         </div>
         <div className="flex gap-2">
           <Link
-            href={`/${locale}/achats/nouveau`}
+            href={`/${locale}/comptabilite/factures-fournisseurs/nouveau`}
             className="px-3 py-1.5 text-sm font-semibold rounded-lg bg-gray-800 text-white hover:bg-gray-700 transition-colors"
           >
             Nouveau
@@ -142,7 +142,7 @@ function PurchaseCard({ locale, stats }: { locale: string; stats: Props["purchas
 
       <div className="px-5 pb-3 space-y-2">
         {stats.draft.length > 0 ? (
-          <Link href={`/${locale}/achats`} className="flex justify-between items-center hover:bg-gray-50 rounded-lg px-2 py-1 -mx-2 transition-colors group">
+          <Link href={`/${locale}/comptabilite/factures-fournisseurs`} className="flex justify-between items-center hover:bg-gray-50 rounded-lg px-2 py-1 -mx-2 transition-colors group">
             <span className="text-sm font-medium text-blue-600 group-hover:underline">
               {stats.draft.length} À valider
             </span>
@@ -152,7 +152,7 @@ function PurchaseCard({ locale, stats }: { locale: string; stats: Props["purchas
           </Link>
         ) : null}
         {stats.toPay.length > 0 ? (
-          <Link href={`/${locale}/achats`} className="flex justify-between items-center hover:bg-gray-50 rounded-lg px-2 py-1 -mx-2 transition-colors group">
+          <Link href={`/${locale}/comptabilite/factures-fournisseurs`} className="flex justify-between items-center hover:bg-gray-50 rounded-lg px-2 py-1 -mx-2 transition-colors group">
             <span className="text-sm font-medium text-amber-600 group-hover:underline">
               {stats.toPay.length} À payer
             </span>
