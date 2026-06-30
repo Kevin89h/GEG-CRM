@@ -16,7 +16,7 @@ export default async function DevisPdfPage({ params }: { params: Promise<{ local
 
   const { data: order, error: orderErr } = await db
     .from("sales_orders")
-    .select("id, number, status, currency, valid_until, notes, created_at, payment_terms, date_order, client_order_ref, account_id, salesperson_id")
+    .select("id, number, currency, valid_until, notes, created_at, account_id, salesperson_id")
     .eq("id", id)
     .single()
 
@@ -47,13 +47,13 @@ export default async function DevisPdfPage({ params }: { params: Promise<{ local
   return (
     <PrintPage
       number={order.number}
-      status={order.status}
+      status={(order as Record<string, unknown>).status as string ?? "draft"}
       currency={order.currency}
       createdAt={order.created_at}
       validUntil={order.valid_until ?? null}
       notes={order.notes ?? null}
       deliveryAddress={null}
-      paymentTerms={order.payment_terms ?? null}
+      paymentTerms={(order as Record<string, unknown>).payment_terms as string ?? null}
       accountName={(account as Record<string, string> | null)?.name ?? "—"}
       accountCountry={(account as Record<string, string> | null)?.country ?? null}
       salespersonName={(salesperson as Record<string, string> | null)?.full_name ?? null}
