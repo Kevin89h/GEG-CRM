@@ -454,7 +454,8 @@
     "paymentTerm30j": "30 jours",
     "paymentTerm45j": "45 jours",
     "paymentTerm60j": "60 jours",
-    "paymentTermAvance": "À la commande"
+    "paymentTermAvance": "À la commande",
+    "paymentTermsComment": "Commentaire libre (ex: 50% avance, 50% à la livraison)"
   },
   "achats": {
     "statusDraft": "Demande de prix",

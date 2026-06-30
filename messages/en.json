@@ -454,7 +454,8 @@
     "paymentTerm30j": "30 days",
     "paymentTerm45j": "45 days",
     "paymentTerm60j": "60 days",
-    "paymentTermAvance": "On order"
+    "paymentTermAvance": "On order",
+    "paymentTermsComment": "Free comment (e.g. 50% upfront, 50% on delivery)"
   },
   "achats": {
     "statusDraft": "Request for Quotation",

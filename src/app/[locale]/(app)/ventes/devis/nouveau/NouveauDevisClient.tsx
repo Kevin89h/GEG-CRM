@@ -533,15 +533,29 @@ export default function NouveauDevisClient({
                 />
               </div>
 
-              <div className="flex items-center gap-4">
-                <label className="w-40 shrink-0 text-gray-600">{t("conditionsDePaiement")}</label>
-                <select
-                  value={form.payment_terms}
-                  onChange={e => setF("payment_terms", e.target.value)}
-                  className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px]"
-                >
-                  {PAYMENT_TERMS.map(pt => <option key={pt.value} value={pt.value}>{pt.label}</option>)}
-                </select>
+              <div className="flex items-start gap-4">
+                <label className="w-40 shrink-0 text-gray-600 pt-1.5">{t("conditionsDePaiement")}</label>
+                <div className="flex flex-col gap-2 min-w-[200px]">
+                  <select
+                    value={PAYMENT_TERMS.some(pt => pt.value === form.payment_terms) ? form.payment_terms : "__custom__"}
+                    onChange={e => {
+                      if (e.target.value !== "__custom__") setF("payment_terms", e.target.value)
+                    }}
+                    className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {PAYMENT_TERMS.map(pt => <option key={pt.value} value={pt.value}>{pt.label}</option>)}
+                    {!PAYMENT_TERMS.some(pt => pt.value === form.payment_terms) && form.payment_terms !== "" && (
+                      <option value="__custom__">{form.payment_terms}</option>
+                    )}
+                  </select>
+                  <input
+                    type="text"
+                    value={form.payment_terms}
+                    onChange={e => setF("payment_terms", e.target.value)}
+                    placeholder={t("paymentTermsComment")}
+                    className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700 placeholder-gray-400"
+                  />
+                </div>
               </div>
 
               <div className="flex items-center gap-4">
