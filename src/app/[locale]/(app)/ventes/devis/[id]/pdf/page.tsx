@@ -16,7 +16,7 @@ export default async function DevisPdfPage({ params }: { params: Promise<{ local
 
   const { data: order, error: orderErr } = await db
     .from("sales_orders")
-    .select("id, number, status, currency, valid_until, notes, created_at, payment_terms, account_id, salesperson_id")
+    .select("id, number, status, currency, valid_until, notes, created_at, payment_terms, date_order, client_order_ref, account_id, salesperson_id")
     .eq("id", id)
     .single()
 

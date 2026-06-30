@@ -17,7 +17,7 @@ export default async function DevisDetailPage({ params }: { params: Promise<{ lo
   const { data: order } = await supabase
     .from("sales_orders")
     .select(`
-      id, number, status, currency, valid_until, notes, created_at,
+      id, number, status, currency, valid_until, notes, created_at, payment_terms, client_order_ref, date_order, tva,
       account:accounts(id, name, country),
       contact:contacts(id, first_name, last_name),
       salesperson:employees(full_name),

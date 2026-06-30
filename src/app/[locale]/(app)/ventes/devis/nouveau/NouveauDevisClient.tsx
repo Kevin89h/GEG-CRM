@@ -395,6 +395,10 @@ export default function NouveauDevisClient({
       currency: form.currency,
       valid_until: form.valid_until || null,
       notes: form.notes || null,
+      payment_terms: form.payment_terms || null,
+      client_order_ref: form.client_order_ref || null,
+      date_order: form.date_order || null,
+      tva: form.tva,
       user_id: user.id,
     }
 
