@@ -149,7 +149,7 @@ export default function FacturePrintPage({
         .btn-primary { background: ${color}; color: white; }
         .btn-secondary { background: #e5e5e5; color: #333; }
 
-        .page { max-width: 210mm; margin: 24px auto; background: white; box-shadow: 0 8px 40px rgba(0,0,0,.22); display: flex; flex-direction: column; overflow: hidden; }
+        .page { width: 210mm; min-height: 297mm; margin: 24px auto; background: white; box-shadow: 0 8px 40px rgba(0,0,0,.22); display: flex; flex-direction: column; }
 
         .stripe { height: 5px; background: linear-gradient(90deg, ${color} 0%, ${color}99 100%); }
 
@@ -233,8 +233,8 @@ export default function FacturePrintPage({
         @media print {
           html, body { background: white; }
           .no-print { display: none !important; }
-          .page { margin: 0; box-shadow: none; }
-          @page { size: A4; margin: 0; }
+          @page { size: A4 portrait; margin: 0; }
+          .page { margin: 0 !important; box-shadow: none !important; width: 210mm; min-height: 297mm; }
         }
       `}</style>
 
