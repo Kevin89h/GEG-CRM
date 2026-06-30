@@ -14,31 +14,35 @@ export default async function DevisPdfPage({ params }: { params: Promise<{ local
     ? await publicSupa.from("document_settings").select("*").eq("company_id", company.id).maybeSingle()
     : { data: null }
 
-  const { data: order } = await db
+  const { data: order, error: orderErr } = await db
     .from("sales_orders")
-    .select(`
-      id, number, status, currency, valid_until, notes, created_at, delivery_address, payment_terms,
-      account:accounts(id, name, country),
-      salesperson:employees(full_name),
-      lines:sales_order_lines(id, description, quantity, unit_price, discount, position, product:products(name, reference))
-    `)
+    .select("id, number, status, currency, valid_until, notes, created_at, delivery_address, payment_terms, account_id, salesperson_id")
     .eq("id", id)
     .single()
 
+  if (orderErr) console.error("PDF devis order error:", orderErr.message)
   if (!order) notFound()
 
-  const account = Array.isArray(order.account) ? order.account[0] : order.account
-  const salesperson = Array.isArray(order.salesperson) ? order.salesperson[0] : order.salesperson
-  const lines = ((order.lines ?? []) as Record<string, unknown>[])
-    .sort((a, b) => (a.position as number) - (b.position as number))
-    .map(l => ({
-      id: String(l.id ?? ""),
-      description: String(l.description ?? ""),
-      quantity: Number(l.quantity) || 0,
-      unit_price: Number(l.unit_price) || 0,
-      discount: Number(l.discount) || 0,
-      product: Array.isArray(l.product) ? (l.product[0] ?? null) : (l.product as { name: string; reference: string | null } | null),
-    }))
+  const [{ data: account }, { data: salesperson }, { data: rawLines }] = await Promise.all([
+    order.account_id ? db.from("accounts").select("id, name, country").eq("id", order.account_id).single() : Promise.resolve({ data: null }),
+    order.salesperson_id ? db.from("employees").select("full_name").eq("id", order.salesperson_id).single() : Promise.resolve({ data: null }),
+    db.from("sales_order_lines").select("id, description, quantity, unit_price, discount, position, product_id").eq("order_id", id).order("position"),
+  ])
+
+  const productIds = (rawLines ?? []).map((l: Record<string, unknown>) => l.product_id as string).filter(Boolean)
+  const { data: products } = productIds.length > 0
+    ? await db.from("products").select("id, name, reference").in("id", productIds)
+    : { data: [] }
+  const productMap = Object.fromEntries((products ?? []).map((p: Record<string, unknown>) => [p.id, p]))
+
+  const lines = ((rawLines ?? []) as Record<string, unknown>[]).map(l => ({
+    id: String(l.id ?? ""),
+    description: String(l.description ?? ""),
+    quantity: Number(l.quantity) || 0,
+    unit_price: Number(l.unit_price) || 0,
+    discount: Number(l.discount) || 0,
+    product: l.product_id ? (productMap[l.product_id as string] as { name: string; reference: string | null } | null) ?? null : null,
+  }))
 
   return (
     <PrintPage
@@ -46,10 +50,10 @@ export default async function DevisPdfPage({ params }: { params: Promise<{ local
       status={order.status}
       currency={order.currency}
       createdAt={order.created_at}
-      validUntil={(order as Record<string, unknown>).valid_until as string ?? null}
-      notes={(order as Record<string, unknown>).notes as string ?? null}
-      deliveryAddress={(order as Record<string, unknown>).delivery_address as string ?? null}
-      paymentTerms={(order as Record<string, unknown>).payment_terms as string ?? null}
+      validUntil={order.valid_until ?? null}
+      notes={order.notes ?? null}
+      deliveryAddress={order.delivery_address ?? null}
+      paymentTerms={order.payment_terms ?? null}
       accountName={(account as Record<string, string> | null)?.name ?? "—"}
       accountCountry={(account as Record<string, string> | null)?.country ?? null}
       salespersonName={(salesperson as Record<string, string> | null)?.full_name ?? null}
