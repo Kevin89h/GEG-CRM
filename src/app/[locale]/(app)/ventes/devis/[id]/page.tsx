@@ -75,5 +75,6 @@ export default async function DevisDetailPage({ params }: { params: Promise<{ lo
       })),
   }
 
-  return <DevisDetailClient order={typedOrder as Parameters<typeof DevisDetailClient>[0]["order"]} locale={locale} docSettings={docSettings ?? {}} stockByProduct={stockByProduct} firstWarehouse={firstWarehouse} invoiceCount={invoiceCount ?? 0} firstInvoiceId={firstInvoiceId} deliveryCount={deliveryCount ?? 0} />
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return <DevisDetailClient order={typedOrder as any} locale={locale} docSettings={docSettings ?? {}} stockByProduct={stockByProduct} firstWarehouse={firstWarehouse} invoiceCount={invoiceCount ?? 0} firstInvoiceId={firstInvoiceId} deliveryCount={deliveryCount ?? 0} />
 }
