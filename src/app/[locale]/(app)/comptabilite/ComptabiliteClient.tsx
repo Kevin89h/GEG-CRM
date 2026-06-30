@@ -17,6 +17,7 @@ interface PurchaseStat { id: string; status: string; currency: string; total_ht:
 
 interface TreasuryAccount {
   id: string; name: string; type: string; institution: string | null
+  account_number: string | null
   currency: string; color: string; is_active: boolean
   balance: number; total_in: number; total_out: number
 }
@@ -212,18 +213,24 @@ function MiniBarChart({ invoices }: { invoices: InvoiceStat[] }) {
 }
 
 /* ─── Carte compte bancaire style Odoo ───────────────── */
-function BankCard({ account, locale, onTransact }: {
+function BankCard({ account, locale, onTransact, onConfig }: {
   account: TreasuryAccount
   locale: string
   onTransact: (accountId: string) => void
+  onConfig: (accountId: string) => void
 }) {
   const Icon = typeIcon[account.type as keyof typeof typeIcon] ?? Banknote
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
       <div className="px-5 pt-5 pb-3">
-        <h3 className="text-base font-semibold text-blue-700 mb-3">{account.name}</h3>
+        <h3 className="text-base font-semibold text-blue-700 mb-0.5">{account.name}</h3>
+        {account.account_number && (
+          <p className="text-xs font-mono text-gray-400 mb-3 tracking-wider">{account.account_number}</p>
+        )}
         <div className="flex gap-2 mb-4">
-          <button className="px-3 py-1.5 text-sm font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors flex items-center gap-1.5">
+          <button
+            onClick={() => onConfig(account.id)}
+            className="px-3 py-1.5 text-sm font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors flex items-center gap-1.5">
             <Icon className="w-3.5 h-3.5" /> Configuration de la banque
           </button>
           <button
@@ -341,6 +348,7 @@ function TransactionsDrawer({ accountId, accounts, transactions, onClose, onNewT
 export default function ComptabiliteClient({ locale, clientStats, purchaseStats, accounts, transactions }: Props) {
   const router = useRouter()
   const [drawerAccountId, setDrawerAccountId] = useState<string | null>(null)
+  const [configAccountId, setConfigAccountId] = useState<string | null>(null)
   const [txModal, setTxModal] = useState(false)
   const [accountModal, setAccountModal] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -473,6 +481,7 @@ export default function ComptabiliteClient({ locale, clientStats, purchaseStats,
             account={account}
             locale={locale}
             onTransact={(id) => setDrawerAccountId(id)}
+            onConfig={(id) => setConfigAccountId(id)}
           />
         ))}
 
@@ -566,6 +575,45 @@ export default function ComptabiliteClient({ locale, clientStats, purchaseStats,
           </div>
         </div>
       </Modal>
+
+      {/* Modal configuration compte */}
+      {configAccountId && (() => {
+        const acc = accounts.find(a => a.id === configAccountId)
+        if (!acc) return null
+        return (
+          <Modal open={true} onClose={() => setConfigAccountId(null)} title="Configuration du compte">
+            <div className="space-y-3">
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Nom</p>
+                <p className="text-sm font-medium text-gray-900">{acc.name}</p>
+              </div>
+              {acc.institution && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Institution</p>
+                  <p className="text-sm text-gray-900">{acc.institution}</p>
+                </div>
+              )}
+              {acc.account_number && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Numéro de compte</p>
+                  <p className="text-sm font-mono text-gray-900 bg-gray-50 px-3 py-2 rounded-lg">{acc.account_number}</p>
+                </div>
+              )}
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Type</p>
+                <p className="text-sm text-gray-900">{acc.type === "bank" ? "Banque" : acc.type === "mobile_money" ? "Mobile Money" : "Caisse"}</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Devise</p>
+                <p className="text-sm text-gray-900">{acc.currency}</p>
+              </div>
+              <div className="flex justify-end pt-2">
+                <Button variant="secondary" onClick={() => setConfigAccountId(null)}>Fermer</Button>
+              </div>
+            </div>
+          </Modal>
+        )
+      })()}
     </div>
   )
 }

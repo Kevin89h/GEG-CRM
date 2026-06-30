@@ -160,12 +160,8 @@ export default function ProduitsClient({ products: initial, categories, units }:
             </thead>
             <tbody className="divide-y divide-gray-50">
               {filtered.map(p => (
-                <tr key={p.id} className="hover:bg-blue-50/30 transition-colors cursor-pointer">
-                  <td className="px-4 py-3 font-medium text-gray-900">
-                    <Link href={`/${locale}/stock/produits/${p.id}`} className="hover:text-blue-600 transition-colors">
-                      {p.name}
-                    </Link>
-                  </td>
+                <tr key={p.id} className="hover:bg-blue-50/30 transition-colors cursor-pointer" onClick={() => window.location.href = `/${locale}/stock/produits/${p.id}`}>
+                  <td className="px-4 py-3 font-medium text-gray-900">{p.name}</td>
                   <td className="px-4 py-3 text-gray-500 font-mono text-xs">{p.reference ?? "—"}</td>
                   <td className="px-4 py-3">
                     {p.category ? (

@@ -46,7 +46,7 @@ export default function StockDashboard({ levels, warehouses, products }: Props) 
     const matchSearch = r.product.name.toLowerCase().includes(search.toLowerCase()) ||
       (r.product.reference ?? "").toLowerCase().includes(search.toLowerCase())
     const matchWarehouse = selectedWarehouse === "all" ||
-      (r.byWarehouse[selectedWarehouse] !== undefined && r.byWarehouse[selectedWarehouse] > 0)
+      r.byWarehouse[selectedWarehouse] !== undefined
     return matchSearch && matchWarehouse
   })
 
