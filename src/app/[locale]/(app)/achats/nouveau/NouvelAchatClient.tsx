@@ -91,10 +91,16 @@ export default function NouvelAchatClient({ products, locale }: Props) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setError(t("errorNotAuthenticated")); setSaving(false); return }
 
+    // Générer un numéro unique basé sur timestamp pour éviter les doublons
+    const { count } = await db
+      .from("purchase_orders")
+      .select("id", { count: "exact", head: true })
+    const num = `PO-${new Date().getFullYear()}-${String((count ?? 0) + 1).padStart(4, "0")}-${Date.now().toString().slice(-4)}`
+
     const { data: order, error: err } = await db
       .from("purchase_orders")
       .insert([{
-        number: "",
+        number: num,
         supplier_name: form.supplier_name,
         currency: form.currency,
         incoterm: form.incoterm,
