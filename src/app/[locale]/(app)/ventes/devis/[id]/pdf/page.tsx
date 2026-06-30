@@ -16,20 +16,12 @@ export default async function DevisPdfPage({ params }: { params: Promise<{ local
 
   const { data: order, error: orderErr } = await db
     .from("sales_orders")
-    .select("id, number, status, currency, valid_until, notes, created_at, delivery_address, payment_terms, account_id, salesperson_id")
+    .select("id, number, status, currency, valid_until, notes, created_at, payment_terms, account_id, salesperson_id")
     .eq("id", id)
     .single()
 
-  if (!order) {
-    return (
-      <div style={{ padding: 40, fontFamily: "monospace" }}>
-        <h1>Erreur PDF devis</h1>
-        <p><b>ID:</b> {id}</p>
-        <p><b>Erreur:</b> {orderErr?.message ?? "order is null"}</p>
-        <p><b>Code:</b> {orderErr?.code ?? "—"}</p>
-      </div>
-    )
-  }
+  if (orderErr) console.error("PDF devis error:", orderErr.message)
+  if (!order) notFound()
 
   const [{ data: account }, { data: salesperson }, { data: rawLines }] = await Promise.all([
     order.account_id ? db.from("accounts").select("id, name, country").eq("id", order.account_id).single() : Promise.resolve({ data: null }),
@@ -60,7 +52,7 @@ export default async function DevisPdfPage({ params }: { params: Promise<{ local
       createdAt={order.created_at}
       validUntil={order.valid_until ?? null}
       notes={order.notes ?? null}
-      deliveryAddress={order.delivery_address ?? null}
+      deliveryAddress={null}
       paymentTerms={order.payment_terms ?? null}
       accountName={(account as Record<string, string> | null)?.name ?? "—"}
       accountCountry={(account as Record<string, string> | null)?.country ?? null}
