@@ -20,8 +20,16 @@ export default async function DevisPdfPage({ params }: { params: Promise<{ local
     .eq("id", id)
     .single()
 
-  if (orderErr) console.error("PDF devis order error:", orderErr.message)
-  if (!order) notFound()
+  if (!order) {
+    return (
+      <div style={{ padding: 40, fontFamily: "monospace" }}>
+        <h1>Erreur PDF devis</h1>
+        <p><b>ID:</b> {id}</p>
+        <p><b>Erreur:</b> {orderErr?.message ?? "order is null"}</p>
+        <p><b>Code:</b> {orderErr?.code ?? "—"}</p>
+      </div>
+    )
+  }
 
   const [{ data: account }, { data: salesperson }, { data: rawLines }] = await Promise.all([
     order.account_id ? db.from("accounts").select("id, name, country").eq("id", order.account_id).single() : Promise.resolve({ data: null }),
