@@ -223,10 +223,12 @@ function BankCard({ account, locale, onTransact, onConfig }: {
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
       <div className="px-5 pt-5 pb-3">
-        <h3 className="text-base font-semibold text-blue-700 mb-0.5">{account.name}</h3>
-        {account.account_number && (
-          <p className="text-xs font-mono text-gray-400 mb-3 tracking-wider">{account.account_number}</p>
-        )}
+        <div className="flex items-baseline gap-2 mb-3">
+          <h3 className="text-base font-semibold text-blue-700">{account.name}</h3>
+          {account.account_number && (
+            <span className="text-xs font-mono text-gray-400 tracking-wider">{account.account_number}</span>
+          )}
+        </div>
         <div className="flex gap-2 mb-4">
           <button
             onClick={() => onConfig(account.id)}
