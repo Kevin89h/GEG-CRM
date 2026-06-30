@@ -349,6 +349,7 @@ export default function ComptabiliteClient({ locale, clientStats, purchaseStats,
   const router = useRouter()
   const [drawerAccountId, setDrawerAccountId] = useState<string | null>(null)
   const [configAccountId, setConfigAccountId] = useState<string | null>(null)
+  const [configForm, setConfigForm] = useState({ name: "", institution: "", account_number: "", currency: "GNF", type: "bank", balance_adjustment: "" })
   const [txModal, setTxModal] = useState(false)
   const [accountModal, setAccountModal] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -481,7 +482,11 @@ export default function ComptabiliteClient({ locale, clientStats, purchaseStats,
             account={account}
             locale={locale}
             onTransact={(id) => setDrawerAccountId(id)}
-            onConfig={(id) => setConfigAccountId(id)}
+            onConfig={(id) => {
+              const acc = accounts.find(a => a.id === id)
+              if (acc) setConfigForm({ name: acc.name, institution: acc.institution ?? "", account_number: acc.account_number ?? "", currency: acc.currency, type: acc.type, balance_adjustment: "" })
+              setConfigAccountId(id)
+            }}
           />
         ))}
 
@@ -580,35 +585,50 @@ export default function ComptabiliteClient({ locale, clientStats, purchaseStats,
       {configAccountId && (() => {
         const acc = accounts.find(a => a.id === configAccountId)
         if (!acc) return null
+
+        async function saveConfig() {
+          setSaving(true)
+          const { db } = getCompanyClientBrowser()
+          const updates: Record<string, unknown> = {
+            name: configForm.name,
+            institution: configForm.institution || null,
+            account_number: configForm.account_number || null,
+            currency: configForm.currency,
+            type: configForm.type,
+          }
+          if (configForm.balance_adjustment !== "") {
+            updates.initial_balance = parseFloat(configForm.balance_adjustment)
+          }
+          await db.from("treasury_accounts").update(updates).eq("id", configAccountId!)
+          setSaving(false)
+          setConfigAccountId(null)
+          router.refresh()
+        }
+
         return (
-          <Modal open={true} onClose={() => setConfigAccountId(null)} title="Configuration du compte">
-            <div className="space-y-3">
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Nom</p>
-                <p className="text-sm font-medium text-gray-900">{acc.name}</p>
+          <Modal open={true} onClose={() => setConfigAccountId(null)} title={`Configurer — ${acc.name}`}>
+            <div className="space-y-4">
+              <Input label="Nom du compte *" value={configForm.name} onChange={e => setConfigForm(f => ({ ...f, name: e.target.value }))} />
+              <div className="grid grid-cols-2 gap-3">
+                <Select label="Type" value={configForm.type}
+                  onChange={e => setConfigForm(f => ({ ...f, type: e.target.value }))}
+                  options={[{ value: "bank", label: "Banque" }, { value: "mobile_money", label: "Mobile Money" }, { value: "cash", label: "Caisse" }]} />
+                <Select label="Devise" value={configForm.currency}
+                  onChange={e => setConfigForm(f => ({ ...f, currency: e.target.value }))}
+                  options={[{ value: "GNF", label: "GNF" }, { value: "USD", label: "USD" }, { value: "EUR", label: "EUR" }]} />
               </div>
-              {acc.institution && (
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Institution</p>
-                  <p className="text-sm text-gray-900">{acc.institution}</p>
-                </div>
-              )}
-              {acc.account_number && (
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Numéro de compte</p>
-                  <p className="text-sm font-mono text-gray-900 bg-gray-50 px-3 py-2 rounded-lg">{acc.account_number}</p>
-                </div>
-              )}
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Type</p>
-                <p className="text-sm text-gray-900">{acc.type === "bank" ? "Banque" : acc.type === "mobile_money" ? "Mobile Money" : "Caisse"}</p>
+              <Input label="Institution" value={configForm.institution} onChange={e => setConfigForm(f => ({ ...f, institution: e.target.value }))} placeholder="ECOBANK, ACCESS BANK…" />
+              <Input label="Numéro de compte" value={configForm.account_number} onChange={e => setConfigForm(f => ({ ...f, account_number: e.target.value }))} placeholder="010001730805226291" />
+              <div className="border-t border-gray-100 pt-4">
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Ajuster le solde initial</label>
+                <p className="text-xs text-gray-400 mb-2">Solde actuel : <span className="font-medium text-gray-700">{formatCurrency(acc.balance, acc.currency as "GNF"|"USD"|"EUR")}</span></p>
+                <Input label="" type="number" value={configForm.balance_adjustment}
+                  onChange={e => setConfigForm(f => ({ ...f, balance_adjustment: e.target.value }))}
+                  placeholder="Laisser vide pour ne pas modifier" />
               </div>
-              <div>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Devise</p>
-                <p className="text-sm text-gray-900">{acc.currency}</p>
-              </div>
-              <div className="flex justify-end pt-2">
-                <Button variant="secondary" onClick={() => setConfigAccountId(null)}>Fermer</Button>
+              <div className="flex justify-end gap-3 pt-2">
+                <Button variant="secondary" onClick={() => setConfigAccountId(null)}>Annuler</Button>
+                <Button onClick={saveConfig} disabled={saving || !configForm.name}>{saving ? "…" : "Enregistrer"}</Button>
               </div>
             </div>
           </Modal>
