@@ -23,13 +23,13 @@ export default async function FacturesFournisseursPage({ params }: { params: Pro
   const { db } = await createCompanyClient()
 
   const { data: invoices } = await db
-    .from("supplier_invoices")
-    .select("id, number, supplier_name, status, currency, total_ht, total_ttc, invoice_date, due_date, notes")
+    .from("supplier_invoice_totals")
+    .select("id, number, supplier_name, status, currency, total_ht, total_ttc, balance, invoice_date, due_date")
     .order("invoice_date", { ascending: false })
     .limit(200)
 
   const list = invoices ?? []
-  const totalPending = list.filter(i => i.status === "pending" || i.status === "partial").reduce((s, i) => s + Number(i.total_ttc), 0)
+  const totalPending = list.filter(i => i.status === "pending" || i.status === "partial").reduce((s, i) => s + Number(i.balance ?? i.total_ttc), 0)
   const totalPaid    = list.filter(i => i.status === "paid").reduce((s, i) => s + Number(i.total_ttc), 0)
 
   return (
@@ -78,7 +78,7 @@ export default async function FacturesFournisseursPage({ params }: { params: Pro
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Fournisseur</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Date</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Échéance</th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase">Total TTC</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase">Montant dû</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase">Statut</th>
               </tr>
             </thead>
@@ -94,7 +94,7 @@ export default async function FacturesFournisseursPage({ params }: { params: Pro
                   <td className="px-4 py-3 text-gray-500">{formatDate(inv.invoice_date)}</td>
                   <td className="px-4 py-3 text-gray-500">{inv.due_date ? formatDate(inv.due_date) : "—"}</td>
                   <td className="px-4 py-3 text-right font-medium text-gray-900">
-                    {Number(inv.total_ttc).toLocaleString("fr")} {inv.currency}
+                    {Number(inv.balance ?? inv.total_ttc).toLocaleString("fr")} {inv.currency}
                   </td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLOR[inv.status] ?? STATUS_COLOR.draft}`}>

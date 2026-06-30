@@ -16,9 +16,9 @@ export default async function ComptabilitePage({ params }: { params: Promise<{ l
     // Toutes les factures clients avec leur statut et montants
     db.from("invoice_totals")
       .select("id, number, status, currency, due_date, total_ht, total_paid, balance, account_id, issue_date"),
-    // Factures fournisseurs
-    db.from("supplier_invoices")
-      .select("id, number, status, currency, total_ht, total_ttc, invoice_date")
+    // Factures fournisseurs avec solde réel
+    db.from("supplier_invoice_totals")
+      .select("id, number, status, currency, total_ht, total_ttc, balance, invoice_date")
       .order("invoice_date", { ascending: false })
       .limit(200),
     // Comptes de trésorerie
@@ -53,7 +53,7 @@ export default async function ComptabilitePage({ params }: { params: Promise<{ l
     draft:        allPurchases.filter(p => p.status === "draft"),
     toPay:        allPurchases.filter(p => p.status === "pending" || p.status === "partial"),
     draftAmount:  allPurchases.filter(p => p.status === "draft").reduce((s, p) => s + Number(p.total_ht), 0),
-    toPayAmount:  allPurchases.filter(p => p.status === "pending" || p.status === "partial").reduce((s, p) => s + Number(p.total_ht), 0),
+    toPayAmount:  allPurchases.filter(p => p.status === "pending" || p.status === "partial").reduce((s, p) => s + Number(p.balance ?? p.total_ht), 0),
   }
 
   const accounts = (treasuryAccounts ?? []).map(a => ({
