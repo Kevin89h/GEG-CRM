@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Plus, Building2, Smartphone, Banknote, ArrowDownLeft, ArrowUpRight, MoreVertical, X, BarChart2 } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils"
-import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
@@ -613,19 +612,24 @@ export default function ComptabiliteClient({ locale, clientStats, purchaseStats,
 
         async function saveConfig() {
           setSaving(true)
-          const { db } = getCompanyClientBrowser()
-          const updates: Record<string, unknown> = {
-            name: configForm.name,
-            institution: configForm.institution || null,
-            account_number: configForm.account_number || null,
-            currency: configForm.currency,
-            type: configForm.type,
-          }
-          if (configForm.balance_adjustment !== "") {
-            updates.initial_balance = parseFloat(configForm.balance_adjustment)
-          }
-          await db.from("treasury_accounts").update(updates).eq("id", configAccountId!)
+          const res = await fetch(`/api/treasury/accounts/${configAccountId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: configForm.name,
+              institution: configForm.institution || null,
+              account_number: configForm.account_number || null,
+              currency: configForm.currency,
+              type: configForm.type,
+              initial_balance: configForm.balance_adjustment !== "" ? configForm.balance_adjustment : undefined,
+            }),
+          })
           setSaving(false)
+          if (!res.ok) {
+            const json = await res.json()
+            setSaveError(json.error ?? "Erreur lors de la mise à jour")
+            return
+          }
           setConfigAccountId(null)
           router.refresh()
         }
