@@ -351,12 +351,6 @@ export default function FacturePrintPage({
                 <span>{formatDate(dueDate, locale)}</span>
               </div>
             )}
-            {sourceRef && (
-              <div className="meta-cell">
-                <label>Référence</label>
-                <span>{sourceRef}</span>
-              </div>
-            )}
             <div className="meta-cell">
               <label>Devise</label>
               <span>{currency}</span>
