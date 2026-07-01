@@ -354,6 +354,7 @@ export default function ComptabiliteClient({ locale, clientStats, purchaseStats,
   const [txModal, setTxModal] = useState(false)
   const [accountModal, setAccountModal] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [txError, setTxError] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
 
   const [txForm, setTxForm] = useState({
@@ -379,56 +380,62 @@ export default function ComptabiliteClient({ locale, clientStats, purchaseStats,
 
   async function saveTransaction() {
     if (!txForm.amount || !txForm.description) return
+    setTxError(null)
     setSaving(true)
-    const res = await fetch("/api/treasury/transactions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        account_id: txForm.account_id,
-        type: txForm.type,
-        amount: txForm.amount,
-        currency: txForm.currency,
-        description: txForm.description,
-        reference: txForm.reference || null,
-        transfer_account_id: txForm.transfer_account_id || null,
-        date: txForm.date,
-      }),
-    })
-    setSaving(false)
-    if (!res.ok) {
+    try {
+      const res = await fetch("/api/treasury/transactions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          account_id: txForm.account_id || accounts[0]?.id,
+          type: txForm.type,
+          amount: txForm.amount,
+          currency: txForm.currency,
+          description: txForm.description,
+          reference: txForm.reference || null,
+          transfer_account_id: txForm.transfer_account_id || null,
+          date: txForm.date,
+        }),
+      })
       const json = await res.json()
-      setSaveError(json.error ?? "Erreur lors de l'enregistrement")
-      return
+      if (!res.ok) { setTxError(json.error ?? `Erreur ${res.status}`); return }
+      setTxModal(false)
+      setTxError(null)
+      router.refresh()
+    } catch (e) {
+      setTxError(String(e))
+    } finally {
+      setSaving(false)
     }
-    setTxModal(false)
-    router.refresh()
   }
 
   async function saveAccount() {
     if (!accForm.name) return
+    setSaveError(null)
     setSaving(true)
-    setSaveError(null)
-    const res = await fetch("/api/treasury/accounts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: accForm.name, type: accForm.type,
-        institution: accForm.institution || null,
-        account_number: accForm.account_number || null,
-        currency: accForm.currency,
-        initial_balance: accForm.initial_balance,
-        color: accForm.color,
-      }),
-    })
-    const json = await res.json()
-    setSaving(false)
-    if (!res.ok) {
-      setSaveError(json.error ?? "Erreur lors de l'enregistrement")
-      return
+    try {
+      const res = await fetch("/api/treasury/accounts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: accForm.name, type: accForm.type,
+          institution: accForm.institution || null,
+          account_number: accForm.account_number || null,
+          currency: accForm.currency,
+          initial_balance: accForm.initial_balance,
+          color: accForm.color,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) { setSaveError(json.error ?? `Erreur ${res.status}`); return }
+      setAccountModal(false)
+      setSaveError(null)
+      router.refresh()
+    } catch (e) {
+      setSaveError(String(e))
+    } finally {
+      setSaving(false)
     }
-    setAccountModal(false)
-    setSaveError(null)
-    router.refresh()
   }
 
   return (
@@ -563,8 +570,11 @@ export default function ComptabiliteClient({ locale, clientStats, purchaseStats,
             <Input label="Référence" value={txForm.reference} onChange={e => setTxForm(f => ({ ...f, reference: e.target.value }))} placeholder="N° chèque, reçu…" />
             <Input label="Date" type="date" value={txForm.date} onChange={e => setTxForm(f => ({ ...f, date: e.target.value }))} />
           </div>
+          {txError && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{txError}</p>
+          )}
           <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" onClick={() => setTxModal(false)}>Annuler</Button>
+            <Button variant="secondary" onClick={() => { setTxModal(false); setTxError(null) }}>Annuler</Button>
             <Button onClick={saveTransaction} disabled={saving || !txForm.amount || !txForm.description}>
               {saving ? "Enregistrement…" : "Enregistrer"}
             </Button>
