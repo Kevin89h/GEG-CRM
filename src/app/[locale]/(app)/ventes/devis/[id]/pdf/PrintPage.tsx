@@ -223,6 +223,7 @@ export default function PrintPage({
                 {city}
               </div>
             </div>
+            <div className="tagline">{tagline}</div>
           </div>
 
           {/* TITLE ROW */}
