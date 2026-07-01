@@ -69,27 +69,42 @@ function parseMSC(json: any) {
 }
 
 async function trackCMA(number: string) {
-  // CMA CGM public tracking endpoint
-  const url = `https://www.cma-cgm.com/ebusiness/tracking/json?numero=${encodeURIComponent(number)}`
-  const res = await fetch(url, {
-    headers: {
-      "Accept": "application/json, text/javascript, */*",
-      "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-      "Referer": "https://www.cma-cgm.com/ebusiness/tracking/search",
-      "X-Requested-With": "XMLHttpRequest",
-    },
-    next: { revalidate: 0 },
-  })
+  // CMA CGM — try both BL number and container number formats
+  const endpoints = [
+    `https://www.cma-cgm.com/ebusiness/tracking/json?numero=${encodeURIComponent(number)}`,
+    `https://www.cma-cgm.com/ebusiness/tracking/json?container=${encodeURIComponent(number)}`,
+  ]
 
-  if (!res.ok) {
-    return NextResponse.json({ error: `CMA CGM API error ${res.status}`, raw: null }, { status: 200 })
+  const headers = {
+    "Accept": "application/json, text/javascript, */*",
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Referer": "https://www.cma-cgm.com/ebusiness/tracking/search",
+    "X-Requested-With": "XMLHttpRequest",
+    "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
   }
 
-  const text = await res.text()
-  let json: any = null
-  try { json = JSON.parse(text) } catch { /* not json */ }
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url, { headers, next: { revalidate: 0 } })
+      if (!res.ok) continue
+      const text = await res.text()
+      let json: any = null
+      try { json = JSON.parse(text) } catch { continue }
+      const parsed = parseCMA(json)
+      if (parsed && (parsed.events.length > 0 || parsed.status)) {
+        return NextResponse.json({ carrier: "CMA CGM", raw: json, parsed })
+      }
+    } catch { continue }
+  }
 
-  return NextResponse.json({ carrier: "CMA CGM", raw: json, parsed: parseCMA(json) })
+  // Fallback: return error with link to manual tracking
+  return NextResponse.json({
+    carrier: "CMA CGM",
+    raw: null,
+    parsed: null,
+    trackingUrl: `https://www.cma-cgm.com/ebusiness/tracking/search?numero=${encodeURIComponent(number)}`,
+    error: "API CMA CGM non accessible — utilisez le lien direct"
+  }, { status: 200 })
 }
 
 function parseCMA(json: any) {

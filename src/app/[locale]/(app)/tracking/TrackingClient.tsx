@@ -106,6 +106,10 @@ export default function TrackingClient({ shipments: initial, schema }: { shipmen
       const json = await res.json();
       if (json.parsed) {
         setLiveData(prev => ({ ...prev, [shipment.id]: json.parsed }));
+      } else if (json.trackingUrl) {
+        // API not accessible — open direct link
+        window.open(json.trackingUrl, '_blank');
+        setLiveData(prev => ({ ...prev, [shipment.id]: 'error' }));
       } else {
         setLiveData(prev => ({ ...prev, [shipment.id]: 'error' }));
       }
