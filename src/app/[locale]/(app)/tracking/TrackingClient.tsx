@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/lib/supabase/client';
 
 type Status = 'in_transit' | 'arrived' | 'delayed' | 'delivered';
 type ShipmentType = 'container' | 'parcel';
@@ -78,9 +77,8 @@ const BLANK_FORM = {
   notes: '',
 };
 
-export default function TrackingClient({ shipments: initial, schema }: { shipments: Shipment[], schema: string }) {
+export default function TrackingClient({ shipments: initial }: { shipments: Shipment[], schema: string }) {
   const router = useRouter();
-  const db = (createClient() as any).schema(schema);
   const [tab, setTab] = useState<ShipmentType>('container');
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(BLANK_FORM);
@@ -121,25 +119,27 @@ export default function TrackingClient({ shipments: initial, schema }: { shipmen
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    await db.from('shipments').insert([{
-      type: form.type,
-      carrier: form.carrier,
-      tracking_number: form.tracking_number,
-      description: form.description || null,
-      origin: form.origin || null,
-      destination: form.destination || null,
-      eta: form.eta || null,
-      status: form.status,
-      notes: form.notes || null,
-    }]);
-    setSaving(false);
-    setModalOpen(false);
-    setForm(BLANK_FORM);
-    router.refresh();
+    try {
+      const res = await fetch('/api/shipments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) {
+        const j = await res.json();
+        alert(j.error ?? 'Erreur lors de l\'enregistrement');
+        return;
+      }
+      setModalOpen(false);
+      setForm(BLANK_FORM);
+      router.refresh();
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function handleDelete(id: string) {
-    await db.from('shipments').delete().eq('id', id);
+    await fetch(`/api/shipments?id=${id}`, { method: 'DELETE' });
     router.refresh();
   }
 
