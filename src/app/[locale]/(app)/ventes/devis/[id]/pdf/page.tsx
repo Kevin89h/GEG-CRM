@@ -4,6 +4,7 @@ import { getCompanySchema } from "@/lib/company"
 import { notFound } from "next/navigation"
 import PrintPage from "./PrintPage"
 
+// v2
 export default async function DevisPdfPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params
   const { db } = await createCompanyClient()
