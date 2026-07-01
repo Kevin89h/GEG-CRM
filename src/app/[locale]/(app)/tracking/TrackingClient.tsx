@@ -21,6 +21,21 @@ interface Shipment {
   created_at: string;
 }
 
+interface LiveEvent {
+  date: string;
+  location: string;
+  description: string;
+}
+
+interface LiveData {
+  status: string;
+  lastLocation: string;
+  lastDate: string;
+  events: LiveEvent[];
+  eta: string | null;
+}
+
+const LIVE_CARRIERS = ['MSC', 'CMA CGM'];
 const CONTAINER_CARRIERS = ['MSC', 'CMA CGM', 'Hapag-Lloyd', 'Maersk'];
 const PARCEL_CARRIERS = ['DHL', 'FedEx'];
 
@@ -70,12 +85,33 @@ export default function TrackingClient({ shipments: initial, schema }: { shipmen
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(BLANK_FORM);
   const [saving, setSaving] = useState(false);
+  const [liveData, setLiveData] = useState<Record<string, LiveData | 'loading' | 'error'>>({});
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const filtered = initial.filter((s) => s.type === tab);
   const carriers = tab === 'container' ? CONTAINER_CARRIERS : PARCEL_CARRIERS;
 
   function handleTypeChange(type: ShipmentType) {
     setForm((f) => ({ ...f, type, carrier: type === 'container' ? 'MSC' : 'DHL' }));
+  }
+
+  async function fetchLive(shipment: Shipment) {
+    if (!LIVE_CARRIERS.includes(shipment.carrier)) return;
+    setLiveData(prev => ({ ...prev, [shipment.id]: 'loading' }));
+    setExpandedId(shipment.id);
+    try {
+      const res = await fetch(
+        `/api/tracking?carrier=${encodeURIComponent(shipment.carrier)}&number=${encodeURIComponent(shipment.tracking_number)}`
+      );
+      const json = await res.json();
+      if (json.parsed) {
+        setLiveData(prev => ({ ...prev, [shipment.id]: json.parsed }));
+      } else {
+        setLiveData(prev => ({ ...prev, [shipment.id]: 'error' }));
+      }
+    } catch {
+      setLiveData(prev => ({ ...prev, [shipment.id]: 'error' }));
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -149,43 +185,103 @@ export default function TrackingClient({ shipments: initial, schema }: { shipmen
                 <th className="px-4 py-3" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filtered.map((s) => (
-                <tr key={s.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-3 font-medium text-slate-800">{s.carrier}</td>
-                  <td className="px-4 py-3 font-mono text-slate-700">{s.tracking_number}</td>
-                  <td className="px-4 py-3 text-slate-600">{s.description ?? '—'}</td>
-                  <td className="px-4 py-3 text-slate-600">
-                    {s.origin || s.destination
-                      ? `${s.origin ?? '?'} → ${s.destination ?? '?'}`
-                      : '—'}
-                  </td>
-                  <td className="px-4 py-3 text-slate-600">{s.eta ?? '—'}</td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[s.status]}`}>
-                      {STATUS_LABELS[s.status]}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2 justify-end">
-                      <a
-                        href={trackingUrl(s.carrier, s.tracking_number)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline text-xs font-medium"
-                      >
-                        Tracker
-                      </a>
-                      <button
-                        onClick={() => handleDelete(s.id)}
-                        className="text-slate-400 hover:text-red-500 text-xs transition-colors"
-                      >
-                        Supprimer
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+            <tbody>
+              {filtered.map((s) => {
+                const live = liveData[s.id];
+                const isExpanded = expandedId === s.id;
+                return (
+                  <>
+                    <tr key={s.id} className="hover:bg-slate-50 transition-colors border-b border-slate-100">
+                      <td className="px-4 py-3 font-medium text-slate-800">{s.carrier}</td>
+                      <td className="px-4 py-3 font-mono text-slate-700">{s.tracking_number}</td>
+                      <td className="px-4 py-3 text-slate-600">{s.description ?? '—'}</td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {s.origin || s.destination
+                          ? `${s.origin ?? '?'} → ${s.destination ?? '?'}`
+                          : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {live && live !== 'loading' && live !== 'error' && live.eta
+                          ? <span className="text-blue-600 font-medium">{live.eta}</span>
+                          : (s.eta ?? '—')}
+                      </td>
+                      <td className="px-4 py-3">
+                        {live && live !== 'loading' && live !== 'error' ? (
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                            {live.status}
+                          </span>
+                        ) : (
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${STATUS_COLORS[s.status]}`}>
+                            {STATUS_LABELS[s.status]}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2 justify-end">
+                          {LIVE_CARRIERS.includes(s.carrier) && (
+                            <button
+                              onClick={() => isExpanded ? setExpandedId(null) : fetchLive(s)}
+                              className="text-emerald-600 hover:text-emerald-700 text-xs font-medium transition-colors"
+                            >
+                              {live === 'loading' ? '…' : isExpanded ? 'Fermer' : '↻ Live'}
+                            </button>
+                          )}
+                          <a
+                            href={trackingUrl(s.carrier, s.tracking_number)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline text-xs font-medium"
+                          >
+                            Site
+                          </a>
+                          <button
+                            onClick={() => handleDelete(s.id)}
+                            className="text-slate-400 hover:text-red-500 text-xs transition-colors"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+
+                    {/* Live events panel */}
+                    {isExpanded && (
+                      <tr key={`${s.id}-live`}>
+                        <td colSpan={7} className="px-4 py-0 bg-slate-50 border-b border-slate-200">
+                          {live === 'loading' && (
+                            <div className="py-4 text-sm text-slate-500">Récupération en cours…</div>
+                          )}
+                          {live === 'error' && (
+                            <div className="py-4 text-sm text-red-500">
+                              Impossible de récupérer le tracking live. Vérifiez le numéro ou utilisez le lien "Site".
+                            </div>
+                          )}
+                          {live && live !== 'loading' && live !== 'error' && (
+                            <div className="py-3">
+                              <div className="flex items-center gap-4 mb-3">
+                                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Dernière position</span>
+                                <span className="text-sm font-medium text-slate-800">{live.lastLocation || '—'}</span>
+                                <span className="text-xs text-slate-400">{live.lastDate}</span>
+                              </div>
+                              {live.events.length > 0 && (
+                                <div className="space-y-1 max-h-48 overflow-y-auto">
+                                  {live.events.map((ev, i) => (
+                                    <div key={i} className="flex gap-3 text-xs text-slate-600 py-1 border-b border-slate-100 last:border-0">
+                                      <span className="text-slate-400 shrink-0 w-32">{ev.date}</span>
+                                      <span className="text-slate-500 shrink-0 w-28 truncate">{ev.location}</span>
+                                      <span>{ev.description}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -246,7 +342,7 @@ export default function TrackingClient({ shipments: initial, schema }: { shipmen
                   value={form.tracking_number}
                   onChange={(e) => setForm((f) => ({ ...f, tracking_number: e.target.value }))}
                   className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800"
-                  placeholder="ex: MSCU1234567"
+                  placeholder="ex: MSCU1234567 ou MSCUXXXXXXX"
                 />
               </div>
               <div>
