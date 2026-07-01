@@ -1,20 +1,33 @@
-import { createCompanyClient } from "@/lib/company"
+import { createClient as createAdminClient } from "@supabase/supabase-js"
+import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
+
+async function getAdminDb() {
+  const cookieStore = await cookies()
+  const schema = cookieStore.get("geg_company")?.value ?? "geg_guinee"
+  const admin = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (admin as any).schema(schema) as typeof admin
+}
 
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const { account_id, type, amount, currency, description, reference, transfer_account_id, date, user_id, category } = body
+    const { account_id, type, amount, currency, description, reference, transfer_account_id, date, category } = body
 
     if (!account_id || !amount || !description) {
       return NextResponse.json({ error: "Champs requis manquants" }, { status: 400 })
     }
 
-    const { db } = await createCompanyClient()
-
+    const db = await getAdminDb()
     const isTransfer = type === "transfer_out"
+
     const rows = [{
-      account_id, type,
+      account_id,
+      type,
       amount: parseFloat(amount),
       currency: currency ?? "GNF",
       description,
@@ -22,7 +35,6 @@ export async function POST(req: Request) {
       category: category || null,
       transfer_account_id: isTransfer ? transfer_account_id : null,
       date: new Date(date).toISOString(),
-      user_id: user_id || null,
     }]
 
     if (isTransfer && transfer_account_id) {
@@ -36,7 +48,6 @@ export async function POST(req: Request) {
         category: category || null,
         transfer_account_id: account_id,
         date: new Date(date).toISOString(),
-        user_id: user_id || null,
       })
     }
 

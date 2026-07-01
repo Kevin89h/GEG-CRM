@@ -1,5 +1,17 @@
-import { createCompanyClient } from "@/lib/company"
+import { createClient as createAdminClient } from "@supabase/supabase-js"
+import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
+
+async function getAdminDb() {
+  const cookieStore = await cookies()
+  const schema = cookieStore.get("geg_company")?.value ?? "geg_guinee"
+  const admin = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (admin as any).schema(schema) as typeof admin
+}
 
 export async function POST(req: Request) {
   try {
@@ -8,8 +20,7 @@ export async function POST(req: Request) {
 
     if (!name) return NextResponse.json({ error: "Nom requis" }, { status: 400 })
 
-    const { db } = await createCompanyClient()
-
+    const db = await getAdminDb()
     const { data, error } = await db.from("treasury_accounts").insert([{
       name,
       type: type ?? "bank",
