@@ -152,7 +152,25 @@ export default function FacturePrintPage({
           box-shadow: 0 8px 40px rgba(0,0,0,.22);
           display: flex;
           flex-direction: column;
+          position: relative;
+          overflow: hidden;
         }
+        .page::before {
+          content: "G";
+          position: absolute;
+          font-size: 480px;
+          font-weight: 900;
+          color: ${color};
+          opacity: 0.04;
+          right: -60px;
+          top: 50%;
+          transform: translateY(-50%);
+          line-height: 1;
+          pointer-events: none;
+          z-index: 0;
+          font-family: 'Helvetica Neue', Arial, sans-serif;
+        }
+        .page-body, .footer-bar { position: relative; z-index: 1; }
 
         /* Content grows, footer sticks to bottom */
         .page-body { flex: 1; display: flex; flex-direction: column; }
@@ -245,9 +263,9 @@ export default function FacturePrintPage({
           background: ${color}; padding: 2px 8px; border-radius: 10px;
           display: inline-block; margin-bottom: 8px; letter-spacing: .5px;
         }
-        .bank-row { display: flex; gap: 8px; padding: 4px 0; font-size: 10px; align-items: baseline; }
-        .bank-inst { font-weight: 700; color: #111; min-width: 90px; }
-        .bank-num { color: #555; font-family: 'Courier New', monospace; font-size: 9.5px; }
+        .bank-row { display: flex; gap: 10px; padding: 5px 0; font-size: 10.5px; align-items: baseline; border-bottom: 1px solid #f0f0f0; }
+        .bank-inst { font-weight: 800; color: #111; min-width: 100px; }
+        .bank-num { color: #111; font-family: 'Courier New', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; }
         .bank-meta { font-size: 9px; color: #999; margin-top: 4px; padding-left: 2px; }
 
         /* TOTALS */
