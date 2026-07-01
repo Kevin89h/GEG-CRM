@@ -28,8 +28,17 @@ export default async function VentesPage({ params }: { params: Promise<{ locale:
     ?.filter(s => s.status !== "cancelled")
     .reduce((sum, s) => sum + Number(s.total_ht), 0) ?? 0
 
-  const { data: invStats } = await supabase.from("invoice_totals").select("status, total_ht")
-  const unpaidTotal = invStats?.filter(s => s.status === "sent").reduce((sum, s) => sum + Number(s.total_ht), 0) ?? 0
+  const { data: invStats } = await supabase.from("invoice_totals").select("status, balance, currency")
+  const unpaidByCurrency: Record<string, number> = {}
+  for (const s of invStats ?? []) {
+    if (s.status !== "paid" && s.status !== "cancelled" && Number(s.balance) > 0) {
+      const c = s.currency ?? "GNF"
+      unpaidByCurrency[c] = (unpaidByCurrency[c] ?? 0) + Number(s.balance)
+    }
+  }
+  const unpaidLabel = Object.entries(unpaidByCurrency)
+    .map(([c, v]) => `${formatNumber(v)} ${c}`)
+    .join(" · ") || "0"
 
   const statusLabel: Record<string, string> = {
     draft: "Brouillon", confirmed: "Confirmé", invoiced: "Facturé", cancelled: "Annulé",
@@ -65,8 +74,8 @@ export default async function VentesPage({ params }: { params: Promise<{ locale:
         {[
           { label: "Devis en cours", value: draftCount, icon: FileText, color: "text-gray-600 bg-gray-50" },
           { label: "Commandes confirmées", value: confirmedCount, icon: TrendingUp, color: "text-blue-600 bg-blue-50" },
-          { label: "Pipeline total", value: `${formatNumber(totalPipeline)} USD`, icon: TrendingUp, color: "text-purple-600 bg-purple-50" },
-          { label: "Factures impayées", value: `${formatNumber(unpaidTotal)} USD`, icon: Clock, color: "text-amber-600 bg-amber-50" },
+          { label: "Pipeline total", value: `${formatNumber(totalPipeline)} GNF`, icon: TrendingUp, color: "text-purple-600 bg-purple-50" },
+          { label: "Factures impayées", value: unpaidLabel, icon: Clock, color: "text-amber-600 bg-amber-50" },
         ].map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${color}`}>
