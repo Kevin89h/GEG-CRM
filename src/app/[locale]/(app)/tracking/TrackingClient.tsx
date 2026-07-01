@@ -310,107 +310,66 @@ export default function TrackingClient({ shipments: initial }: { shipments: Ship
       {/* Modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 p-6">
-            <div className="flex items-center justify-between mb-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+            <div className="flex items-center justify-between mb-5">
               <h2 className="text-lg font-semibold text-slate-900">Ajouter une expédition</h2>
               <button onClick={() => setModalOpen(false)} className="text-slate-400 hover:text-slate-600 text-xl leading-none">×</button>
             </div>
-            <form onSubmit={handleSubmit} className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Type</label>
-                  <select
-                    value={form.type}
-                    onChange={(e) => handleTypeChange(e.target.value as ShipmentType)}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800"
-                  >
-                    <option value="container">Conteneur maritime</option>
-                    <option value="parcel">Colis</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Transporteur</label>
-                  <select
-                    value={form.carrier}
-                    onChange={(e) => setForm((f) => ({ ...f, carrier: e.target.value }))}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800"
-                  >
-                    {carriers.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Transporteur</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {CONTAINER_CARRIERS.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, carrier: c, type: 'container' }))}
+                      className={`py-2 px-2 rounded-lg text-xs font-medium border transition ${
+                        form.carrier === c
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                  {PARCEL_CARRIERS.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setForm((f) => ({ ...f, carrier: c, type: 'parcel' }))}
+                      className={`py-2 px-2 rounded-lg text-xs font-medium border transition ${
+                        form.carrier === c
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                    >
+                      {c}
+                    </button>
+                  ))}
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">N° de suivi *</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">N° conteneur ou B/L *</label>
                 <input
                   required
+                  autoFocus
                   value={form.tracking_number}
-                  onChange={(e) => setForm((f) => ({ ...f, tracking_number: e.target.value }))}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800"
-                  placeholder="ex: MSCU1234567 ou MSCUXXXXXXX"
+                  onChange={(e) => setForm((f) => ({ ...f, tracking_number: e.target.value.trim().toUpperCase() }))}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="TCLU4080620 ou ISB1992771"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Description</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Description <span className="text-slate-400 font-normal">(optionnel)</span></label>
                 <input
                   value={form.description}
                   onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800"
-                  placeholder="ex: Équipements miniers"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="ex: Huile moteur, équipements…"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Origine</label>
-                  <input
-                    value={form.origin}
-                    onChange={(e) => setForm((f) => ({ ...f, origin: e.target.value }))}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800"
-                    placeholder="ex: Shanghai"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Destination</label>
-                  <input
-                    value={form.destination}
-                    onChange={(e) => setForm((f) => ({ ...f, destination: e.target.value }))}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800"
-                    placeholder="ex: Conakry"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">ETA</label>
-                  <input
-                    type="date"
-                    value={form.eta}
-                    onChange={(e) => setForm((f) => ({ ...f, eta: e.target.value }))}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1">Statut</label>
-                  <select
-                    value={form.status}
-                    onChange={(e) => setForm((f) => ({ ...f, status: e.target.value as Status }))}
-                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800"
-                  >
-                    {(Object.entries(STATUS_LABELS) as [Status, string][]).map(([k, v]) => (
-                      <option key={k} value={k}>{v}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Notes</label>
-                <textarea
-                  value={form.notes}
-                  onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-                  rows={2}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 resize-none"
-                />
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex justify-end gap-2 pt-1">
                 <button
                   type="button"
                   onClick={() => setModalOpen(false)}
