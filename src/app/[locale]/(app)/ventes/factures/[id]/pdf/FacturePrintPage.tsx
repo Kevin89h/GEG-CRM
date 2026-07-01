@@ -156,7 +156,7 @@ export default function FacturePrintPage({
           overflow: hidden;
         }
         .page-body, .footer-bar { position: relative; z-index: 1; }
-        .watermark { position: absolute; width: 380px; height: 380px; right: -60px; top: 50%; transform: translateY(-50%); opacity: 0.05; pointer-events: none; z-index: 0; object-fit: contain; }
+        .watermark { position: absolute; width: 380px; height: 380px; left: 50%; top: 50%; transform: translate(-50%, -50%); opacity: 0.05; pointer-events: none; z-index: 0; object-fit: contain; }
 
         /* Content grows, footer sticks to bottom */
         .page-body { flex: 1; display: flex; flex-direction: column; }

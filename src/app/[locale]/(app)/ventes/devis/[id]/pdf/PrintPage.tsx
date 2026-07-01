@@ -108,7 +108,7 @@ export default function PrintPage({
         .page { width: 210mm; min-height: 297mm; margin: 24px auto; background: white; box-shadow: 0 8px 40px rgba(0,0,0,.22); display: flex; flex-direction: column; position: relative; overflow: hidden; }
         .page-body { flex: 1; display: flex; flex-direction: column; position: relative; z-index: 1; }
         .footer-bar { position: relative; z-index: 1; }
-        .watermark { position: absolute; width: 380px; height: 380px; right: -60px; top: 50%; transform: translateY(-50%); opacity: 0.05; pointer-events: none; z-index: 0; object-fit: contain; }
+        .watermark { position: absolute; width: 380px; height: 380px; left: 50%; top: 50%; transform: translate(-50%, -50%); opacity: 0.05; pointer-events: none; z-index: 0; object-fit: contain; }
 
         .stripe { height: 5px; background: linear-gradient(90deg, ${color} 0%, ${color}88 100%); flex-shrink: 0; }
 
