@@ -1,9 +1,21 @@
 import { createCompanyClient } from "@/lib/company"
+import { createClient as createAdminClient } from "@supabase/supabase-js"
+import { cookies } from "next/headers"
 import ComptabiliteClient from "./ComptabiliteClient"
 
 export default async function ComptabilitePage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params
   const { db } = await createCompanyClient()
+
+  // Admin client for treasury tables (bypasses RLS)
+  const cookieStore = await cookies()
+  const schema = cookieStore.get("geg_company")?.value ?? "geg_guinee"
+  const adminRaw = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const adminDb = (adminRaw as any).schema(schema) as typeof adminRaw
 
   const today = new Date().toISOString().split("T")[0]
 
@@ -22,12 +34,12 @@ export default async function ComptabilitePage({ params }: { params: Promise<{ l
       .order("invoice_date", { ascending: false })
       .limit(200),
     // Comptes de trésorerie
-    db.from("treasury_balances")
+    adminDb.from("treasury_balances")
       .select("*")
       .eq("is_active", true)
       .order("name"),
     // Dernières transactions
-    db.from("treasury_transactions")
+    adminDb.from("treasury_transactions")
       .select("id, account_id, type, amount, currency, description, reference, category, date")
       .order("date", { ascending: false })
       .limit(200),
