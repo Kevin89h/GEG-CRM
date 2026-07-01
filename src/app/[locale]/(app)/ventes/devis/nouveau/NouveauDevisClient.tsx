@@ -262,6 +262,7 @@ export default function NouveauDevisClient({
   const PAYMENT_TERMS = [
     { value: "",          label: t("paymentTermImmediat") },
     { value: "15j",       label: t("paymentTerm15j") },
+    { value: "21j",       label: "21 jours" },
     { value: "30j",       label: t("paymentTerm30j") },
     { value: "45j",       label: t("paymentTerm45j") },
     { value: "60j",       label: t("paymentTerm60j") },

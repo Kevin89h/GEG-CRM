@@ -56,6 +56,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
   const PAYMENT_TERMS_LABELS: Record<string, string> = {
     immediate: t("paymentImmediate"),
     "15j": t("payment15j"),
+    "21j": "21 jours",
     "30j": t("payment30j"),
     "45j": t("payment45j"),
     "60j": t("payment60j"),
