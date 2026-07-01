@@ -86,7 +86,7 @@ export default function TrackingClient({ shipments: initial }: { shipments: Ship
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(BLANK_FORM);
   const [saving, setSaving] = useState(false);
-  const [liveData, setLiveData] = useState<Record<string, LiveData | 'loading' | 'error'>>({});
+  const [liveData, setLiveData] = useState<Record<string, LiveData | 'loading' | string>>({});
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const filtered = initial.filter((s) => s.type === tab);
@@ -107,15 +107,12 @@ export default function TrackingClient({ shipments: initial }: { shipments: Ship
       const json = await res.json();
       if (json.parsed) {
         setLiveData(prev => ({ ...prev, [shipment.id]: json.parsed }));
-      } else if (json.trackingUrl) {
-        // API not accessible — open direct link
-        window.open(json.trackingUrl, '_blank');
-        setLiveData(prev => ({ ...prev, [shipment.id]: 'error' }));
       } else {
-        setLiveData(prev => ({ ...prev, [shipment.id]: 'error' }));
+        const msg = json.error ?? 'Erreur inconnue';
+        setLiveData(prev => ({ ...prev, [shipment.id]: msg }));
       }
-    } catch {
-      setLiveData(prev => ({ ...prev, [shipment.id]: 'error' }));
+    } catch (e) {
+      setLiveData(prev => ({ ...prev, [shipment.id]: String(e) }));
     }
   }
 
@@ -230,7 +227,7 @@ export default function TrackingClient({ shipments: initial }: { shipments: Ship
                               onClick={() => isExpanded ? setExpandedId(null) : fetchLive(s)}
                               className="text-emerald-600 hover:text-emerald-700 text-xs font-medium transition-colors"
                             >
-                              {live === 'loading' ? '…' : isExpanded ? 'Fermer' : '↻ Scraper'}
+                              {live === 'loading' ? '…' : isExpanded ? 'Fermer' : '↻ Live'}
                             </button>
                           )}
                           <a
@@ -258,16 +255,16 @@ export default function TrackingClient({ shipments: initial }: { shipments: Ship
                           {live === 'loading' && (
                             <div className="py-4 text-sm text-slate-500">Récupération en cours…</div>
                           )}
-                          {live === 'error' && (
+                          {live && live !== 'loading' && typeof live === 'string' && (
                             <div className="py-4 flex items-center gap-3">
-                              <span className="text-sm text-slate-500">Scraping bloqué par {s.carrier}.</span>
+                              <span className="text-sm text-slate-500 font-mono text-xs">{live}</span>
                               <a
                                 href={trackingUrl(s.carrier, s.tracking_number)}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+                                className="inline-flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors shrink-0"
                               >
-                                ↗ Ouvrir le tracking {s.carrier}
+                                ↗ Ouvrir {s.carrier}
                               </a>
                             </div>
                           )}

@@ -15,33 +15,44 @@ export async function GET(req: Request) {
 async function track17(number: string, carrier: string) {
   const apiKey = process.env.TRACKING_17_KEY
   if (!apiKey) {
-    return { parsed: null, error: "Clé API 17track manquante (TRACKING_17_KEY)" }
+    return { parsed: null, error: "TRACKING_17_KEY manquante dans Vercel" }
   }
 
   try {
-    // Enregistrer le numéro pour tracking
-    await fetch("https://api.17track.net/track/v2/register", {
+    // Étape 1 : enregistrer le numéro
+    const regRes = await fetch("https://api.17track.net/track/v2/register", {
       method: "POST",
       headers: { "Content-Type": "application/json", "17token": apiKey },
-      body: JSON.stringify([{ number }]),
+      body: JSON.stringify([{ number, carrier: 190 }]), // 190 = Sea freight
     })
+    const regJson = await regRes.json()
+    console.log("17track register:", JSON.stringify(regJson))
 
-    // Récupérer le statut
+    // Étape 2 : récupérer les données
     const res = await fetch("https://api.17track.net/track/v2/gettracklist", {
       method: "POST",
       headers: { "Content-Type": "application/json", "17token": apiKey },
       body: JSON.stringify([{ number }]),
     })
 
-    if (!res.ok) return { parsed: null, error: `17track API error ${res.status}` }
+    if (!res.ok) return { parsed: null, error: `17track HTTP ${res.status}` }
 
     const json = await res.json()
-    const item = json?.data?.accepted?.[0]
-    if (!item) return { parsed: null, error: "Numéro non trouvé" }
+    console.log("17track result:", JSON.stringify(json).slice(0, 500))
+
+    const accepted = json?.data?.accepted ?? []
+    const rejected = json?.data?.rejected ?? []
+
+    if (rejected.length > 0) {
+      return { parsed: null, error: `17track: ${rejected[0]?.error?.message ?? "numéro rejeté"}` }
+    }
+
+    const item = accepted[0]
+    if (!item) return { parsed: null, error: "Aucune donnée 17track pour ce numéro" }
 
     return { carrier, parsed: parse17(item) }
   } catch (err) {
-    return { parsed: null, error: String(err) }
+    return { parsed: null, error: `Erreur: ${String(err)}` }
   }
 }
 
