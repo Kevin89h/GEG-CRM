@@ -32,6 +32,9 @@ interface LiveData {
   lastDate: string;
   events: LiveEvent[];
   eta: string | null;
+  vessel?: string | null;
+  origin?: string | null;
+  destination?: string | null;
 }
 
 const LIVE_CARRIERS = ['MSC', 'CMA CGM'];
@@ -270,16 +273,19 @@ export default function TrackingClient({ shipments: initial }: { shipments: Ship
                           )}
                           {live && live !== 'loading' && live !== 'error' && (
                             <div className="py-3">
-                              <div className="flex items-center gap-4 mb-3">
-                                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Dernière position</span>
-                                <span className="text-sm font-medium text-slate-800">{live.lastLocation || '—'}</span>
-                                <span className="text-xs text-slate-400">{live.lastDate}</span>
+                              <div className="flex flex-wrap items-center gap-x-6 gap-y-1 mb-3">
+                                {live.vessel && <span className="text-xs text-slate-600">🚢 <strong>{live.vessel}</strong></span>}
+                                {live.origin && live.destination && (
+                                  <span className="text-xs text-slate-600">{live.origin} → {live.destination}</span>
+                                )}
+                                {live.eta && <span className="text-xs text-blue-600 font-medium">ETA : {live.eta}</span>}
+                                <span className="text-xs text-slate-500">{live.lastLocation || '—'} · {live.lastDate}</span>
                               </div>
                               {live.events.length > 0 && (
-                                <div className="space-y-1 max-h-48 overflow-y-auto">
+                                <div className="space-y-0 max-h-48 overflow-y-auto border border-slate-100 rounded-lg">
                                   {live.events.map((ev, i) => (
-                                    <div key={i} className="flex gap-3 text-xs text-slate-600 py-1 border-b border-slate-100 last:border-0">
-                                      <span className="text-slate-400 shrink-0 w-32">{ev.date}</span>
+                                    <div key={i} className="flex gap-3 text-xs text-slate-600 px-3 py-2 border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                                      <span className="text-slate-400 shrink-0 w-36">{ev.date}</span>
                                       <span className="text-slate-500 shrink-0 w-28 truncate">{ev.location}</span>
                                       <span>{ev.description}</span>
                                     </div>
