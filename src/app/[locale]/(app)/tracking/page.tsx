@@ -1,14 +1,15 @@
-import { createCompanyClient } from '@/lib/company';
-import TrackingClient from './TrackingClient';
+import { createCompanyClient } from '@/lib/company'
+import TrackingClient from './TrackingClient'
 
 export default async function TrackingPage() {
-  const db = await createCompanyClient();
+  const { db, schema } = await createCompanyClient()
 
-  const { data: shipments } = await (db as any)
-    .schema('geg_guinee')
+  const { data: shipments, error } = await db
     .from('shipments')
     .select('*')
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
 
-  return <TrackingClient shipments={shipments ?? []} />;
+  if (error) console.error('Tracking fetch error:', error.message)
+
+  return <TrackingClient shipments={shipments ?? []} schema={schema} />
 }

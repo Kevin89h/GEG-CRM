@@ -63,9 +63,9 @@ const BLANK_FORM = {
   notes: '',
 };
 
-export default function TrackingClient({ shipments: initial }: { shipments: Shipment[] }) {
+export default function TrackingClient({ shipments: initial, schema }: { shipments: Shipment[], schema: string }) {
   const router = useRouter();
-  const supabase = createClient();
+  const db = (createClient() as any).schema(schema);
   const [tab, setTab] = useState<ShipmentType>('container');
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(BLANK_FORM);
@@ -81,7 +81,7 @@ export default function TrackingClient({ shipments: initial }: { shipments: Ship
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    await (supabase as any).schema('geg_guinee').from('shipments').insert([{
+    await db.from('shipments').insert([{
       type: form.type,
       carrier: form.carrier,
       tracking_number: form.tracking_number,
@@ -99,7 +99,7 @@ export default function TrackingClient({ shipments: initial }: { shipments: Ship
   }
 
   async function handleDelete(id: string) {
-    await (supabase as any).schema('geg_guinee').from('shipments').delete().eq('id', id);
+    await db.from('shipments').delete().eq('id', id);
     router.refresh();
   }
 
