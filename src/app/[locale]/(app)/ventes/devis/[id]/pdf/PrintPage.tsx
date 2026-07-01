@@ -218,19 +218,9 @@ export default function PrintPage({
                 : <div className="logo-initials">{companyName.split(" ").map((w: string) => w[0]).join("").slice(0, 3)}</div>
               }
               <div className="co-name">{companyName}</div>
-              <div className="co-addr">
-                {nif && <>NIF : {nif}<br /></>}
-                {rccm && <>RCCM : {rccm}</>}
-              </div>
-            </div>
-            <div style={{ textAlign: "right" }}>
-              <div className="tagline">{tagline}</div>
               <div className="co-detail">
                 {addr1}{addr2 ? `, ${addr2}` : ""}<br />
-                {city}<br />
-                {phone && <>Tél. : {phone}<br /></>}
-                {email && <>{email}<br /></>}
-                {website && <a href={`https://${website.replace(/^https?:\/\//, "")}`}>{website}</a>}
+                {city}
               </div>
             </div>
           </div>
