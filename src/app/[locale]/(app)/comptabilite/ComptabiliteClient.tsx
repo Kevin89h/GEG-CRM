@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Plus, Building2, Smartphone, Banknote, ArrowDownLeft, ArrowUpRight, MoreVertical, X, BarChart2 } from "lucide-react"
@@ -275,15 +275,27 @@ function BankCard({ account, locale, onTransact, onConfig }: {
 }
 
 /* ─── Drawer transactions ─────────────────────────────── */
-function TransactionsDrawer({ accountId, accounts, transactions, onClose, onNewTx }: {
+function TransactionsDrawer({ accountId, accounts, onClose, onNewTx, refreshKey }: {
   accountId: string
   accounts: TreasuryAccount[]
-  transactions: Transaction[]
   onClose: () => void
   onNewTx: () => void
+  refreshKey: number
 }) {
   const account = accounts.find(a => a.id === accountId)
-  const filtered = transactions.filter(t => t.account_id === accountId)
+  const [filtered, setFiltered] = useState<Transaction[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    setLoading(true)
+    fetch("/api/treasury/transactions")
+      .then(r => r.json())
+      .then(json => {
+        const all: Transaction[] = json.transactions ?? []
+        setFiltered(all.filter(t => t.account_id === accountId))
+      })
+      .finally(() => setLoading(false))
+  }, [accountId, refreshKey])
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
@@ -309,7 +321,9 @@ function TransactionsDrawer({ accountId, accounts, transactions, onClose, onNewT
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          {filtered.length === 0 ? (
+          {loading ? (
+            <p className="text-center py-12 text-gray-400 text-sm">Chargement…</p>
+          ) : filtered.length === 0 ? (
             <p className="text-center py-12 text-gray-400 text-sm">Aucune transaction</p>
           ) : (
             <table className="w-full text-sm">
@@ -427,6 +441,7 @@ export default function ComptabiliteClient({ locale, clientStats, purchaseStats,
   const [configAccountId, setConfigAccountId] = useState<string | null>(null)
   const [configForm, setConfigForm] = useState({ name: "", institution: "", account_number: "", currency: "GNF", type: "bank", balance_adjustment: "" })
   const [txModal, setTxModal] = useState(false)
+  const [txRefreshKey, setTxRefreshKey] = useState(0)
   const [accountModal, setAccountModal] = useState(false)
   const [saving, setSaving] = useState(false)
   const [txError, setTxError] = useState<string | null>(null)
@@ -476,6 +491,7 @@ export default function ComptabiliteClient({ locale, clientStats, purchaseStats,
       if (!res.ok) { setTxError(json.error ?? `Erreur ${res.status}`); return }
       setTxModal(false)
       setTxError(null)
+      setTxRefreshKey(k => k + 1)
       router.refresh()
     } catch (e) {
       setTxError(String(e))
@@ -608,7 +624,7 @@ export default function ComptabiliteClient({ locale, clientStats, purchaseStats,
         <TransactionsDrawer
           accountId={drawerAccountId}
           accounts={accounts}
-          transactions={transactions}
+          refreshKey={txRefreshKey}
           onClose={() => setDrawerAccountId(null)}
           onNewTx={() => {
             setTxForm(f => ({ ...f, account_id: drawerAccountId }))
