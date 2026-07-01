@@ -36,9 +36,7 @@ export default async function FacturePdfPage({ params }: { params: Promise<{ loc
   const [{ data: payments }, { data: bankAccounts }] = await Promise.all([
     db.from("payments").select("amount, paid_at").eq("invoice_id", id).order("paid_at"),
     db.from("treasury_accounts")
-      .select("name, institution, account_number, currency")
-      .eq("type", "bank")
-      .eq("is_active", true)
+      .select("name, institution, account_number, currency, type, is_active")
       .order("currency")
       .order("name"),
   ])
