@@ -7,15 +7,15 @@ export default async function ComptabilitePage({ params }: { params: Promise<{ l
   const { locale } = await params
   const { db } = await createCompanyClient()
 
-  // Admin client for treasury tables (bypasses RLS)
+  // Admin client for treasury_transactions (bypasses RLS)
   const cookieStore = await cookies()
   const schema = cookieStore.get("geg_company")?.value ?? "geg_guinee"
-  const adminRaw = createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const adminRaw = serviceKey
+    ? createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceKey)
+    : null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const adminDb = (adminRaw as any).schema(schema) as typeof adminRaw
+  const adminDb = adminRaw ? (adminRaw as any).schema(schema) as typeof adminRaw : db
 
   const today = new Date().toISOString().split("T")[0]
 
@@ -33,12 +33,12 @@ export default async function ComptabilitePage({ params }: { params: Promise<{ l
       .select("id, number, status, currency, total_ht, total_ttc, balance, invoice_date")
       .order("invoice_date", { ascending: false })
       .limit(200),
-    // Comptes de trésorerie
-    adminDb.from("treasury_balances")
+    // Comptes de trésorerie (anon key OK, RLS allows SELECT)
+    db.from("treasury_balances")
       .select("*")
       .eq("is_active", true)
       .order("name"),
-    // Dernières transactions
+    // Dernières transactions (admin key needed to bypass RLS)
     adminDb.from("treasury_transactions")
       .select("id, account_id, type, amount, currency, description, reference, category, date")
       .order("date", { ascending: false })
