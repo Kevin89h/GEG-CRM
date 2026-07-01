@@ -355,6 +355,7 @@ export default function ComptabiliteClient({ locale, clientStats, purchaseStats,
   const [txModal, setTxModal] = useState(false)
   const [accountModal, setAccountModal] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   const [txForm, setTxForm] = useState({
     account_id: accounts[0]?.id ?? "",
@@ -404,14 +405,20 @@ export default function ComptabiliteClient({ locale, clientStats, purchaseStats,
   async function saveAccount() {
     if (!accForm.name) return
     setSaving(true)
+    setSaveError(null)
     const { db } = getCompanyClientBrowser()
-    await db.from("treasury_accounts").insert([{
+    const { error } = await db.from("treasury_accounts").insert([{
       name: accForm.name, type: accForm.type, institution: accForm.institution || null,
       account_number: accForm.account_number || null, currency: accForm.currency,
       initial_balance: parseFloat(accForm.initial_balance) || 0, color: accForm.color,
     }])
-    setAccountModal(false)
     setSaving(false)
+    if (error) {
+      setSaveError(error.message)
+      return
+    }
+    setAccountModal(false)
+    setSaveError(null)
     router.refresh()
   }
 
@@ -579,9 +586,12 @@ export default function ComptabiliteClient({ locale, clientStats, purchaseStats,
               ))}
             </div>
           </div>
+          {saveError && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{saveError}</p>
+          )}
           <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" onClick={() => setAccountModal(false)}>Annuler</Button>
-            <Button onClick={saveAccount} disabled={saving || !accForm.name}>Créer le compte</Button>
+            <Button variant="secondary" onClick={() => { setAccountModal(false); setSaveError(null) }}>Annuler</Button>
+            <Button onClick={saveAccount} disabled={saving || !accForm.name}>{saving ? "Enregistrement…" : "Créer le compte"}</Button>
           </div>
         </div>
       </Modal>
