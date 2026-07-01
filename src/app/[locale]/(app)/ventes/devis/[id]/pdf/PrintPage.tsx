@@ -1,7 +1,13 @@
 "use client"
 
 import { useEffect } from "react"
-import { formatDate, formatNumber } from "@/lib/utils"
+import { formatDate } from "@/lib/utils"
+
+function fmt(value: number, decimals = 0): string {
+  const parts = value.toFixed(decimals).split(".")
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, " ")
+  return decimals > 0 ? parts.join(",") : parts[0]
+}
 
 interface Line {
   id: string
@@ -291,10 +297,10 @@ export default function PrintPage({
                           <div className="td-desc">{l.description}</div>
                           {l.discount > 0 && <div className="td-muted">Remise {l.discount}%</div>}
                         </td>
-                        <td className="td-r">{formatNumber(l.quantity, 2)} U</td>
-                        <td className="td-r">{formatNumber(l.unit_price, 0)} {cur}</td>
+                        <td className="td-r">{fmt(l.quantity, 2)} U</td>
+                        <td className="td-r">{fmt(l.unit_price, 0)} {cur}</td>
                         {tvaRate > 0 && <td className="td-r" style={{ fontSize: "9px", color: "#999" }}>{lineTva > 0 ? `${lineTva}%` : "—"}</td>}
-                        <td className="td-r" style={{ fontWeight: 700 }}>{formatNumber(sub, 0)} {cur}</td>
+                        <td className="td-r" style={{ fontWeight: 700 }}>{fmt(sub, 0)} {cur}</td>
                       </tr>
                     )
                   })}
@@ -313,7 +319,7 @@ export default function PrintPage({
                   {lines.map(l => (
                     <tr key={l.id}>
                       <td><div className="td-desc">{l.description}</div></td>
-                      <td className="td-r">{formatNumber(l.quantity, 2)} U</td>
+                      <td className="td-r">{fmt(l.quantity, 2)} U</td>
                       <td></td>
                     </tr>
                   ))}
@@ -329,17 +335,17 @@ export default function PrintPage({
                 <tbody>
                   <tr>
                     <td>Montant hors taxes</td>
-                    <td style={{ textAlign: "right" }}>{formatNumber(totalHT, 0)} {cur}</td>
+                    <td style={{ textAlign: "right" }}>{fmt(totalHT, 0)} {cur}</td>
                   </tr>
                   {tvaAmt > 0 && (
                     <tr>
                       <td>TVA {tvaRate}%</td>
-                      <td style={{ textAlign: "right" }}>{formatNumber(tvaAmt, 0)} {cur}</td>
+                      <td style={{ textAlign: "right" }}>{fmt(tvaAmt, 0)} {cur}</td>
                     </tr>
                   )}
                   <tr>
                     <td className="tot-ttc">Total</td>
-                    <td className="tot-ttc" style={{ textAlign: "right" }}>{formatNumber(totalTTC, 0)} {cur}</td>
+                    <td className="tot-ttc" style={{ textAlign: "right" }}>{fmt(totalTTC, 0)} {cur}</td>
                   </tr>
                 </tbody>
               </table>

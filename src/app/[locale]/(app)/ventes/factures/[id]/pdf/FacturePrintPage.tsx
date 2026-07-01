@@ -1,7 +1,13 @@
 "use client"
 
 import { useEffect } from "react"
-import { formatDate, formatNumber } from "@/lib/utils"
+import { formatDate } from "@/lib/utils"
+
+function fmt(value: number, decimals = 0): string {
+  const parts = value.toFixed(decimals).split(".")
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, " ")
+  return decimals > 0 ? parts.join(",") : parts[0]
+}
 
 interface Line {
   id: string
@@ -109,7 +115,7 @@ export default function FacturePrintPage({
   const balance = totalTTC - totalPaid
 
   const curSymbol = currency === "GNF" ? "FG" : currency
-  const fmtAmt = (n: number) => `${Math.round(n).toLocaleString("fr-FR")} ${curSymbol}`
+  const fmtAmt = (n: number) => `${fmt(Math.round(n))} ${curSymbol}`
 
   const statusConfig: Record<string, { label: string; bg: string; text: string }> = {
     draft:     { label: "Brouillon",     bg: "#f3f4f6", text: "#6b7280" },
@@ -388,15 +394,15 @@ export default function FacturePrintPage({
                           <div className="td-muted">Remise {l.discount}%</div>
                         )}
                       </td>
-                      <td className="td-r">{formatNumber(l.quantity, 2)} U</td>
-                      <td className="td-r">{formatNumber(l.unit_price, 0)} {curSymbol}</td>
+                      <td className="td-r">{fmt(l.quantity, 2)} U</td>
+                      <td className="td-r">{fmt(l.unit_price, 0)} {curSymbol}</td>
                       {hasTva && (
                         <td className="td-r" style={{ fontSize: "9px", color: "#999" }}>
                           {rate > 0 ? `TVA ${rate}%` : "—"}
                         </td>
                       )}
                       <td className="td-r" style={{ fontWeight: 700 }}>
-                        {formatNumber(sub, 0)} {curSymbol}
+                        {fmt(sub, 0)} {curSymbol}
                       </td>
                     </tr>
                   )
