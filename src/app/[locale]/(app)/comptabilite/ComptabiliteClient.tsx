@@ -345,6 +345,81 @@ function TransactionsDrawer({ accountId, accounts, transactions, onClose, onNewT
   )
 }
 
+/* ─── Modal configuration compte (composant séparé pour éviter closure stale) ── */
+interface ConfigForm { name: string; institution: string; account_number: string; currency: string; type: string; balance_adjustment: string }
+interface AccInfo { id: string; name: string; balance: number; currency: string }
+
+function ConfigModal({ accountId, acc, form, setForm, onClose, onSaved }: {
+  accountId: string
+  acc: AccInfo | null
+  form: ConfigForm
+  setForm: React.Dispatch<React.SetStateAction<ConfigForm>>
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  if (!acc) return null
+
+  async function save() {
+    if (!form.name) return
+    setError(null)
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/treasury/accounts/${accountId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.name,
+          institution: form.institution || null,
+          account_number: form.account_number || null,
+          currency: form.currency,
+          type: form.type,
+          initial_balance: form.balance_adjustment !== "" ? form.balance_adjustment : undefined,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) { setError(json.error ?? `Erreur ${res.status}`); return }
+      onSaved()
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal open={true} onClose={onClose} title={`Configurer — ${acc.name}`}>
+      <div className="space-y-4">
+        <Input label="Nom du compte *" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+        <div className="grid grid-cols-2 gap-3">
+          <Select label="Type" value={form.type}
+            onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
+            options={[{ value: "bank", label: "Banque" }, { value: "mobile_money", label: "Mobile Money" }, { value: "cash", label: "Caisse" }]} />
+          <Select label="Devise" value={form.currency}
+            onChange={e => setForm(f => ({ ...f, currency: e.target.value }))}
+            options={[{ value: "GNF", label: "GNF" }, { value: "USD", label: "USD" }, { value: "EUR", label: "EUR" }]} />
+        </div>
+        <Input label="Institution" value={form.institution} onChange={e => setForm(f => ({ ...f, institution: e.target.value }))} placeholder="ECOBANK, ACCESS BANK…" />
+        <Input label="Numéro de compte" value={form.account_number} onChange={e => setForm(f => ({ ...f, account_number: e.target.value }))} placeholder="010001730805226291" />
+        <div className="border-t border-gray-100 pt-4">
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Ajuster le solde initial</label>
+          <p className="text-xs text-gray-400 mb-2">Solde actuel : <span className="font-medium text-gray-700">{formatCurrency(acc.balance, acc.currency as "GNF"|"USD"|"EUR")}</span></p>
+          <Input label="" type="number" value={form.balance_adjustment}
+            onChange={e => setForm(f => ({ ...f, balance_adjustment: e.target.value }))}
+            placeholder="Laisser vide pour ne pas modifier" />
+        </div>
+        {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
+        <div className="flex justify-end gap-3 pt-2">
+          <Button variant="secondary" onClick={onClose}>Annuler</Button>
+          <Button onClick={save} disabled={saving || !form.name}>{saving ? "Enregistrement…" : "Enregistrer"}</Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 /* ─── Composant principal ────────────────────────────── */
 export default function ComptabiliteClient({ locale, clientStats, purchaseStats, accounts, transactions }: Props) {
   const router = useRouter()
@@ -616,63 +691,16 @@ export default function ComptabiliteClient({ locale, clientStats, purchaseStats,
       </Modal>
 
       {/* Modal configuration compte */}
-      {configAccountId && (() => {
-        const acc = accounts.find(a => a.id === configAccountId)
-        if (!acc) return null
-
-        async function saveConfig() {
-          setSaving(true)
-          const res = await fetch(`/api/treasury/accounts/${configAccountId}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              name: configForm.name,
-              institution: configForm.institution || null,
-              account_number: configForm.account_number || null,
-              currency: configForm.currency,
-              type: configForm.type,
-              initial_balance: configForm.balance_adjustment !== "" ? configForm.balance_adjustment : undefined,
-            }),
-          })
-          setSaving(false)
-          if (!res.ok) {
-            const json = await res.json()
-            setSaveError(json.error ?? "Erreur lors de la mise à jour")
-            return
-          }
-          setConfigAccountId(null)
-          router.refresh()
-        }
-
-        return (
-          <Modal open={true} onClose={() => setConfigAccountId(null)} title={`Configurer — ${acc.name}`}>
-            <div className="space-y-4">
-              <Input label="Nom du compte *" value={configForm.name} onChange={e => setConfigForm(f => ({ ...f, name: e.target.value }))} />
-              <div className="grid grid-cols-2 gap-3">
-                <Select label="Type" value={configForm.type}
-                  onChange={e => setConfigForm(f => ({ ...f, type: e.target.value }))}
-                  options={[{ value: "bank", label: "Banque" }, { value: "mobile_money", label: "Mobile Money" }, { value: "cash", label: "Caisse" }]} />
-                <Select label="Devise" value={configForm.currency}
-                  onChange={e => setConfigForm(f => ({ ...f, currency: e.target.value }))}
-                  options={[{ value: "GNF", label: "GNF" }, { value: "USD", label: "USD" }, { value: "EUR", label: "EUR" }]} />
-              </div>
-              <Input label="Institution" value={configForm.institution} onChange={e => setConfigForm(f => ({ ...f, institution: e.target.value }))} placeholder="ECOBANK, ACCESS BANK…" />
-              <Input label="Numéro de compte" value={configForm.account_number} onChange={e => setConfigForm(f => ({ ...f, account_number: e.target.value }))} placeholder="010001730805226291" />
-              <div className="border-t border-gray-100 pt-4">
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Ajuster le solde initial</label>
-                <p className="text-xs text-gray-400 mb-2">Solde actuel : <span className="font-medium text-gray-700">{formatCurrency(acc.balance, acc.currency as "GNF"|"USD"|"EUR")}</span></p>
-                <Input label="" type="number" value={configForm.balance_adjustment}
-                  onChange={e => setConfigForm(f => ({ ...f, balance_adjustment: e.target.value }))}
-                  placeholder="Laisser vide pour ne pas modifier" />
-              </div>
-              <div className="flex justify-end gap-3 pt-2">
-                <Button variant="secondary" onClick={() => setConfigAccountId(null)}>Annuler</Button>
-                <Button onClick={saveConfig} disabled={saving || !configForm.name}>{saving ? "…" : "Enregistrer"}</Button>
-              </div>
-            </div>
-          </Modal>
-        )
-      })()}
+      {configAccountId && (
+        <ConfigModal
+          accountId={configAccountId}
+          acc={accounts.find(a => a.id === configAccountId) ?? null}
+          form={configForm}
+          setForm={setConfigForm}
+          onClose={() => setConfigAccountId(null)}
+          onSaved={() => { setConfigAccountId(null); router.refresh() }}
+        />
+      )}
     </div>
   )
 }
