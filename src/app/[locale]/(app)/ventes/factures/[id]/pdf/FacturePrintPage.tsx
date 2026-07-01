@@ -76,7 +76,7 @@ export default function FacturePrintPage({
   const city = docSettings?.city ?? "Lambanyii - Conakry"
   const phone = docSettings?.phone ?? "+224 613 04 40 20"
   const email = docSettings?.email ?? null
-  const website = docSettings?.website ?? "www.globalenergy.group"
+  const website = docSettings?.website ?? "www.globalenergygroup.com"
   const nif = docSettings?.nif ?? "446243099"
   const rccm = docSettings?.rccm ?? null
   const logoUrl = docSettings?.logo_url ?? null
