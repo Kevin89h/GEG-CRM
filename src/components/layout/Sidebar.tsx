@@ -21,6 +21,7 @@ import {
   FolderOpen,
   Sparkles,
   Activity,
+  Ship,
 } from "lucide-react"
 import { cn, initials } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
@@ -53,6 +54,7 @@ const navItems = [
   { key: "comptabilite", icon: Landmark, path: "comptabilite" },
   { key: "employes", icon: UserCheck, path: "employes" },
   { key: "documents", icon: FolderOpen, path: "documents" },
+  { key: "tracking", icon: Ship, path: "tracking" },
   { key: "ai", icon: Sparkles, path: "ai" },
   { key: "settings", icon: Settings, path: "parametres/taux-de-change" },
 ] as const
