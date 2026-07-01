@@ -207,8 +207,9 @@ export default function FacturePrintPage({
         thead tr { background: ${color}; }
         thead th { padding: 10px 11px; text-align: left; font-size: 8.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: white; }
         .th-r { text-align: right; }
-        tbody tr { border-bottom: 1px solid #f0f0f0; }
-        tbody tr:last-child { border-bottom: 2px solid #ddd; }
+        tbody tr { border-bottom: 1px solid #d0d0d0; }
+        tbody tr:nth-child(even) { background: #f5f5f5; }
+        tbody tr:last-child { border-bottom: 2px solid #bbb; }
         tbody td { padding: 10px 11px; vertical-align: top; }
         .td-r { text-align: right; }
         .td-desc { font-weight: 600; color: #111; line-height: 1.45; }
