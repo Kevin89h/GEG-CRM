@@ -168,8 +168,8 @@ export default function FacturePrintPage({
         .tagline { font-size: 22px; font-weight: 900; color: ${color}; letter-spacing: -.5px; margin-bottom: 12px; }
         .co-detail { font-size: 9.5px; color: #666; line-height: 1.75; }
         .co-detail a { color: ${color}; text-decoration: none; font-weight: 600; }
-        .company-right { text-align: right; }
-        .logo { height: 52px; object-fit: contain; display: block; margin-left: auto; margin-bottom: 8px; }
+        .company-left { text-align: left; }
+        .logo { height: 52px; object-fit: contain; display: block; margin-bottom: 8px; }
         .logo-initials { font-size: 28px; font-weight: 900; color: ${color}; letter-spacing: -1px; margin-bottom: 4px; }
         .co-name { font-size: 12px; font-weight: 800; color: #111; }
         .co-addr { font-size: 9.5px; color: #666; line-height: 1.7; margin-top: 3px; }
@@ -304,17 +304,7 @@ export default function FacturePrintPage({
         <div className="page-body">
           {/* HEADER */}
           <div className="header">
-            <div>
-              <div className="tagline">{tagline}</div>
-              <div className="co-detail">
-                {addr1}{addr2 ? `, ${addr2}` : ""}<br />
-                {city}<br />
-                {phone && <>Tél. : {phone}<br /></>}
-                {email && <>{email}<br /></>}
-                {website && <a href={`https://${website.replace(/^https?:\/\//, "")}`}>{website}</a>}
-              </div>
-            </div>
-            <div className="company-right">
+            <div className="company-left">
               {logoUrl
                 ? <img src={logoUrl} alt={companyName} className="logo" />
                 : <div className="logo-initials">
@@ -325,6 +315,16 @@ export default function FacturePrintPage({
               <div className="co-addr">
                 {nif && <>NIF : {nif}<br /></>}
                 {rccm && <>RCCM : {rccm}</>}
+              </div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div className="tagline">{tagline}</div>
+              <div className="co-detail">
+                {addr1}{addr2 ? `, ${addr2}` : ""}<br />
+                {city}<br />
+                {phone && <>Tél. : {phone}<br /></>}
+                {email && <>{email}<br /></>}
+                {website && <a href={`https://${website.replace(/^https?:\/\//, "")}`}>{website}</a>}
               </div>
             </div>
           </div>
