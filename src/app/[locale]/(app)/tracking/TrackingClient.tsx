@@ -205,12 +205,12 @@ export default function TrackingClient({ shipments: initial }: { shipments: Ship
                           : '—'}
                       </td>
                       <td className="px-4 py-3 text-slate-600">
-                        {live && live !== 'loading' && live !== 'error' && live.eta
+                        {live && live !== 'loading' && typeof live === 'object' && live.eta
                           ? <span className="text-blue-600 font-medium">{live.eta}</span>
                           : (s.eta ?? '—')}
                       </td>
                       <td className="px-4 py-3">
-                        {live && live !== 'loading' && live !== 'error' ? (
+                        {live && live !== 'loading' && typeof live === 'object' ? (
                           <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
                             {live.status}
                           </span>
@@ -268,7 +268,7 @@ export default function TrackingClient({ shipments: initial }: { shipments: Ship
                               </a>
                             </div>
                           )}
-                          {live && live !== 'loading' && live !== 'error' && (
+                          {live && live !== 'loading' && typeof live === 'object' && (
                             <div className="py-3">
                               <div className="flex flex-wrap items-center gap-x-6 gap-y-1 mb-3">
                                 {live.vessel && <span className="text-xs text-slate-600">🚢 <strong>{live.vessel}</strong></span>}
