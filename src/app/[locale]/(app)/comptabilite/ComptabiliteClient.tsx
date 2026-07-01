@@ -381,24 +381,27 @@ export default function ComptabiliteClient({ locale, clientStats, purchaseStats,
   async function saveTransaction() {
     if (!txForm.amount || !txForm.description) return
     setSaving(true)
-    const { supabase, db } = getCompanyClientBrowser()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setSaving(false); return }
-
-    const isTransfer = txForm.type === "transfer_out"
-    const rows: Record<string, unknown>[] = [{
-      account_id: txForm.account_id, type: txForm.type,
-      amount: parseFloat(txForm.amount), currency: txForm.currency,
-      description: txForm.description, reference: txForm.reference || null,
-      transfer_account_id: isTransfer ? txForm.transfer_account_id : null,
-      date: new Date(txForm.date).toISOString(), user_id: user.id,
-    }]
-    if (isTransfer && txForm.transfer_account_id) {
-      rows.push({ account_id: txForm.transfer_account_id, type: "transfer_in", amount: parseFloat(txForm.amount), currency: txForm.currency, description: txForm.description, reference: txForm.reference || null, transfer_account_id: txForm.account_id, date: new Date(txForm.date).toISOString(), user_id: user.id })
-    }
-    await db.from("treasury_transactions").insert(rows)
-    setTxModal(false)
+    const res = await fetch("/api/treasury/transactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        account_id: txForm.account_id,
+        type: txForm.type,
+        amount: txForm.amount,
+        currency: txForm.currency,
+        description: txForm.description,
+        reference: txForm.reference || null,
+        transfer_account_id: txForm.transfer_account_id || null,
+        date: txForm.date,
+      }),
+    })
     setSaving(false)
+    if (!res.ok) {
+      const json = await res.json()
+      setSaveError(json.error ?? "Erreur lors de l'enregistrement")
+      return
+    }
+    setTxModal(false)
     router.refresh()
   }
 
@@ -406,15 +409,22 @@ export default function ComptabiliteClient({ locale, clientStats, purchaseStats,
     if (!accForm.name) return
     setSaving(true)
     setSaveError(null)
-    const { db } = getCompanyClientBrowser()
-    const { error } = await db.from("treasury_accounts").insert([{
-      name: accForm.name, type: accForm.type, institution: accForm.institution || null,
-      account_number: accForm.account_number || null, currency: accForm.currency,
-      initial_balance: parseFloat(accForm.initial_balance) || 0, color: accForm.color,
-    }])
+    const res = await fetch("/api/treasury/accounts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: accForm.name, type: accForm.type,
+        institution: accForm.institution || null,
+        account_number: accForm.account_number || null,
+        currency: accForm.currency,
+        initial_balance: accForm.initial_balance,
+        color: accForm.color,
+      }),
+    })
+    const json = await res.json()
     setSaving(false)
-    if (error) {
-      setSaveError(error.message)
+    if (!res.ok) {
+      setSaveError(json.error ?? "Erreur lors de l'enregistrement")
       return
     }
     setAccountModal(false)
