@@ -1,4 +1,5 @@
 import { createClient as createAdminClient } from "@supabase/supabase-js"
+import { createClient } from "@/lib/supabase/server"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
 
@@ -22,6 +23,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Champs requis manquants" }, { status: 400 })
     }
 
+    // Récupérer l'utilisateur connecté
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 })
+
     const db = await getAdminDb()
     const isTransfer = type === "transfer_out"
 
@@ -35,6 +41,7 @@ export async function POST(req: Request) {
       category: category || null,
       transfer_account_id: isTransfer ? transfer_account_id : null,
       date: new Date(date).toISOString(),
+      user_id: user.id,
     }]
 
     if (isTransfer && transfer_account_id) {
@@ -48,6 +55,7 @@ export async function POST(req: Request) {
         category: category || null,
         transfer_account_id: account_id,
         date: new Date(date).toISOString(),
+        user_id: user.id,
       })
     }
 
