@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Plus, Building2, Smartphone, Banknote, ArrowDownLeft, ArrowUpRight, MoreVertical, X } from "lucide-react"
+import { Plus, Building2, Smartphone, Banknote, ArrowDownLeft, ArrowUpRight, MoreVertical, X, BarChart2 } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { Button } from "@/components/ui/Button"
@@ -424,8 +424,11 @@ export default function ComptabiliteClient({ locale, clientStats, purchaseStats,
           <p className="text-gray-500 text-sm mt-0.5">Tableau de bord</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Link href={`/${locale}/comptabilite/resultat`} className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-1.5">
+            <BarChart2 className="w-4 h-4" /> Compte de résultat
+          </Link>
           <button onClick={() => setAccountModal(true)} className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-1.5">
-            <Plus className="w-4 h-4" /> Nouveau compte
+            <Plus className="w-4 h-4" /> Nouveau journal
           </button>
           <button onClick={() => setTxModal(true)} className="px-4 py-2 text-sm font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition-colors flex items-center gap-1.5">
             <Plus className="w-4 h-4" /> Mouvement
