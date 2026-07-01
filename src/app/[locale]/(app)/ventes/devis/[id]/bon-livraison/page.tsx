@@ -6,16 +6,15 @@ export default async function BonLivraisonPage({ params }: { params: Promise<{ l
   const { locale, id } = await params
   const { db } = await createCompanyClient()
 
-  const { data: order } = await db
-    .from("sales_orders")
-    .select(`
+  const [{ data: order }, { data: bankAccounts }] = await Promise.all([
+    db.from("sales_orders").select(`
       id, number, status, currency, valid_until, notes, created_at,
       account:accounts(id, name, country),
       salesperson:employees(full_name),
       lines:sales_order_lines(id, description, quantity, unit_price, discount, position, product:products(name, reference))
-    `)
-    .eq("id", id)
-    .single()
+    `).eq("id", id).single(),
+    db.from("treasury_accounts").select("name, institution, account_number, currency").eq("type", "bank").eq("is_active", true).order("currency").order("name"),
+  ])
 
   if (!order) notFound()
 
@@ -44,6 +43,7 @@ export default async function BonLivraisonPage({ params }: { params: Promise<{ l
       accountCountry={(account as Record<string, string> | null)?.country ?? null}
       salespersonName={(salesperson as Record<string, string> | null)?.full_name ?? null}
       lines={lines}
+      bankAccounts={(bankAccounts ?? []).map(b => ({ name: b.name, institution: b.institution ?? "", account_number: b.account_number ?? "", currency: b.currency }))}
       locale={locale}
       docType="bon-livraison"
     />
