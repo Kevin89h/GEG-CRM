@@ -155,22 +155,8 @@ export default function FacturePrintPage({
           position: relative;
           overflow: hidden;
         }
-        .page::before {
-          content: "G";
-          position: absolute;
-          font-size: 480px;
-          font-weight: 900;
-          color: ${color};
-          opacity: 0.04;
-          right: -60px;
-          top: 50%;
-          transform: translateY(-50%);
-          line-height: 1;
-          pointer-events: none;
-          z-index: 0;
-          font-family: 'Helvetica Neue', Arial, sans-serif;
-        }
         .page-body, .footer-bar { position: relative; z-index: 1; }
+        .watermark { position: absolute; width: 380px; height: 380px; right: -60px; top: 50%; transform: translateY(-50%); opacity: 0.05; pointer-events: none; z-index: 0; object-fit: contain; }
 
         /* Content grows, footer sticks to bottom */
         .page-body { flex: 1; display: flex; flex-direction: column; }
@@ -318,6 +304,7 @@ export default function FacturePrintPage({
       </div>
 
       <div className="page">
+        {logoUrl && <img src={logoUrl} alt="" className="watermark" />}
         <div className="stripe" />
 
         <div className="page-body">
