@@ -227,16 +227,16 @@ export default function TrackingClient({ shipments: initial }: { shipments: Ship
                               onClick={() => isExpanded ? setExpandedId(null) : fetchLive(s)}
                               className="text-emerald-600 hover:text-emerald-700 text-xs font-medium transition-colors"
                             >
-                              {live === 'loading' ? '…' : isExpanded ? 'Fermer' : '↻ Live'}
+                              {live === 'loading' ? '…' : isExpanded ? 'Fermer' : '↻ Scraper'}
                             </button>
                           )}
                           <a
                             href={trackingUrl(s.carrier, s.tracking_number)}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-blue-600 hover:underline text-xs font-medium"
+                            className="inline-flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors"
                           >
-                            Site
+                            ↗ Tracker
                           </a>
                           <button
                             onClick={() => handleDelete(s.id)}
@@ -256,8 +256,16 @@ export default function TrackingClient({ shipments: initial }: { shipments: Ship
                             <div className="py-4 text-sm text-slate-500">Récupération en cours…</div>
                           )}
                           {live === 'error' && (
-                            <div className="py-4 text-sm text-red-500">
-                              Impossible de récupérer le tracking live. Vérifiez le numéro ou utilisez le lien "Site".
+                            <div className="py-4 flex items-center gap-3">
+                              <span className="text-sm text-slate-500">Scraping bloqué par {s.carrier}.</span>
+                              <a
+                                href={trackingUrl(s.carrier, s.tracking_number)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+                              >
+                                ↗ Ouvrir le tracking {s.carrier}
+                              </a>
                             </div>
                           )}
                           {live && live !== 'loading' && live !== 'error' && (
