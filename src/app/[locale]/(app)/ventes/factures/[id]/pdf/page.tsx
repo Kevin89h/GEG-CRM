@@ -33,14 +33,7 @@ export default async function FacturePdfPage({ params }: { params: Promise<{ loc
 
   if (!invoice) notFound()
 
-  const [{ data: payments }, { data: bankAccounts, error: bankErr }] = await Promise.all([
-    db.from("payments").select("amount, paid_at").eq("invoice_id", id).order("paid_at"),
-    db.from("treasury_accounts")
-      .select("name, institution, account_number, currency, type, is_active")
-      .order("currency")
-      .order("name"),
-  ])
-  console.log("DEBUG treasury_accounts:", JSON.stringify(bankAccounts), "err:", bankErr?.message)
+  const { data: payments } = await db.from("payments").select("amount, paid_at").eq("invoice_id", id).order("paid_at")
 
   const account = Array.isArray(invoice.account) ? invoice.account[0] : invoice.account
   const acc = account as Record<string, string | null> | null
@@ -101,12 +94,6 @@ export default async function FacturePdfPage({ params }: { params: Promise<{ loc
       accountPhone={acc?.phone ?? null}
       lines={lines}
       payments={paymentList}
-      bankAccounts={(bankAccounts ?? []).map(b => ({
-        name: b.name,
-        institution: b.institution ?? "",
-        account_number: b.account_number ?? "",
-        currency: b.currency,
-      }))}
       qrSvg={qrSvg}
       locale={locale}
       docSettings={docSettings ?? null}

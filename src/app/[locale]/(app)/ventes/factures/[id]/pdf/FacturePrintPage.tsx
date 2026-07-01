@@ -21,13 +21,6 @@ interface BankDetails {
   tva_key?: string
 }
 
-interface TreasuryAccount {
-  name: string
-  institution: string
-  account_number: string
-  currency: string
-}
-
 interface DocSettings {
   company_name?: string | null
   tagline?: string | null
@@ -60,7 +53,6 @@ interface Props {
   accountPhone: string | null
   lines: Line[]
   payments: { amount: number; paid_at: string }[]
-  bankAccounts: TreasuryAccount[]
   qrSvg: string
   locale: string
   docSettings?: DocSettings | null
@@ -69,7 +61,7 @@ interface Props {
 export default function FacturePrintPage({
   number, status, currency, issueDate, dueDate, notes, sourceRef,
   accountName, accountCity, accountCountry, accountPhone,
-  lines, payments, bankAccounts, locale, docSettings,
+  lines, payments, locale, docSettings,
 }: Props) {
   useEffect(() => {
     document.title = `Facture ${number}`
@@ -90,16 +82,11 @@ export default function FacturePrintPage({
   const logoUrl = docSettings?.logo_url ?? null
   const bankMeta = (docSettings?.bank_details as BankDetails | null) ?? { swift: "ECOCGNCN", tva_key: "5X" }
 
-  // Group bank accounts by currency, order GNF > EUR > USD
-  const grouped: Record<string, TreasuryAccount[]> = {}
-  for (const acc of bankAccounts) {
-    if (!grouped[acc.currency]) grouped[acc.currency] = []
-    grouped[acc.currency].push(acc)
-  }
-  const currencyOrder = ["GNF", "EUR", "USD"]
-  const sortedCurrencies = [
-    ...currencyOrder.filter(c => grouped[c]),
-    ...Object.keys(grouped).filter(c => !currencyOrder.includes(c)),
+  const BANK_ACCOUNTS = [
+    { institution: "ECOBANK",     account_number: "10001730805226290" },
+    { institution: "ECOBANK",     account_number: "100017308064086" },
+    { institution: "ACCESS BANK", account_number: "36001010000215460" },
+    { institution: "VISTA BANK",  account_number: "2842400145744130" },
   ]
 
   const hasTva = lines.some(l => (l.tva_rate ?? 0) > 0)
@@ -433,25 +420,18 @@ export default function FacturePrintPage({
           <div className="bottom">
             {/* BANK ACCOUNTS */}
             <div className="bank-section">
-              <div className="bank-section-title">Coordonnées bancaires</div>
-              {sortedCurrencies.map(cur => (
-                <div className="bank-currency-group" key={cur}>
-                  <span className="bank-currency-label">{cur}</span>
-                  {grouped[cur].map(acc => (
-                    <div className="bank-row" key={acc.name}>
-                      <span className="bank-inst">{acc.institution}</span>
-                      <span className="bank-num">{acc.account_number}</span>
-                    </div>
-                  ))}
-                  {cur === "GNF" && (
-                    <div className="bank-meta">
-                      {bankMeta.swift && <>Swift : {bankMeta.swift}</>}
-                      {bankMeta.swift && bankMeta.tva_key && "  ·  "}
-                      {bankMeta.tva_key && <>Clé TVA : {bankMeta.tva_key}</>}
-                    </div>
-                  )}
+              <div className="bank-section-title">Coordonnées bancaires — GNF</div>
+              {BANK_ACCOUNTS.map(acc => (
+                <div className="bank-row" key={acc.account_number}>
+                  <span className="bank-inst">{acc.institution}</span>
+                  <span className="bank-num">{acc.account_number}</span>
                 </div>
               ))}
+              <div className="bank-meta">
+                {bankMeta.swift && <>Swift : {bankMeta.swift}</>}
+                {bankMeta.swift && bankMeta.tva_key && "  ·  "}
+                {bankMeta.tva_key && <>Clé TVA : {bankMeta.tva_key}</>}
+              </div>
             </div>
 
             {/* TOTALS */}

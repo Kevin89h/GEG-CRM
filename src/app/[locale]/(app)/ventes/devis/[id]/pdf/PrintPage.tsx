@@ -18,13 +18,6 @@ interface BankDetails {
   tva_key?: string
 }
 
-interface TreasuryAccount {
-  name: string
-  institution: string
-  account_number: string
-  currency: string
-}
-
 interface DocSettings {
   company_name?: string | null
   tagline?: string | null
@@ -55,7 +48,6 @@ interface Props {
   deliveryAddress?: string | null
   paymentTerms?: string | null
   lines: Line[]
-  bankAccounts: TreasuryAccount[]
   locale: string
   docType: "devis" | "bon-livraison"
   docSettings?: DocSettings | null
@@ -64,7 +56,7 @@ interface Props {
 export default function PrintPage({
   number, status, currency, createdAt, validUntil, notes,
   accountName, accountCountry, salespersonName, deliveryAddress, paymentTerms,
-  lines, bankAccounts, locale, docType, docSettings,
+  lines, locale, docType, docSettings,
 }: Props) {
   useEffect(() => {
     document.title = `${docType === "bon-livraison" ? "BL" : status === "confirmed" ? "BC" : "DEVIS"} - ${number}`
@@ -86,6 +78,13 @@ export default function PrintPage({
   const logoUrl = docSettings?.logo_url ?? null
   const bankMeta = (docSettings?.bank_details as BankDetails | null) ?? { swift: "ECOCGNCN", tva_key: "5X" }
 
+  const BANK_ACCOUNTS = [
+    { institution: "ECOBANK",     account_number: "10001730805226290" },
+    { institution: "ECOBANK",     account_number: "100017308064086" },
+    { institution: "ACCESS BANK", account_number: "36001010000215460" },
+    { institution: "VISTA BANK",  account_number: "2842400145744130" },
+  ]
+
   const docLabel = docType === "bon-livraison" ? "BON DE LIVRAISON"
     : status === "confirmed" ? "BON DE COMMANDE"
     : "DEVIS"
@@ -94,18 +93,6 @@ export default function PrintPage({
   const tvaAmt = totalHT * tvaRate / 100
   const totalTTC = totalHT + tvaAmt
   const cur = currency === "GNF" ? "FG" : currency
-
-  // Group bank accounts by currency
-  const grouped: Record<string, TreasuryAccount[]> = {}
-  for (const acc of bankAccounts) {
-    if (!grouped[acc.currency]) grouped[acc.currency] = []
-    grouped[acc.currency].push(acc)
-  }
-  const currencyOrder = ["GNF", "EUR", "USD"]
-  const sortedCurrencies = [
-    ...currencyOrder.filter(c => grouped[c]),
-    ...Object.keys(grouped).filter(c => !currencyOrder.includes(c)),
-  ]
 
   return (
     <>
@@ -377,27 +364,20 @@ export default function PrintPage({
           {/* BOTTOM: BANK + CONDITIONS */}
           <div className="bottom">
             {/* BANK ACCOUNTS */}
-            {docType !== "bon-livraison" && sortedCurrencies.length > 0 && (
+            {docType !== "bon-livraison" && (
               <div className="bank-section">
-                <div className="bank-section-title">Coordonnées bancaires</div>
-                {sortedCurrencies.map(c => (
-                  <div className="bank-currency-group" key={c}>
-                    <span className="bank-currency-label">{c}</span>
-                    {grouped[c].map(acc => (
-                      <div className="bank-row" key={acc.name}>
-                        <span className="bank-inst">{acc.institution}</span>
-                        <span className="bank-num">{acc.account_number}</span>
-                      </div>
-                    ))}
-                    {c === "GNF" && (
-                      <div className="bank-meta">
-                        {bankMeta.swift && <>Swift : {bankMeta.swift}</>}
-                        {bankMeta.swift && bankMeta.tva_key && "  ·  "}
-                        {bankMeta.tva_key && <>Clé TVA : {bankMeta.tva_key}</>}
-                      </div>
-                    )}
+                <div className="bank-section-title">Coordonnées bancaires — GNF</div>
+                {BANK_ACCOUNTS.map(acc => (
+                  <div className="bank-row" key={acc.account_number}>
+                    <span className="bank-inst">{acc.institution}</span>
+                    <span className="bank-num">{acc.account_number}</span>
                   </div>
                 ))}
+                <div className="bank-meta">
+                  {bankMeta.swift && <>Swift : {bankMeta.swift}</>}
+                  {bankMeta.swift && bankMeta.tva_key && "  ·  "}
+                  {bankMeta.tva_key && <>Clé TVA : {bankMeta.tva_key}</>}
+                </div>
               </div>
             )}
 
