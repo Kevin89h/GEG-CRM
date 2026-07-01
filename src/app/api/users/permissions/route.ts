@@ -5,7 +5,7 @@ import { NextResponse } from "next/server"
 export async function PATCH(req: Request) {
   const supabase = await createClient()
 
-  // Verify caller is admin
+  // Verify caller is admin (using session client)
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 })
 
@@ -15,7 +15,13 @@ export async function PATCH(req: Request) {
   const { userId, role, permissions } = await req.json()
   if (!userId) return NextResponse.json({ error: "userId requis" }, { status: 400 })
 
-  const { error } = await supabase
+  // Use service role client to bypass RLS for updating other users' profiles
+  const adminClient = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  )
+
+  const { error } = await adminClient
     .from("profiles")
     .update({ role, permissions })
     .eq("id", userId)
