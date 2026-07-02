@@ -18,9 +18,16 @@ interface ProductOption {
   unit: { name: string } | null
 }
 
+interface StockLevel {
+  product_id: string
+  warehouse_id: string
+  quantity: number
+}
+
 interface Props {
   warehouses: Warehouse[]
   products: ProductOption[]
+  stockLevels: StockLevel[]
   initialType?: string
   locale: string
 }
@@ -29,7 +36,7 @@ type MoveType = "in" | "out" | "transfer" | "adjustment" | "damaged" | "lost" | 
 
 const VALID_TYPES: MoveType[] = ["in", "out", "transfer", "adjustment", "damaged", "lost", "destroyed"]
 
-export default function NouveauMouvementClient({ warehouses, products, initialType, locale }: Props) {
+export default function NouveauMouvementClient({ warehouses, products, stockLevels, initialType, locale }: Props) {
   const router = useRouter()
   const t = useTranslations("mouvements")
 
@@ -93,6 +100,20 @@ export default function NouveauMouvementClient({ warehouses, products, initialTy
 
   const cfg = typeConfig[type]
   const selectedProduct = products.find(p => p.id === form.product_id)
+
+  function getStockForProduct(productId: string): { warehouseId: string; warehouseName: string; quantity: number }[] {
+    return stockLevels
+      .filter(s => s.product_id === productId && s.quantity > 0)
+      .map(s => ({
+        warehouseId: s.warehouse_id,
+        warehouseName: warehouses.find(w => w.id === s.warehouse_id)?.name ?? s.warehouse_id,
+        quantity: s.quantity,
+      }))
+      .sort((a, b) => b.quantity - a.quantity)
+  }
+
+  const productStockLines = form.product_id ? getStockForProduct(form.product_id) : []
+  const totalStock = productStockLines.reduce((s, l) => s + l.quantity, 0)
 
   function set(key: keyof typeof form, value: string) {
     setForm(f => ({ ...f, [key]: value }))
@@ -189,6 +210,29 @@ export default function NouveauMouvementClient({ warehouses, products, initialTy
             label: p.reference ? `${p.name} (${p.reference})` : p.name,
           }))}
         />
+
+        {form.product_id && (
+          <div className="rounded-lg bg-gray-50 border border-gray-200 px-4 py-3 text-sm">
+            <div className="flex items-center justify-between mb-1">
+              <span className="font-medium text-gray-700">Stock actuel</span>
+              <span className={`font-bold ${totalStock === 0 ? "text-red-600" : "text-gray-900"}`}>
+                {totalStock.toLocaleString("fr")} {selectedProduct?.unit?.name ?? ""}
+              </span>
+            </div>
+            {productStockLines.length === 0 ? (
+              <p className="text-xs text-red-500">Aucun stock disponible</p>
+            ) : (
+              <div className="space-y-0.5 mt-1">
+                {productStockLines.map(l => (
+                  <div key={l.warehouseId} className="flex justify-between text-xs text-gray-500">
+                    <span>{l.warehouseName}</span>
+                    <span className="font-medium text-gray-700">{l.quantity.toLocaleString("fr")} {selectedProduct?.unit?.name ?? ""}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         <Input
           label={`${t("labelQuantity")}${selectedProduct?.unit ? ` (${selectedProduct.unit.name})` : ""}`}

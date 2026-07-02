@@ -9,6 +9,12 @@ interface ProductOption {
   unit: { name: string } | null
 }
 
+interface StockLevel {
+  product_id: string
+  warehouse_id: string
+  quantity: number
+}
+
 interface Props {
   params: Promise<{ locale: string }>
   searchParams: Promise<{ type?: string }>
@@ -19,9 +25,10 @@ export default async function NouveauMouvementPage({ params, searchParams }: Pro
   const { type } = await searchParams
 
   const { db: supabase } = await createCompanyClient()
-  const [{ data: warehouses }, { data: products }] = await Promise.all([
+  const [{ data: warehouses }, { data: products }, { data: stockLevels }] = await Promise.all([
     supabase.from("warehouses").select("*").eq("is_active", true).order("name"),
     supabase.from("products").select("id, name, reference, unit:units(name)").eq("is_active", true).order("name"),
+    supabase.from("stock_levels").select("product_id, warehouse_id, quantity"),
   ])
 
   const typedProducts: ProductOption[] = (products ?? []).map((p: Record<string, unknown>) => ({
@@ -35,6 +42,7 @@ export default async function NouveauMouvementPage({ params, searchParams }: Pro
     <NouveauMouvementClient
       warehouses={(warehouses ?? []) as Warehouse[]}
       products={typedProducts}
+      stockLevels={(stockLevels ?? []) as StockLevel[]}
       initialType={type}
       locale={locale}
     />

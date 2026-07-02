@@ -133,9 +133,6 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
 
   async function resetToDraft() {
     setLoading(true)
-    if (order.status === "confirmed") {
-      await restoreStock()
-    }
     const { db } = getCompanyClientBrowser()
     await db.from("sales_orders").update({ status: "draft" }).eq("id", order.id)
     router.refresh()
