@@ -4,7 +4,6 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Plus, Trash2, ArrowLeft } from "lucide-react"
 import Link from "next/link"
-import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 
 interface TreasuryAccount { id: string; name: string; type: string; currency: string }
 interface Props { locale: string; treasuryAccounts: TreasuryAccount[] }
@@ -69,19 +68,11 @@ export default function NouvelleFactureFournisseurClient({ locale, treasuryAccou
 
     setSaving(true)
     setError(null)
-    const { db } = getCompanyClientBrowser()
 
-    const { count } = await db.from("supplier_invoices").select("id", { count: "exact", head: true })
-    const now   = new Date()
-    const year  = now.getFullYear()
-    const month = String(now.getMonth() + 1).padStart(2, "0")
-    const seq   = String((count ?? 0) + 1).padStart(4, "0")
-    const number = `FF-${year}-${month}-${seq}`
-
-    const { data: invoice, error: invErr } = await db
-      .from("supplier_invoices")
-      .insert([{
-        number,
+    const res = await fetch("/api/supplier-invoices", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
         supplier_name: form.supplier_name.trim(),
         currency: form.currency,
         invoice_date: form.invoice_date,
@@ -92,37 +83,22 @@ export default function NouvelleFactureFournisseurClient({ locale, treasuryAccou
         tax_amount: taxAmount,
         total_ttc: totalTTC,
         status: form.pay_immediately ? "paid" : "pending",
-      }])
-      .select("id")
-      .single()
+        lines: lines.map(l => ({
+          description: l.description,
+          quantity: parseFloat(l.quantity) || 1,
+          unit_price: parseFloat(l.unit_price) || 0,
+          tax_rate: parseFloat(l.tax_rate) || 0,
+        })),
+        pay_immediately: form.pay_immediately,
+        treasury_account_id: form.treasury_account_id || null,
+        payment_method: form.payment_method,
+      }),
+    })
 
-    if (invErr || !invoice) { setError(invErr?.message ?? "Erreur lors de la création"); setSaving(false); return }
+    const json = await res.json()
+    if (!res.ok || !json.id) { setError(json.error ?? "Erreur lors de la création"); setSaving(false); return }
 
-    await db.from("supplier_invoice_lines").insert(
-      lines.map((l, i) => ({
-        invoice_id: invoice.id,
-        description: l.description,
-        quantity: parseFloat(l.quantity) || 1,
-        unit_price: parseFloat(l.unit_price) || 0,
-        tax_rate: parseFloat(l.tax_rate) || 0,
-        position: i,
-      }))
-    )
-
-    if (form.pay_immediately && form.treasury_account_id) {
-      await db.from("treasury_transactions").insert([{
-        account_id: form.treasury_account_id,
-        type: "debit",
-        amount: totalTTC,
-        currency: form.currency,
-        description: `Paiement facture fournisseur ${number} — ${form.supplier_name}`,
-        reference: form.reference || number,
-        category: "achat",
-        date: form.invoice_date,
-      }])
-    }
-
-    router.push(`/${locale}/comptabilite/factures-fournisseurs/${invoice.id}`)
+    router.push(`/${locale}/comptabilite/factures-fournisseurs/${json.id}`)
   }
 
   return (
