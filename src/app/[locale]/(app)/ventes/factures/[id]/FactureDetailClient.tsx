@@ -109,12 +109,15 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
   const canEdit = !isCancelled
 
   async function updateLine(lineId: string, field: keyof Line, value: string | number) {
-    const { db } = getCompanyClientBrowser()
     const numVal = ["quantity", "unit_price", "discount", "tva_rate"].includes(field as string)
       ? (typeof value === "number" ? value : parseFloat(value as string) || 0)
       : undefined
     const payload = numVal !== undefined ? { [field]: numVal } : { [field]: value }
-    await db.from("invoice_lines").update(payload).eq("id", lineId)
+    await fetch(`/api/invoices/${invoice.id}/lines/${lineId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
     setInvoice(prev => ({
       ...prev,
       lines: prev.lines.map(l => l.id === lineId ? { ...l, ...payload } : l),
@@ -127,19 +130,20 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
   }
 
   async function deleteLine(lineId: string) {
-    const { db } = getCompanyClientBrowser()
-    await db.from("invoice_lines").delete().eq("id", lineId)
+    await fetch(`/api/invoices/${invoice.id}/lines/${lineId}`, { method: "DELETE" })
     setInvoice(prev => ({ ...prev, lines: prev.lines.filter(l => l.id !== lineId) }))
   }
 
   async function addLine() {
-    const { db } = getCompanyClientBrowser()
     const position = invoice.lines.length
     const defaultTvaRate = hasTva ? 18 : 0
-    const { data } = await db.from("invoice_lines").insert([{
-      invoice_id: invoice.id, description: "", quantity: 1, unit_price: 0, discount: 0, position, tva_rate: defaultTvaRate,
-    }]).select("id, product_id, description, quantity, unit_price, discount, tva_rate").single()
-    if (data) setInvoice(prev => ({ ...prev, lines: [...prev.lines, data as Line] }))
+    const res = await fetch(`/api/invoices/${invoice.id}/lines`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ description: "", quantity: 1, unit_price: 0, discount: 0, position, tva_rate: defaultTvaRate }),
+    })
+    const json = await res.json()
+    if (json.line) setInvoice(prev => ({ ...prev, lines: [...prev.lines, json.line as Line] }))
   }
 
   async function updateStatus(status: string) {
