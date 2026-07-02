@@ -6,6 +6,10 @@ const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 const nextConfig: NextConfig = {
   compress: true,
 
+  turbopack: {
+    root: __dirname,
+  },
+
   images: {
     formats: ["image/avif", "image/webp"],
     minimumCacheTTL: 86400,

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getCompanySchema } from "@/lib/company"
 import Sidebar from "@/components/layout/Sidebar"
 import MobileHeader from "@/components/layout/MobileHeader"
+import ChatWidget from "@/components/chat/ChatWidget"
 
 interface Props {
   children: React.ReactNode
@@ -52,6 +53,11 @@ export default async function AppLayout({ children, params }: Props) {
           {children}
         </div>
       </main>
+
+      <ChatWidget
+        currentUserId={user.id}
+        currentUserName={profile?.full_name || profile?.email || user.email || ""}
+      />
     </div>
   )
 }
