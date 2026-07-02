@@ -56,6 +56,11 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
     setLines(prev => prev.map(l => l.id === lineId ? { ...l, warehouse_id: warehouseId } : l))
   }
 
+  function setLineQuantity(lineId: string, value: string) {
+    const qty = parseFloat(value) || 0
+    setLines(prev => prev.map(l => l.id === lineId ? { ...l, quantity: qty } : l))
+  }
+
   // Appliquer l'entrepôt par défaut à toutes les lignes sans entrepôt
   function applyDefaultWarehouse(wid: string) {
     setDefaultWarehouse(wid)
@@ -75,7 +80,12 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setSaving(false); return }
 
-    // Créer les mouvements de stock sortie
+    // Sauvegarder les quantites ajustees sur le BL
+    for (const l of lines) {
+      await db.from("delivery_note_lines").update({ quantity: l.quantity, warehouse_id: l.warehouse_id }).eq("id", l.id)
+    }
+
+    // Creer les mouvements de stock sortie et mettre a jour stock_levels
     if (stockLines.length > 0) {
       await db.from("stock_moves").insert(
         stockLines.map(l => ({
@@ -83,10 +93,25 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
           product_id: l.product_id,
           from_warehouse_id: l.warehouse_id,
           quantity: l.quantity,
+          reference: dn.number,
           notes: `Livraison ${dn.number}`,
           user_id: user.id,
         }))
       )
+      // Mettre a jour stock_levels
+      for (const l of stockLines) {
+        const { data: level } = await db.from("stock_levels")
+          .select("quantity")
+          .eq("product_id", l.product_id!)
+          .eq("warehouse_id", l.warehouse_id!)
+          .maybeSingle()
+        const current = Number(level?.quantity ?? 0)
+        await db.from("stock_levels")
+          .upsert(
+            { product_id: l.product_id!, warehouse_id: l.warehouse_id!, quantity: Math.max(0, current - l.quantity) },
+            { onConflict: "product_id,warehouse_id" }
+          )
+      }
     }
 
     // Marquer le BL comme livré
@@ -188,7 +213,7 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100 text-xs">
               <th className="text-left px-4 py-3 font-medium text-gray-600">Description</th>
-              <th className="text-right px-4 py-3 font-medium text-gray-600 w-24">Quantité</th>
+              <th className="text-right px-4 py-3 font-medium text-gray-600 w-32">Qté à livrer</th>
               <th className="text-left px-4 py-3 font-medium text-gray-600 w-64">Entrepôt de sortie</th>
             </tr>
           </thead>
@@ -201,7 +226,18 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
                     <span className="ml-2 text-xs text-gray-400 font-normal">(prestation — pas de stock)</span>
                   )}
                 </td>
-                <td className="px-4 py-3 text-right text-gray-700">{l.quantity.toLocaleString("fr")}</td>
+                <td className="px-4 py-3 text-right">
+                  {isDraft && l.product_id ? (
+                    <input
+                      type="number" min="0" step="any"
+                      value={l.quantity}
+                      onChange={e => setLineQuantity(l.id, e.target.value)}
+                      className="w-20 text-right px-2 py-1 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <span className="text-gray-700">{l.quantity.toLocaleString("fr")}</span>
+                  )}
+                </td>
                 <td className="px-4 py-3">
                   {l.product_id ? (
                     isDraft ? (
