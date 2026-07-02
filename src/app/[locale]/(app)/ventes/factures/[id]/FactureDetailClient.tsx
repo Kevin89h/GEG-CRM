@@ -96,6 +96,33 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
 
   const isPaid = invoice.status === "paid"
   const isCancelled = invoice.status === "cancelled"
+  const isDraft = invoice.status === "draft"
+
+  async function updateLine(lineId: string, field: keyof Line, value: string) {
+    const { db } = getCompanyClientBrowser()
+    const numVal = ["quantity", "unit_price", "discount"].includes(field) ? parseFloat(value) || 0 : undefined
+    const payload = numVal !== undefined ? { [field]: numVal } : { [field]: value }
+    await db.from("invoice_lines").update(payload).eq("id", lineId)
+    setInvoice(prev => ({
+      ...prev,
+      lines: prev.lines.map(l => l.id === lineId ? { ...l, ...payload } : l),
+    }))
+  }
+
+  async function deleteLine(lineId: string) {
+    const { db } = getCompanyClientBrowser()
+    await db.from("invoice_lines").delete().eq("id", lineId)
+    setInvoice(prev => ({ ...prev, lines: prev.lines.filter(l => l.id !== lineId) }))
+  }
+
+  async function addLine() {
+    const { db } = getCompanyClientBrowser()
+    const position = invoice.lines.length
+    const { data } = await db.from("invoice_lines").insert([{
+      invoice_id: invoice.id, description: "", quantity: 1, unit_price: 0, discount: 0, position,
+    }]).select("id, product_id, description, quantity, unit_price, discount").single()
+    if (data) setInvoice(prev => ({ ...prev, lines: [...prev.lines, data as Line] }))
+  }
 
   async function updateStatus(status: string) {
     setSaving(true)
@@ -375,26 +402,75 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
               <th className="text-right px-4 py-3 font-medium text-gray-600 hidden sm:table-cell">{t("colUnitPrice")}</th>
               <th className="text-right px-4 py-3 font-medium text-gray-600 hidden sm:table-cell">{t("colDiscount")}</th>
               <th className="text-right px-4 py-3 font-medium text-gray-600">{t("colTotalHt")}</th>
+              {isDraft && <th className="w-8" />}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
             {invoice.lines.map(l => (
-              <tr key={l.id}>
-                <td className="px-4 py-3 font-medium text-gray-900">{l.description}</td>
-                <td className="px-4 py-3 text-right text-gray-700">{formatNumber(l.quantity)}</td>
-                <td className="px-4 py-3 text-right text-gray-700 hidden sm:table-cell">{formatNumber(l.unit_price, 2)}</td>
-                <td className="px-4 py-3 text-right text-gray-500 hidden sm:table-cell">{l.discount > 0 ? `${l.discount}%` : "—"}</td>
-                <td className="px-4 py-3 text-right font-semibold text-gray-900">
+              <tr key={l.id} className={isDraft ? "group" : ""}>
+                <td className="px-4 py-2">
+                  {isDraft ? (
+                    <input
+                      defaultValue={l.description}
+                      onBlur={e => updateLine(l.id, "description", e.target.value)}
+                      className="w-full font-medium text-gray-900 outline-none border-b border-transparent focus:border-blue-400 bg-transparent py-0.5"
+                    />
+                  ) : (
+                    <span className="font-medium text-gray-900">{l.description}</span>
+                  )}
+                </td>
+                <td className="px-4 py-2 text-right">
+                  {isDraft ? (
+                    <input type="number" min="0" step="any" defaultValue={l.quantity}
+                      onBlur={e => updateLine(l.id, "quantity", e.target.value)}
+                      className="w-20 text-right text-gray-700 outline-none border-b border-transparent focus:border-blue-400 bg-transparent py-0.5"
+                    />
+                  ) : <span className="text-gray-700">{formatNumber(l.quantity)}</span>}
+                </td>
+                <td className="px-4 py-2 text-right hidden sm:table-cell">
+                  {isDraft ? (
+                    <input type="number" min="0" step="any" defaultValue={l.unit_price}
+                      onBlur={e => updateLine(l.id, "unit_price", e.target.value)}
+                      className="w-28 text-right text-gray-700 outline-none border-b border-transparent focus:border-blue-400 bg-transparent py-0.5"
+                    />
+                  ) : <span className="text-gray-700">{formatNumber(l.unit_price, 2)}</span>}
+                </td>
+                <td className="px-4 py-2 text-right hidden sm:table-cell">
+                  {isDraft ? (
+                    <input type="number" min="0" max="100" step="0.1" defaultValue={l.discount}
+                      onBlur={e => updateLine(l.id, "discount", e.target.value)}
+                      className="w-16 text-right text-gray-500 outline-none border-b border-transparent focus:border-blue-400 bg-transparent py-0.5"
+                    />
+                  ) : <span className="text-gray-500">{l.discount > 0 ? `${l.discount}%` : "—"}</span>}
+                </td>
+                <td className="px-4 py-2 text-right font-semibold text-gray-900">
                   {formatNumber(lineTotal(l), 2)}
                 </td>
+                {isDraft && (
+                  <td className="pr-2 py-2">
+                    <button onClick={() => deleteLine(l.id)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 transition">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
         </table>
         </div>
+        {isDraft && (
+          <div className="px-4 py-2 border-t border-gray-50">
+            <button onClick={addLine} className="text-sm text-blue-600 hover:text-blue-500 font-medium transition-colors">
+              + Ajouter une ligne
+            </button>
+          </div>
+        )}
         <div className="border-t border-gray-100 px-4 py-3 flex justify-end">
           <p className="font-bold text-gray-900">
-            {t("totalHtLabel")} : {formatCurrency(invoice.total_ht, invoice.currency as "USD" | "GNF" | "EUR")}
+            {t("totalHtLabel")} : {formatCurrency(
+              isDraft ? invoice.lines.reduce((s, l) => s + lineTotal(l), 0) : invoice.total_ht,
+              invoice.currency as "USD" | "GNF" | "EUR"
+            )}
           </p>
         </div>
       </div>
