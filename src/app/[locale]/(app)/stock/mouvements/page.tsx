@@ -22,13 +22,13 @@ export default async function MouvementsPage() {
     .select(`
       id, type, quantity, created_at, notes, user_id,
       product:products(id, name, reference, unit:units(name)),
-      from_warehouse:warehouses!stock_moves_from_warehouse_id_fkey(id, name),
-      to_warehouse:warehouses!stock_moves_to_warehouse_id_fkey(id, name)
+      from_warehouse:warehouses!from_warehouse_id(id, name),
+      to_warehouse:warehouses!to_warehouse_id(id, name)
     `)
     .order("created_at", { ascending: false })
     .limit(500)
 
-  if (error) console.error("stock_moves error:", error.message)
+  if (error) console.error("stock_moves error:", error.message, "| count:", moves?.length ?? 0)
 
   // Recuperer les emails depuis auth.users
   const userIds = [...new Set((moves ?? []).map((m: { user_id?: string }) => m.user_id).filter(Boolean))]
