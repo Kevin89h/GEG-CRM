@@ -360,7 +360,7 @@ function TransactionsDrawer({ accountId, accounts, onClose, onNewTx, refreshKey 
 }
 
 /* ─── Modal configuration compte (composant séparé pour éviter closure stale) ── */
-interface ConfigForm { name: string; institution: string; account_number: string; currency: string; type: string; balance_adjustment: string }
+interface ConfigForm { name: string; institution: string; account_number: string; currency: string; type: string; target_balance: string }
 interface AccInfo { id: string; name: string; balance: number; currency: string }
 
 function ConfigModal({ accountId, acc, form, setForm, onClose, onSaved }: {
@@ -372,6 +372,8 @@ function ConfigModal({ accountId, acc, form, setForm, onClose, onSaved }: {
   onSaved: () => void
 }) {
   const [saving, setSaving] = useState(false)
+  const [resetting, setResetting] = useState(false)
+  const [confirmReset, setConfirmReset] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   if (!acc) return null
@@ -381,17 +383,18 @@ function ConfigModal({ accountId, acc, form, setForm, onClose, onSaved }: {
     setError(null)
     setSaving(true)
     try {
+      const body: Record<string, unknown> = {
+        name: form.name,
+        institution: form.institution || null,
+        account_number: form.account_number || null,
+        currency: form.currency,
+        type: form.type,
+      }
+      if (form.target_balance !== "") body.target_balance = form.target_balance
       const res = await fetch(`/api/treasury/accounts/${accountId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: form.name,
-          institution: form.institution || null,
-          account_number: form.account_number || null,
-          currency: form.currency,
-          type: form.type,
-          initial_balance: form.balance_adjustment !== "" ? form.balance_adjustment : undefined,
-        }),
+        body: JSON.stringify(body),
       })
       const json = await res.json()
       if (!res.ok) { setError(json.error ?? `Erreur ${res.status}`); return }
@@ -400,6 +403,22 @@ function ConfigModal({ accountId, acc, form, setForm, onClose, onSaved }: {
       setError(String(e))
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function resetToZero() {
+    setError(null)
+    setResetting(true)
+    try {
+      const res = await fetch(`/api/treasury/accounts/${accountId}`, { method: "DELETE" })
+      const json = await res.json()
+      if (!res.ok) { setError(json.error ?? `Erreur ${res.status}`); return }
+      setConfirmReset(false)
+      onSaved()
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setResetting(false)
     }
   }
 
@@ -417,13 +436,44 @@ function ConfigModal({ accountId, acc, form, setForm, onClose, onSaved }: {
         </div>
         <Input label="Institution" value={form.institution} onChange={e => setForm(f => ({ ...f, institution: e.target.value }))} placeholder="ECOBANK, ACCESS BANK…" />
         <Input label="Numéro de compte" value={form.account_number} onChange={e => setForm(f => ({ ...f, account_number: e.target.value }))} placeholder="010001730805226291" />
+
+        {/* Correction directe du solde */}
         <div className="border-t border-gray-100 pt-4">
-          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Ajuster le solde initial</label>
-          <p className="text-xs text-gray-400 mb-2">Solde actuel : <span className="font-medium text-gray-700">{formatCurrency(acc.balance, acc.currency as "GNF"|"USD"|"EUR")}</span></p>
-          <Input label="" type="number" value={form.balance_adjustment}
-            onChange={e => setForm(f => ({ ...f, balance_adjustment: e.target.value }))}
-            placeholder="Laisser vide pour ne pas modifier" />
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Corriger le solde affiché</label>
+          <p className="text-xs text-gray-400 mb-2">
+            Solde actuel : <span className="font-medium text-gray-700">{formatCurrency(acc.balance, acc.currency as "GNF"|"USD"|"EUR")}</span>
+            <span className="ml-2 text-gray-300">·</span>
+            <span className="ml-2">Entrez le montant exact que vous voulez voir affiché</span>
+          </p>
+          <Input label="" type="number" value={form.target_balance}
+            onChange={e => setForm(f => ({ ...f, target_balance: e.target.value }))}
+            placeholder="Ex : 5000000 — laisser vide pour ne pas modifier" />
         </div>
+
+        {/* Remettre à zéro */}
+        <div className="border-t border-gray-100 pt-4">
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Réinitialisation</label>
+          <p className="text-xs text-gray-400 mb-3">Remet le solde ET les paiements à 0 en supprimant tout l&apos;historique de ce compte.</p>
+          {!confirmReset ? (
+            <button
+              onClick={() => setConfirmReset(true)}
+              className="px-3 py-2 text-sm font-medium rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors"
+            >
+              Remettre à zéro
+            </button>
+          ) : (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-center justify-between gap-3">
+              <p className="text-sm text-red-700 font-medium">Supprimer toutes les transactions et remettre à 0 ?</p>
+              <div className="flex gap-2 shrink-0">
+                <button onClick={() => setConfirmReset(false)} className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white border border-gray-200 text-gray-600 hover:bg-gray-50">Annuler</button>
+                <button onClick={resetToZero} disabled={resetting} className="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-50">
+                  {resetting ? "…" : "Confirmer"}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
         {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
         <div className="flex justify-end gap-3 pt-2">
           <Button variant="secondary" onClick={onClose}>Annuler</Button>
@@ -439,7 +489,7 @@ export default function ComptabiliteClient({ locale, clientStats, purchaseStats,
   const router = useRouter()
   const [drawerAccountId, setDrawerAccountId] = useState<string | null>(null)
   const [configAccountId, setConfigAccountId] = useState<string | null>(null)
-  const [configForm, setConfigForm] = useState({ name: "", institution: "", account_number: "", currency: "GNF", type: "bank", balance_adjustment: "" })
+  const [configForm, setConfigForm] = useState({ name: "", institution: "", account_number: "", currency: "GNF", type: "bank", target_balance: "" })
   const [txModal, setTxModal] = useState(false)
   const [txRefreshKey, setTxRefreshKey] = useState(0)
   const [accountModal, setAccountModal] = useState(false)
@@ -603,7 +653,7 @@ export default function ComptabiliteClient({ locale, clientStats, purchaseStats,
             onTransact={(id) => setDrawerAccountId(id)}
             onConfig={(id) => {
               const acc = accounts.find(a => a.id === id)
-              if (acc) setConfigForm({ name: acc.name, institution: acc.institution ?? "", account_number: acc.account_number ?? "", currency: acc.currency, type: acc.type, balance_adjustment: "" })
+              if (acc) setConfigForm({ name: acc.name, institution: acc.institution ?? "", account_number: acc.account_number ?? "", currency: acc.currency, type: acc.type, target_balance: "" })
               setConfigAccountId(id)
             }}
           />
