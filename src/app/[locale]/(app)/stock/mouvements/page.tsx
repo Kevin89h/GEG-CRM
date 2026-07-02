@@ -19,16 +19,26 @@ export default async function MouvementsPage() {
 
   const { data: moves, error } = await queryDb
     .from("stock_moves")
-    .select(`
-      id, type, quantity, created_at, notes, user_id,
-      product:products(id, name, reference, unit:units(name)),
-      from_warehouse:warehouses!from_warehouse_id(id, name),
-      to_warehouse:warehouses!to_warehouse_id(id, name)
-    `)
+    .select("id, type, quantity, created_at, notes, user_id, product_id, from_warehouse_id, to_warehouse_id")
     .order("created_at", { ascending: false })
     .limit(500)
 
-  if (error) console.error("stock_moves error:", error.message, "| count:", moves?.length ?? 0)
+  if (error) console.error("stock_moves error:", error.message)
+
+  // Charger produits et entrepots separement
+  const productIds = [...new Set((moves ?? []).map((m: { product_id?: string }) => m.product_id).filter(Boolean))]
+  const warehouseIds = [...new Set([
+    ...(moves ?? []).map((m: { from_warehouse_id?: string }) => m.from_warehouse_id),
+    ...(moves ?? []).map((m: { to_warehouse_id?: string }) => m.to_warehouse_id),
+  ].filter(Boolean))]
+
+  const [{ data: products }, { data: warehouses }] = await Promise.all([
+    productIds.length > 0 ? queryDb.from("products").select("id, name, reference, unit:units(name)").in("id", productIds) : { data: [] },
+    warehouseIds.length > 0 ? queryDb.from("warehouses").select("id, name").in("id", warehouseIds) : { data: [] },
+  ])
+
+  const prodMap = Object.fromEntries((products ?? []).map((p: { id: string }) => [p.id, p]))
+  const whMap = Object.fromEntries((warehouses ?? []).map((w: { id: string }) => [w.id, w]))
 
   // Recuperer les emails depuis auth.users
   const userIds = [...new Set((moves ?? []).map((m: { user_id?: string }) => m.user_id).filter(Boolean))]
@@ -42,9 +52,12 @@ export default async function MouvementsPage() {
     )
   }
 
-  const movesWithUser = (moves ?? []).map((m: { user_id?: string }) => ({
+  const movesWithUser = (moves ?? []).map((m: { user_id?: string; product_id?: string; from_warehouse_id?: string; to_warehouse_id?: string }) => ({
     ...m,
     created_by: m.user_id ? (userMap[m.user_id] ?? m.user_id) : null,
+    product: m.product_id ? prodMap[m.product_id] ?? null : null,
+    from_warehouse: m.from_warehouse_id ? whMap[m.from_warehouse_id] ?? null : null,
+    to_warehouse: m.to_warehouse_id ? whMap[m.to_warehouse_id] ?? null : null,
   }))
 
   return <MouvementsClient moves={movesWithUser} />
