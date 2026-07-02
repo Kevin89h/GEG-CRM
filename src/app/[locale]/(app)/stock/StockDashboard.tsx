@@ -44,10 +44,12 @@ export default function StockDashboard({ levels, warehouses, products }: Props) 
   const filteredWarehouses = selectedWarehouse === "all" ? warehouses : warehouses.filter(w => w.id === selectedWarehouse)
 
   const rows = Object.values(pivot).filter(r => {
+    const totalQty = Object.values(r.byWarehouse).reduce((s, q) => s + q, 0)
+    if (totalQty <= 0) return false
     const matchSearch = r.product.name.toLowerCase().includes(search.toLowerCase()) ||
       (r.product.reference ?? "").toLowerCase().includes(search.toLowerCase())
     const matchWarehouse = selectedWarehouse === "all" ||
-      r.byWarehouse[selectedWarehouse] !== undefined
+      (r.byWarehouse[selectedWarehouse] ?? 0) > 0
     return matchSearch && matchWarehouse
   })
 
