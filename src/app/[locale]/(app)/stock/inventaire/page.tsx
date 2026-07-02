@@ -12,7 +12,7 @@ export default async function InventairePage() {
 
   return (
     <InventaireClient
-      products={(products ?? []) as { id: string; name: string; reference: string | null; unit: { name: string } | null }[]}
+      products={(products ?? []).map((p: Record<string, unknown>) => ({ id: p.id as string, name: p.name as string, reference: (p.reference as string | null) ?? null, unit: Array.isArray(p.unit) ? (p.unit[0] as { name: string } | null) ?? null : (p.unit as { name: string } | null) }))}
       warehouses={(warehouses ?? []) as { id: string; name: string }[]}
       levels={(levels ?? []) as { product_id: string; warehouse_id: string; quantity: number }[]}
     />
