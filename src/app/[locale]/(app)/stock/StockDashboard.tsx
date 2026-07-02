@@ -4,7 +4,8 @@ import { useState } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useTranslations } from "next-intl"
-import { Package, ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight, SlidersHorizontal, Warehouse as WarehouseIcon, Plus } from "lucide-react"
+import { Package, ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight, SlidersHorizontal, Warehouse as WarehouseIcon, Plus, Download } from "lucide-react"
+import { exportToXls } from "@/lib/exportXls"
 import { Badge } from "@/components/ui/Badge"
 import type { Warehouse } from "@/types"
 
@@ -74,6 +75,25 @@ export default function StockDashboard({ levels, warehouses, products }: Props) 
             <SlidersHorizontal className="w-4 h-4" />
             <span className="hidden sm:inline">{t("movements")}</span>
           </Link>
+          <button
+            onClick={() => {
+              const xlsRows = rows.flatMap(r =>
+                warehouses.map(w => ({
+                  "Produit": r.product.name,
+                  "Référence": r.product.reference ?? "",
+                  "Catégorie": r.product.category?.name ?? "",
+                  "Unité": r.product.unit?.name ?? "",
+                  "Entrepôt": w.name,
+                  "Quantité": r.byWarehouse[w.id] ?? 0,
+                }))
+              )
+              exportToXls(xlsRows, "stock")
+            }}
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition"
+          >
+            <Download className="w-4 h-4" />
+            <span className="hidden sm:inline">Export XLS</span>
+          </button>
           <Link href={`/${locale}/stock/mouvements/nouveau`} className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition">
             <Plus className="w-4 h-4" />
             <span className="hidden sm:inline">{t("movement")}</span>

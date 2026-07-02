@@ -4,7 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useTranslations } from "next-intl"
-import { Plus, Search, Package } from "lucide-react"
+import { Plus, Search, Package, Download } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { Badge } from "@/components/ui/Badge"
 import { Modal } from "@/components/ui/Modal"
@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { formatCurrency } from "@/lib/utils"
+import { exportToXls } from "@/lib/exportXls"
 import type { ProductCategory, Unit } from "@/types"
 
 interface ProductRow {
@@ -103,10 +104,28 @@ export default function ProduitsClient({ products: initial, categories, units }:
           <h1 className="text-2xl font-bold text-gray-900">{t("catalogueProduits")}</h1>
           <p className="text-gray-500 text-sm mt-0.5">{filtered.length} {t("produit")}{filtered.length !== 1 ? t("pluralSuffix") : ""}</p>
         </div>
-        <Button onClick={() => setModalOpen(true)}>
-          <Plus className="w-4 h-4" />
-          {t("nouveauProduit")}
-        </Button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => exportToXls(filtered.map(p => ({
+              "Référence": p.reference ?? "",
+              "Nom": p.name,
+              "Catégorie": p.category?.name ?? "",
+              "Unité": p.unit?.name ?? "",
+              "Prix achat": p.buy_price ?? "",
+              "Devise achat": p.buy_price_currency,
+              "Prix vente": p.sell_price ?? "",
+              "Devise vente": p.currency,
+              "Actif": p.is_active ? "Oui" : "Non",
+            })), "produits")}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded border border-gray-200 text-gray-600 hover:bg-gray-50 transition"
+          >
+            <Download className="w-4 h-4" /> Export XLS
+          </button>
+          <Button onClick={() => setModalOpen(true)}>
+            <Plus className="w-4 h-4" />
+            {t("nouveauProduit")}
+          </Button>
+        </div>
       </div>
 
       {/* Filtres */}

@@ -6,9 +6,10 @@ import { useParams } from "next/navigation"
 import { useTranslations } from "next-intl"
 import {
   Plus, Search, ChevronLeft, ChevronRight, LayoutList, LayoutGrid,
-  Receipt, Clock, ChevronUp, ChevronDown, ChevronsUpDown, AlertTriangle,
+  Receipt, Clock, ChevronUp, ChevronDown, ChevronsUpDown, AlertTriangle, Download,
 } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils"
+import { exportToXls } from "@/lib/exportXls"
 
 interface Invoice {
   id: string
@@ -166,6 +167,22 @@ export default function FacturesClient({ invoices }: Props) {
         >
           <Plus className="w-3.5 h-3.5" /> {t("new")}
         </Link>
+        <button
+          onClick={() => exportToXls(displayed.map(i => ({
+            "Numéro": i.number,
+            "Client": i.client_name,
+            "Statut": i.status,
+            "Date émission": i.issue_date ?? "",
+            "Date échéance": i.due_date ?? "",
+            "Total HT": i.total_ht,
+            "Payé": i.total_paid,
+            "Solde": i.balance,
+            "Devise": i.currency,
+          })), "factures")}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded border border-gray-200 text-gray-600 hover:bg-gray-50 transition"
+        >
+          <Download className="w-3.5 h-3.5" /> Export XLS
+        </button>
 
         <div className="flex items-center gap-1 ml-2">
           {TABS.map(tab => (

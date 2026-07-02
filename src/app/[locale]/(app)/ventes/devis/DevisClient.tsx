@@ -6,9 +6,10 @@ import { useParams } from "next/navigation"
 import { useTranslations } from "next-intl"
 import {
   Plus, Search, ChevronLeft, ChevronRight, LayoutList, LayoutGrid,
-  FileText, Clock,
+  FileText, Clock, Download,
 } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils"
+import { exportToXls } from "@/lib/exportXls"
 
 interface Order {
   id: string
@@ -93,6 +94,20 @@ export default function DevisClient({ orders }: Props) {
         >
           <Plus className="w-3.5 h-3.5" /> {t("new")}
         </Link>
+        <button
+          onClick={() => exportToXls(displayed.map(o => ({
+            "Numéro": o.number,
+            "Client": o.client_name,
+            "Commercial": o.salesperson_name,
+            "Statut": o.status,
+            "Date": o.created_at?.slice(0, 10) ?? "",
+            "Total HT": o.total_ht,
+            "Devise": o.currency,
+          })), "devis")}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded border border-gray-200 text-gray-600 hover:bg-gray-50 transition"
+        >
+          <Download className="w-3.5 h-3.5" /> Export XLS
+        </button>
 
         {/* Tabs */}
         <div className="flex items-center gap-1 ml-2">
