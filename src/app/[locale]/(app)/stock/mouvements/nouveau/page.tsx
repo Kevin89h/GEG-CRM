@@ -27,7 +27,7 @@ export default async function NouveauMouvementPage({ params, searchParams }: Pro
   const { db: supabase } = await createCompanyClient()
   const [{ data: warehouses }, { data: products }, { data: stockLevels }] = await Promise.all([
     supabase.from("warehouses").select("*").eq("is_active", true).order("name"),
-    supabase.from("products").select("id, name, reference, unit:units(name)").eq("is_active", true).order("name"),
+    supabase.from("products").select("id, name, reference, product_type, unit:units(name)").eq("is_active", true).neq("product_type", "service").order("name"),
     supabase.from("stock_levels").select("product_id, warehouse_id, quantity"),
   ])
 
