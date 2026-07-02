@@ -17,12 +17,12 @@ interface StockLevel {
 
 interface Props {
   params: Promise<{ locale: string }>
-  searchParams: Promise<{ type?: string }>
+  searchParams: Promise<{ type?: string; product?: string }>
 }
 
 export default async function NouveauMouvementPage({ params, searchParams }: Props) {
   const { locale } = await params
-  const { type } = await searchParams
+  const { type, product: initialProductId } = await searchParams
 
   const { db: supabase } = await createCompanyClient()
   const [{ data: warehouses }, { data: products }, { data: stockLevels }] = await Promise.all([
@@ -44,6 +44,7 @@ export default async function NouveauMouvementPage({ params, searchParams }: Pro
       products={typedProducts}
       stockLevels={(stockLevels ?? []) as StockLevel[]}
       initialType={type}
+      initialProductId={initialProductId}
       locale={locale}
     />
   )

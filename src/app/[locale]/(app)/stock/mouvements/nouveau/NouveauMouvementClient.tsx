@@ -29,6 +29,7 @@ interface Props {
   products: ProductOption[]
   stockLevels: StockLevel[]
   initialType?: string
+  initialProductId?: string
   locale: string
 }
 
@@ -36,7 +37,7 @@ type MoveType = "in" | "out" | "transfer" | "adjustment" | "damaged" | "lost" | 
 
 const VALID_TYPES: MoveType[] = ["in", "out", "transfer", "adjustment", "damaged", "lost", "destroyed"]
 
-export default function NouveauMouvementClient({ warehouses, products, stockLevels, initialType, locale }: Props) {
+export default function NouveauMouvementClient({ warehouses, products, stockLevels, initialType, initialProductId, locale }: Props) {
   const router = useRouter()
   const t = useTranslations("mouvements")
 
@@ -89,7 +90,7 @@ export default function NouveauMouvementClient({ warehouses, products, stockLeve
     (VALID_TYPES.includes(initialType as MoveType) ? initialType : "in") as MoveType
   )
   const [form, setForm] = useState({
-    product_id: products[0]?.id ?? "",
+    product_id: initialProductId ?? products[0]?.id ?? "",
     from_warehouse_id: "",
     to_warehouse_id: warehouses[0]?.id ?? "",
     quantity: "",

@@ -6,7 +6,7 @@ import Link from "next/link"
 import {
   ArrowLeft, Package, TrendingUp, TrendingDown, Warehouse,
   Edit2, Save, X, ChevronRight, BarChart3, ShoppingCart, ShoppingBag,
-  FileText, Shield, Upload, Trash2, Download, Lock, Eye, AlertTriangle,
+  FileText, Shield, Upload, Trash2, Download, Lock, Eye, AlertTriangle, SlidersHorizontal,
 } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
@@ -758,7 +758,16 @@ export default function ProductDetailClient({
             {/* MOUVEMENTS */}
             {tab === "mouvements" && (
               <div>
-                <p className="text-sm text-gray-500 mb-4">{moves.length} {t("mouvementCount", { count: moves.length })}</p>
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-sm text-gray-500">{moves.length} {t("mouvementCount", { count: moves.length })}</p>
+                  <Link
+                    href={`/${locale}/stock/mouvements/nouveau?type=adjustment&product=${product.id}`}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition"
+                  >
+                    <SlidersHorizontal className="w-3.5 h-3.5" />
+                    Ajuster le stock
+                  </Link>
+                </div>
                 {moves.length === 0 ? (
                   <div className="text-center py-12 text-gray-400">
                     <BarChart3 className="w-8 h-8 mx-auto mb-2 opacity-30" />
