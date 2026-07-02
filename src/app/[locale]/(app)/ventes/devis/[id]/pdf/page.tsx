@@ -24,10 +24,11 @@ export default async function DevisPdfPage({ params }: { params: Promise<{ local
   if (orderErr) console.error("PDF devis error:", orderErr.message)
   if (!order) notFound()
 
-  const [{ data: account }, { data: salesperson }, { data: rawLines }] = await Promise.all([
+  const [{ data: account }, { data: salesperson }, { data: rawLines }, { data: bankAccounts }] = await Promise.all([
     order.account_id ? db.from("accounts").select("id, name, country").eq("id", order.account_id).single() : Promise.resolve({ data: null }),
     order.salesperson_id ? db.from("employees").select("full_name").eq("id", order.salesperson_id).single() : Promise.resolve({ data: null }),
     db.from("sales_order_lines").select("id, description, quantity, unit_price, discount, position, product_id").eq("order_id", id).order("position"),
+    db.from("treasury_accounts").select("institution, account_number, swift, iban, currency").eq("type", "bank").eq("is_active", true).order("name"),
   ])
 
   const productIds = (rawLines ?? []).map((l: Record<string, unknown>) => l.product_id as string).filter(Boolean)
@@ -62,6 +63,7 @@ export default async function DevisPdfPage({ params }: { params: Promise<{ local
       locale={locale}
       docType="devis"
       docSettings={docSettings ?? null}
+      bankAccounts={bankAccounts ?? []}
     />
   )
 }

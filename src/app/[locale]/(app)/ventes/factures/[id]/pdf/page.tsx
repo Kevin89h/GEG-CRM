@@ -35,6 +35,13 @@ export default async function FacturePdfPage({ params }: { params: Promise<{ loc
 
   const { data: payments } = await db.from("payments").select("amount, paid_at").eq("invoice_id", id).order("paid_at")
 
+  const { data: bankAccounts } = await db
+    .from("treasury_accounts")
+    .select("institution, account_number, swift, iban, currency")
+    .eq("type", "bank")
+    .eq("is_active", true)
+    .order("name")
+
   const account = Array.isArray(invoice.account) ? invoice.account[0] : invoice.account
   const acc = account as Record<string, string | null> | null
 
@@ -97,6 +104,7 @@ export default async function FacturePdfPage({ params }: { params: Promise<{ loc
       qrSvg={qrSvg}
       locale={locale}
       docSettings={docSettings ?? null}
+      bankAccounts={bankAccounts ?? []}
     />
   )
 }

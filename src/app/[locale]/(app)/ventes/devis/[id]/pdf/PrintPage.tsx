@@ -41,6 +41,14 @@ interface DocSettings {
   bank_details?: BankDetails | null
 }
 
+interface BankAccount {
+  institution: string | null
+  account_number: string | null
+  swift: string | null
+  iban: string | null
+  currency: string
+}
+
 interface Props {
   number: string
   status: string
@@ -57,12 +65,13 @@ interface Props {
   locale: string
   docType: "devis" | "bon-livraison"
   docSettings?: DocSettings | null
+  bankAccounts?: BankAccount[]
 }
 
 export default function PrintPage({
   number, status, currency, createdAt, validUntil, notes,
   accountName, accountCountry, salespersonName, deliveryAddress, paymentTerms,
-  lines, locale, docType, docSettings,
+  lines, locale, docType, docSettings, bankAccounts = [],
 }: Props) {
   useEffect(() => {
     document.title = `${docType === "bon-livraison" ? "BL" : status === "confirmed" ? "BC" : "DEVIS"} - ${number}`
@@ -82,13 +91,13 @@ export default function PrintPage({
   const nif = docSettings?.nif ?? "446243099"
   const rccm = docSettings?.rccm ?? null
   const logoUrl = docSettings?.logo_url ?? null
-  const bankMeta = (docSettings?.bank_details as BankDetails | null) ?? { swift: "ECOCGNCN", tva_key: "5X" }
+  const bankMeta = (docSettings?.bank_details as BankDetails | null) ?? { tva_key: "5X" }
 
-  const BANK_ACCOUNTS = [
-    { institution: "ECOBANK",     account_number: "10001730805226290" },
-    { institution: "ECOBANK",     account_number: "100017308064086" },
-    { institution: "ACCESS BANK", account_number: "36001010000215460" },
-    { institution: "VISTA BANK",  account_number: "2842400145744130" },
+  const BANK_ACCOUNTS = bankAccounts.length > 0 ? bankAccounts : [
+    { institution: "ECOBANK",     account_number: "10001730805226290", swift: "ECOCGNCN", iban: null, currency: "GNF" },
+    { institution: "ECOBANK",     account_number: "100017308064086",   swift: "ECOCGNCN", iban: null, currency: "GNF" },
+    { institution: "ACCESS BANK", account_number: "36001010000215460", swift: null,        iban: null, currency: "GNF" },
+    { institution: "VISTA BANK",  account_number: "2842400145744130",  swift: null, iban: null, currency: "GNF" },
   ]
 
   const docLabel = docType === "bon-livraison" ? "BON DE LIVRAISON"
@@ -366,18 +375,23 @@ export default function PrintPage({
             {/* BANK ACCOUNTS */}
             {docType !== "bon-livraison" && (
               <div className="bank-section">
-                <div className="bank-section-title">Coordonnées bancaires — GNF</div>
-                {BANK_ACCOUNTS.map(acc => (
-                  <div className="bank-row" key={acc.account_number}>
+                <div className="bank-section-title">Coordonnées bancaires</div>
+                {BANK_ACCOUNTS.map((acc, i) => (
+                  <div className="bank-row" key={i}>
                     <span className="bank-inst">{acc.institution}</span>
                     <span className="bank-num">{acc.account_number}</span>
+                    {(acc.swift || acc.iban) && (
+                      <span className="bank-meta" style={{ display: "inline", marginLeft: 8 }}>
+                        {acc.swift && <>SWIFT : {acc.swift}</>}
+                        {acc.swift && acc.iban && "  ·  "}
+                        {acc.iban && <>IBAN : {acc.iban}</>}
+                      </span>
+                    )}
                   </div>
                 ))}
-                <div className="bank-meta">
-                  {bankMeta.swift && <>Swift : {bankMeta.swift}</>}
-                  {bankMeta.swift && bankMeta.tva_key && "  ·  "}
-                  {bankMeta.tva_key && <>Clé TVA : {bankMeta.tva_key}</>}
-                </div>
+                {bankMeta.tva_key && (
+                  <div className="bank-meta">Clé TVA : {bankMeta.tva_key}</div>
+                )}
               </div>
             )}
 
