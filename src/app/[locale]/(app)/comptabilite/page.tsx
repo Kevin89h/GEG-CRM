@@ -31,28 +31,38 @@ export default async function ComptabilitePage({ params }: { params: Promise<{ l
   const [
     { data: invoices },
     { data: purchases },
-    { data: treasuryAccounts },
+    { data: treasuryBalances },
     { data: transactions },
+    { data: swiftIbanData },
   ] = await Promise.all([
-    // Toutes les factures clients avec leur statut et montants
     db.from("invoice_totals")
       .select("id, number, status, currency, due_date, total_ht, total_paid, balance, account_id, issue_date"),
-    // Factures fournisseurs avec solde réel
     db.from("supplier_invoice_totals")
       .select("id, number, status, currency, total_ht, total_ttc, balance, invoice_date")
       .order("invoice_date", { ascending: false })
       .limit(200),
-    // Comptes de trésorerie avec swift/iban (admin key pour bypasser RLS)
-    adminDb.from("treasury_accounts")
-      .select("id, name, type, institution, account_number, swift, iban, currency, color, is_active, initial_balance, total_in, total_out")
+    // Soldes depuis la vue (total_in/total_out calcules)
+    adminDb.from("treasury_balances")
+      .select("id, name, type, institution, account_number, currency, color, is_active, initial_balance, total_in, total_out")
       .eq("is_active", true)
       .order("name"),
-    // Dernières transactions (admin key needed to bypass RLS)
     adminDb.from("treasury_transactions")
       .select("id, account_id, type, amount, currency, description, reference, category, date")
       .order("date", { ascending: false })
       .limit(200),
+    // swift/iban depuis la table de base (pas dans la vue)
+    adminDb.from("treasury_accounts")
+      .select("id, swift, iban")
+      .eq("is_active", true),
   ])
+
+  // Fusionner swift/iban dans les donnees de solde
+  const swiftMap = new Map((swiftIbanData ?? []).map((a: { id: string; swift: string | null; iban: string | null }) => [a.id, a]))
+  const treasuryAccounts = (treasuryBalances ?? []).map(a => ({
+    ...a,
+    swift: swiftMap.get(a.id)?.swift ?? null,
+    iban: swiftMap.get(a.id)?.iban ?? null,
+  }))
 
   // Calcul stats factures clients
   const allInvoices = invoices ?? []
