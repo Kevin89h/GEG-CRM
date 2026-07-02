@@ -4,7 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useTranslations } from "next-intl"
-import { Package, ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight, SlidersHorizontal, Warehouse as WarehouseIcon, Plus, Download } from "lucide-react"
+import { Package, ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight, SlidersHorizontal, Warehouse as WarehouseIcon, Plus, Download, ClipboardList } from "lucide-react"
 import { exportToXls } from "@/lib/exportXls"
 import { Badge } from "@/components/ui/Badge"
 import type { Warehouse } from "@/types"
@@ -74,6 +74,10 @@ export default function StockDashboard({ levels, warehouses, products }: Props) 
           <Link href={`/${locale}/stock/mouvements`} className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition">
             <SlidersHorizontal className="w-4 h-4" />
             <span className="hidden sm:inline">{t("movements")}</span>
+          </Link>
+          <Link href={`/${locale}/stock/inventaire`} className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 transition">
+            <ClipboardList className="w-4 h-4" />
+            <span className="hidden sm:inline">Inventaire</span>
           </Link>
           <button
             onClick={() => {
