@@ -106,16 +106,24 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
   const isPaid = invoice.status === "paid"
   const isCancelled = invoice.status === "cancelled"
   const isDraft = invoice.status === "draft"
+  const canEdit = !isCancelled
 
-  async function updateLine(lineId: string, field: keyof Line, value: string) {
+  async function updateLine(lineId: string, field: keyof Line, value: string | number) {
     const { db } = getCompanyClientBrowser()
-    const numVal = ["quantity", "unit_price", "discount"].includes(field) ? parseFloat(value) || 0 : undefined
+    const numVal = ["quantity", "unit_price", "discount", "tva_rate"].includes(field as string)
+      ? (typeof value === "number" ? value : parseFloat(value as string) || 0)
+      : undefined
     const payload = numVal !== undefined ? { [field]: numVal } : { [field]: value }
     await db.from("invoice_lines").update(payload).eq("id", lineId)
     setInvoice(prev => ({
       ...prev,
       lines: prev.lines.map(l => l.id === lineId ? { ...l, ...payload } : l),
     }))
+  }
+
+  async function toggleLineTva(lineId: string, currentRate: number | null | undefined) {
+    const newRate = (currentRate ?? 0) > 0 ? 0 : 18
+    await updateLine(lineId, "tva_rate", newRate)
   }
 
   async function deleteLine(lineId: string) {
@@ -127,9 +135,10 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
   async function addLine() {
     const { db } = getCompanyClientBrowser()
     const position = invoice.lines.length
+    const defaultTvaRate = hasTva ? 18 : 0
     const { data } = await db.from("invoice_lines").insert([{
-      invoice_id: invoice.id, description: "", quantity: 1, unit_price: 0, discount: 0, position,
-    }]).select("id, product_id, description, quantity, unit_price, discount").single()
+      invoice_id: invoice.id, description: "", quantity: 1, unit_price: 0, discount: 0, position, tva_rate: defaultTvaRate,
+    }]).select("id, product_id, description, quantity, unit_price, discount, tva_rate").single()
     if (data) setInvoice(prev => ({ ...prev, lines: [...prev.lines, data as Line] }))
   }
 
@@ -410,15 +419,16 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
               <th className="text-right px-4 py-3 font-medium text-gray-600">{t("colQty")}</th>
               <th className="text-right px-4 py-3 font-medium text-gray-600 hidden sm:table-cell">{t("colUnitPrice")}</th>
               <th className="text-right px-4 py-3 font-medium text-gray-600 hidden sm:table-cell">{t("colDiscount")}</th>
+              {canEdit && <th className="text-center px-2 py-3 font-medium text-gray-600 hidden sm:table-cell">TVA</th>}
               <th className="text-right px-4 py-3 font-medium text-gray-600">{t("colTotalHt")}</th>
-              {isDraft && <th className="w-8" />}
+              {canEdit && <th className="w-8" />}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
             {invoice.lines.map(l => (
-              <tr key={l.id} className={isDraft ? "group" : ""}>
+              <tr key={l.id} className="group">
                 <td className="px-4 py-2">
-                  {isDraft ? (
+                  {canEdit ? (
                     <input
                       defaultValue={l.description}
                       onBlur={e => updateLine(l.id, "description", e.target.value)}
@@ -429,7 +439,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
                   )}
                 </td>
                 <td className="px-4 py-2 text-right">
-                  {isDraft ? (
+                  {canEdit ? (
                     <input type="number" min="0" step="any" defaultValue={l.quantity}
                       onBlur={e => updateLine(l.id, "quantity", e.target.value)}
                       className="w-20 text-right text-gray-700 outline-none border-b border-transparent focus:border-blue-400 bg-transparent py-0.5"
@@ -437,7 +447,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
                   ) : <span className="text-gray-700">{formatNumber(l.quantity)}</span>}
                 </td>
                 <td className="px-4 py-2 text-right hidden sm:table-cell">
-                  {isDraft ? (
+                  {canEdit ? (
                     <input type="number" min="0" step="any" defaultValue={l.unit_price}
                       onBlur={e => updateLine(l.id, "unit_price", e.target.value)}
                       className="w-28 text-right text-gray-700 outline-none border-b border-transparent focus:border-blue-400 bg-transparent py-0.5"
@@ -445,17 +455,32 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
                   ) : <span className="text-gray-700">{formatNumber(l.unit_price, 2)}</span>}
                 </td>
                 <td className="px-4 py-2 text-right hidden sm:table-cell">
-                  {isDraft ? (
+                  {canEdit ? (
                     <input type="number" min="0" max="100" step="0.1" defaultValue={l.discount}
                       onBlur={e => updateLine(l.id, "discount", e.target.value)}
                       className="w-16 text-right text-gray-500 outline-none border-b border-transparent focus:border-blue-400 bg-transparent py-0.5"
                     />
                   ) : <span className="text-gray-500">{l.discount > 0 ? `${l.discount}%` : "—"}</span>}
                 </td>
+                {canEdit && (
+                  <td className="px-2 py-2 text-center hidden sm:table-cell">
+                    <button
+                      onClick={() => toggleLineTva(l.id, l.tva_rate)}
+                      title={(l.tva_rate ?? 0) > 0 ? "TVA 18% — cliquer pour exempter" : "Sans TVA — cliquer pour activer"}
+                      className={`text-xs px-2 py-0.5 rounded-full font-semibold border transition-colors ${
+                        (l.tva_rate ?? 0) > 0
+                          ? "bg-blue-50 text-blue-700 border-blue-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200"
+                          : "bg-gray-100 text-gray-400 border-gray-200 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200"
+                      }`}
+                    >
+                      {(l.tva_rate ?? 0) > 0 ? `${l.tva_rate}%` : "—"}
+                    </button>
+                  </td>
+                )}
                 <td className="px-4 py-2 text-right font-semibold text-gray-900">
                   {formatNumber(lineTotal(l), 2)}
                 </td>
-                {isDraft && (
+                {canEdit && (
                   <td className="pr-2 py-2">
                     <button onClick={() => deleteLine(l.id)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 transition">
                       <X className="w-3.5 h-3.5" />
@@ -467,7 +492,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
           </tbody>
         </table>
         </div>
-        {isDraft && (
+        {canEdit && (
           <div className="px-4 py-2 border-t border-gray-50">
             <button onClick={addLine} className="text-sm text-blue-600 hover:text-blue-500 font-medium transition-colors">
               + Ajouter une ligne
