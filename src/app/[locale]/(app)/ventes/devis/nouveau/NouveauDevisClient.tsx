@@ -46,7 +46,7 @@ function newProductLine(): Line {
   return { id: uid(), kind: "product", product_id: "", description: "", quantity: "1", unit_id: "", unit_price: "0", discount: "0", tva_exempt: false }
 }
 function newNoteLine(): Line {
-  return { id: uid(), kind: "note", product_id: "", description: "", quantity: "", unit_id: "", unit_price: "", discount: "" }
+  return { id: uid(), kind: "note", product_id: "", description: "", quantity: "", unit_id: "", unit_price: "", discount: "", tva_exempt: false }
 }
 
 /* --- Composant autocomplete client ------------------------ */
