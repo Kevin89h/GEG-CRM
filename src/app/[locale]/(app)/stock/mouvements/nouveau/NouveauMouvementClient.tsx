@@ -124,6 +124,12 @@ export default function NouveauMouvementClient({ warehouses, products, stockLeve
     if (cfg.needsFrom && !form.from_warehouse_id) return
     if (cfg.needsTo && !form.to_warehouse_id) return
 
+    const qty = parseFloat(form.quantity)
+    if (isNaN(qty) || qty <= 0) {
+      setError("La quantité doit être supérieure à 0")
+      return
+    }
+
     setSaving(true)
     setError(null)
 
@@ -131,7 +137,7 @@ export default function NouveauMouvementClient({ warehouses, products, stockLeve
     const payload: Record<string, unknown> = {
       type,
       product_id: form.product_id,
-      quantity: parseFloat(form.quantity),
+      quantity: qty,
       notes: form.note || null,
       from_warehouse_id: cfg.needsFrom ? form.from_warehouse_id : null,
       to_warehouse_id: cfg.needsTo ? form.to_warehouse_id : null,
