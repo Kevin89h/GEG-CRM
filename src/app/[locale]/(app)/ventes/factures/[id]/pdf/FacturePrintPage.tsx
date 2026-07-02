@@ -427,17 +427,22 @@ export default function FacturePrintPage({
             {/* BANK ACCOUNTS */}
             <div className="bank-section">
               <div className="bank-section-title">Coordonnées bancaires</div>
-              {BANK_ACCOUNTS.map((acc, i) => (
-                <div className="bank-row" key={i}>
-                  <span className="bank-inst">{acc.institution}</span>
-                  <span className="bank-num">{acc.account_number}</span>
-                  {(acc.swift || acc.iban) && (
-                    <span className="bank-meta" style={{ display: "inline", marginLeft: 8 }}>
-                      {acc.swift && <>SWIFT : {acc.swift}</>}
-                      {acc.swift && acc.iban && "  ·  "}
-                      {acc.iban && <>IBAN : {acc.iban}</>}
-                    </span>
-                  )}
+              {Array.from(new Set(BANK_ACCOUNTS.map(a => a.currency))).map(cur => (
+                <div className="bank-currency-group" key={cur}>
+                  <div className="bank-currency-label">{cur}</div>
+                  {BANK_ACCOUNTS.filter(a => a.currency === cur).map((acc, i) => (
+                    <div className="bank-row" key={i}>
+                      <span className="bank-inst">{acc.institution}</span>
+                      <span className="bank-num">{acc.account_number}</span>
+                      {(acc.swift || acc.iban) && (
+                        <span className="bank-meta" style={{ display: "inline", marginLeft: 8 }}>
+                          {acc.swift && <>SWIFT : {acc.swift}</>}
+                          {acc.swift && acc.iban && "  ·  "}
+                          {acc.iban && <>IBAN : {acc.iban}</>}
+                        </span>
+                      )}
+                    </div>
+                  ))}
                 </div>
               ))}
               {bankMeta.tva_key && (
