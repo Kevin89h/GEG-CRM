@@ -121,12 +121,61 @@ export default function NouveauMouvementClient({ warehouses, products, stockLeve
   }
 
   async function handleSave() {
-    if (!form.product_id || !form.quantity) return
+    if (!form.product_id || form.quantity === "") return
     if (cfg.needsFrom && !form.from_warehouse_id) return
     if (cfg.needsTo && !form.to_warehouse_id) return
 
     const qty = parseFloat(form.quantity)
-    if (isNaN(qty) || qty <= 0) {
+    if (isNaN(qty) || qty < 0) {
+      setError("La quantité ne peut pas être négative")
+      return
+    }
+
+    // Pour ajustement: la quantité = nouvelle valeur absolue, on calcule le delta
+    if (type === "adjustment") {
+      if (!form.to_warehouse_id) return
+      setSaving(true)
+      setError(null)
+
+      const { supabase, db } = getCompanyClientBrowser()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { setError(t("errorNotAuthenticated")); setSaving(false); return }
+
+      // Lire stock actuel
+      const { data: level } = await db.from("stock_levels")
+        .select("quantity")
+        .eq("product_id", form.product_id)
+        .eq("warehouse_id", form.to_warehouse_id)
+        .maybeSingle()
+
+      const currentQty = level?.quantity ?? 0
+      const delta = qty - currentQty
+
+      if (delta !== 0) {
+        const { error: moveErr } = await db.from("stock_moves").insert([{
+          type: "adjustment",
+          product_id: form.product_id,
+          quantity: Math.abs(delta),
+          notes: form.note || `Ajustement: ${currentQty} → ${qty}`,
+          to_warehouse_id: form.to_warehouse_id,
+          from_warehouse_id: null,
+          user_id: user.id,
+        }])
+        if (moveErr) { setError(moveErr.message); setSaving(false); return }
+
+        await db.from("stock_levels").upsert({
+          product_id: form.product_id,
+          warehouse_id: form.to_warehouse_id,
+          quantity: qty,
+        }, { onConflict: "product_id,warehouse_id" })
+      }
+
+      router.push(`/${locale}/stock`)
+      router.refresh()
+      return
+    }
+
+    if (qty <= 0) {
       setError("La quantité doit être supérieure à 0")
       return
     }
@@ -159,7 +208,7 @@ export default function NouveauMouvementClient({ warehouses, products, stockLeve
     router.refresh()
   }
 
-  const isValid = form.product_id && form.quantity &&
+  const isValid = form.product_id && (form.quantity !== "" && !isNaN(parseFloat(form.quantity)) && parseFloat(form.quantity) >= 0) &&
     (!cfg.needsFrom || form.from_warehouse_id) &&
     (!cfg.needsTo || form.to_warehouse_id) &&
     (type !== "transfer" || form.from_warehouse_id !== form.to_warehouse_id)
@@ -242,9 +291,11 @@ export default function NouveauMouvementClient({ warehouses, products, stockLeve
         )}
 
         <Input
-          label={`${t("labelQuantity")}${selectedProduct?.unit ? ` (${selectedProduct.unit.name})` : ""}`}
+          label={type === "adjustment"
+            ? `Nouvelle valeur absolue${selectedProduct?.unit ? ` (${selectedProduct.unit.name})` : ""}`
+            : `${t("labelQuantity")}${selectedProduct?.unit ? ` (${selectedProduct.unit.name})` : ""}`}
           type="number"
-          min="0.001"
+          min="0"
           step="any"
           value={form.quantity}
           onChange={e => set("quantity", e.target.value)}
