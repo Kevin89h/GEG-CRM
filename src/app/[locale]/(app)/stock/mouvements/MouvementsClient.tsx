@@ -16,6 +16,7 @@ interface MoveRow {
   quantity: number
   created_at: string
   notes: string | null
+  created_by: string | null
   product: { id: string; name: string; reference: string | null; unit: { name: string } | null } | null
   from_warehouse: { id: string; name: string } | null
   to_warehouse: { id: string; name: string } | null
@@ -105,6 +106,7 @@ export default function MouvementsClient({ moves: initial }: Props) {
                 <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colFrom")}</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colTo")}</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colNote")}</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Créé par</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -135,6 +137,9 @@ export default function MouvementsClient({ moves: initial }: Props) {
                     <td className="px-4 py-3 text-gray-600">{m.from_warehouse?.name ?? "—"}</td>
                     <td className="px-4 py-3 text-gray-600">{m.to_warehouse?.name ?? "—"}</td>
                     <td className="px-4 py-3 text-gray-500 max-w-[160px] truncate">{m.notes ?? "—"}</td>
+                    <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">
+                      {m.created_by ? m.created_by.split("@")[0] : "—"}
+                    </td>
                   </tr>
                 )
               })}
