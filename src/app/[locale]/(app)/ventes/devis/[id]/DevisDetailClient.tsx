@@ -16,6 +16,7 @@ interface Line {
   quantity: number
   unit_price: number
   discount: number
+  tva_exempt?: boolean | null
   product: { name: string; reference: string | null } | null
   unit?: { name: string } | null
 }
@@ -53,6 +54,8 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [activeTab, setActiveTab] = useState<"lines" | "other" | "notes">("lines")
+  const [tva, setTva] = useState<boolean>(order.tva ?? false)
+  const [lines, setLines] = useState<Line[]>(order.lines)
 
   const PAYMENT_TERMS_LABELS: Record<string, string> = {
     immediate: t("paymentImmediate"),
@@ -114,7 +117,26 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
   function lineTotal(l: Line) {
     return l.quantity * l.unit_price * (1 - l.discount / 100)
   }
-  const total = order.lines.reduce((s, l) => s + lineTotal(l), 0)
+  const total = lines.reduce((s, l) => s + lineTotal(l), 0)
+  const totalTaxable = lines.filter(l => !l.tva_exempt).reduce((s, l) => s + lineTotal(l), 0)
+  const tvaAmount = tva ? totalTaxable * 0.18 : 0
+  const totalTTC = total + tvaAmount
+
+  async function toggleTva() {
+    const newVal = !tva
+    setTva(newVal)
+    const { db } = getCompanyClientBrowser()
+    await db.from("sales_orders").update({ tva: newVal }).eq("id", order.id)
+  }
+
+  async function toggleLineExempt(lineId: string) {
+    const line = lines.find(l => l.id === lineId)
+    if (!line) return
+    const newVal = !line.tva_exempt
+    setLines(prev => prev.map(l => l.id === lineId ? { ...l, tva_exempt: newVal } : l))
+    const { db } = getCompanyClientBrowser()
+    await db.from("sales_order_lines").update({ tva_exempt: newVal }).eq("id", lineId)
+  }
 
   async function confirm() {
     setLoading(true)
@@ -404,12 +426,13 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                   <th className="text-right px-4 py-3 font-medium text-gray-600">{t("colUnitPrice")}</th>
                   <th className="text-right px-4 py-3 font-medium text-gray-600">{t("colDiscount")}</th>
                   <th className="text-right px-4 py-3 font-medium text-gray-600">{t("colStock")}</th>
+                  {tva && <th className="text-center px-4 py-3 font-medium text-gray-600 text-xs">Sans TVA</th>}
                   <th className="text-right px-4 py-3 font-medium text-gray-600">{t("colSubtotal")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {order.lines.map(l => (
-                  <tr key={l.id}>
+                {lines.map(l => (
+                  <tr key={l.id} className={l.tva_exempt ? "bg-gray-50/50" : ""}>
                     <td className="px-4 py-3">
                       <p className="font-medium text-gray-900">{l.description}</p>
                       {l.product?.reference && <p className="text-xs text-gray-400 font-mono">{l.product.reference}</p>}
@@ -427,6 +450,17 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                         return <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-medium">✗ {t("stockNone")}</span>
                       })()}
                     </td>
+                    {tva && (
+                      <td className="px-4 py-3 text-center">
+                        <button
+                          onClick={() => toggleLineExempt(l.id)}
+                          title={l.tva_exempt ? "Cliquer pour appliquer la TVA" : "Cliquer pour exempter de TVA"}
+                          className={`w-8 h-4 rounded-full transition-colors relative inline-flex items-center ${l.tva_exempt ? "bg-amber-400" : "bg-gray-200"}`}
+                        >
+                          <span className={`absolute w-3 h-3 rounded-full bg-white shadow transition-transform ${l.tva_exempt ? "translate-x-4" : "translate-x-0.5"}`} />
+                        </button>
+                      </td>
+                    )}
                     <td className="px-4 py-3 text-right font-semibold text-gray-900">
                       {formatNumber(lineTotal(l))}
                     </td>
@@ -435,25 +469,38 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
               </tbody>
             </table>
 
-            <div className="border-t border-gray-100 px-6 py-4 flex justify-end">
+            <div className="border-t border-gray-100 px-6 py-4 flex items-start justify-between gap-4">
+              {/* Toggle TVA global */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={toggleTva}
+                  className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer ${tva ? "bg-blue-600" : "bg-gray-200"}`}
+                >
+                  <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${tva ? "translate-x-4" : "translate-x-0.5"}`} />
+                </button>
+                <span className="text-sm text-gray-600">TVA 18%</span>
+              </div>
+
               <div className="w-64 space-y-2">
                 <div className="flex justify-between text-sm text-gray-500">
                   <span>{t("totalHT")}</span>
-                  <span className="font-semibold text-gray-900">
-                    {formatNumber(total)} {order.currency}
-                  </span>
+                  <span className="font-semibold text-gray-900">{formatNumber(total)} {order.currency}</span>
                 </div>
-                {order.tva && (
+                {tva && (
                   <>
+                    {lines.some(l => l.tva_exempt) && (
+                      <div className="flex justify-between text-xs text-amber-600">
+                        <span>Base taxable</span>
+                        <span>{formatNumber(totalTaxable)} {order.currency}</span>
+                      </div>
+                    )}
                     <div className="flex justify-between text-sm text-gray-500">
                       <span>TVA 18%</span>
-                      <span className="font-semibold text-gray-900">
-                        {formatNumber(total * 0.18)} {order.currency}
-                      </span>
+                      <span className="font-semibold text-gray-900">{formatNumber(tvaAmount)} {order.currency}</span>
                     </div>
                     <div className="flex justify-between text-sm font-bold text-gray-900 border-t border-gray-200 pt-2">
                       <span>Total TTC</span>
-                      <span>{formatNumber(total * 1.18)} {order.currency}</span>
+                      <span>{formatNumber(totalTTC)} {order.currency}</span>
                     </div>
                   </>
                 )}

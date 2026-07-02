@@ -1,6 +1,9 @@
 import { createClient as createAdminClient } from "@supabase/supabase-js"
+import { createClient } from "@/lib/supabase/server"
 import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
+
+const SUPER_ADMIN_EMAIL = "kevin@globalenergy.group"
 
 async function getAdminDb() {
   const cookieStore = await cookies()
@@ -50,23 +53,41 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 }
 
-// Reset: delete all transactions + set initial_balance = 0
+// DELETE ?action=reset  → vider les transactions + remettre à 0
+// DELETE ?action=purge  → supprimer le compte entier (super admin uniquement)
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
+    const { searchParams } = new URL(req.url)
+    const action = searchParams.get("action") ?? "reset"
     const { db } = await getAdminDb()
 
-    // Delete all transactions for this account
+    if (action === "purge") {
+      // Vérifier que l'appelant est super admin
+      const supabase = await createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      const { data: profile } = await supabase.from("profiles").select("email").eq("id", user?.id ?? "").single()
+      if (profile?.email !== SUPER_ADMIN_EMAIL) {
+        return NextResponse.json({ error: "Accès refusé" }, { status: 403 })
+      }
+
+      // Supprimer les transactions puis le compte
+      await db.from("treasury_transactions").delete().eq("account_id", id)
+      const { error } = await db.from("treasury_accounts").delete().eq("id", id)
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json({ ok: true, deleted: true })
+    }
+
+    // action === "reset" : vider les transactions + solde à 0
     const { error: txErr } = await db.from("treasury_transactions").delete().eq("account_id", id)
     if (txErr) return NextResponse.json({ error: txErr.message }, { status: 500 })
 
-    // Reset initial_balance to 0
     const { error: accErr } = await db.from("treasury_accounts").update({ initial_balance: 0 }).eq("id", id)
     if (accErr) return NextResponse.json({ error: accErr.message }, { status: 500 })
 
     return NextResponse.json({ ok: true })
   } catch (err) {
-    console.error("Treasury account reset error:", err)
+    console.error("Treasury account delete error:", err)
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
 }

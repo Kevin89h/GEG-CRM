@@ -1,11 +1,20 @@
 import { createCompanyClient } from "@/lib/company"
 import { createClient as createAdminClient } from "@supabase/supabase-js"
+import { createClient } from "@/lib/supabase/server"
 import { cookies } from "next/headers"
 import ComptabiliteClient from "./ComptabiliteClient"
+
+const SUPER_ADMIN_EMAIL = "kevin@globalenergy.group"
 
 export default async function ComptabilitePage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params
   const { db } = await createCompanyClient()
+
+  // Vérifier si l'utilisateur connecté est super admin
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data: profile } = await supabase.from("profiles").select("email").eq("id", user?.id ?? "").single()
+  const isSuperAdmin = profile?.email === SUPER_ADMIN_EMAIL
 
   // Admin client for treasury_transactions (bypasses RLS)
   const cookieStore = await cookies()
@@ -83,6 +92,7 @@ export default async function ComptabilitePage({ params }: { params: Promise<{ l
       purchaseStats={purchaseStats}
       accounts={accounts}
       transactions={transactions ?? []}
+      isSuperAdmin={isSuperAdmin}
     />
   )
 }

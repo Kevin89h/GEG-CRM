@@ -34,6 +34,7 @@ interface Line {
   unit_id: string
   unit_price: string
   discount: string
+  tva_exempt: boolean
 }
 
 type Currency = "GNF" | "USD" | "EUR"
@@ -42,7 +43,7 @@ let _id = 0
 const uid = () => ++_id
 
 function newProductLine(): Line {
-  return { id: uid(), kind: "product", product_id: "", description: "", quantity: "1", unit_id: "", unit_price: "0", discount: "0" }
+  return { id: uid(), kind: "product", product_id: "", description: "", quantity: "1", unit_id: "", unit_price: "0", discount: "0", tva_exempt: false }
 }
 function newNoteLine(): Line {
   return { id: uid(), kind: "note", product_id: "", description: "", quantity: "", unit_id: "", unit_price: "", discount: "" }
@@ -312,6 +313,8 @@ export default function NouveauDevisClient({
   }
 
   const total = lines.reduce((s, l) => s + lineTotal(l), 0)
+  const totalTaxable = lines.filter(l => !l.tva_exempt).reduce((s, l) => s + lineTotal(l), 0)
+  const tvaAmount = form.tva ? totalTaxable * 0.18 : 0
   const filteredContacts = contacts.filter(c => !form.account_id || c.account_id === form.account_id)
 
   /* ── Création client ── */
@@ -410,7 +413,7 @@ export default function NouveauDevisClient({
       return {
         order_id: order.id, product_id: l.product_id || null, description: l.description,
         quantity: parseFloat(l.quantity) || 1, unit_price: parseFloat(l.unit_price) || 0,
-        discount: parseFloat(l.discount) || 0, position: i,
+        discount: parseFloat(l.discount) || 0, position: i, tva_exempt: l.tva_exempt,
       }
     })
 
@@ -612,6 +615,7 @@ export default function NouveauDevisClient({
                     <th className="text-right px-3 py-2.5 font-medium w-32">{t("prixUnitaire")}</th>
                     <th className="text-right px-3 py-2.5 font-medium w-20">{t("remise")}</th>
                     <th className="text-right px-8 py-2.5 font-medium w-32">{t("montant")}</th>
+                    {form.tva && <th className="text-center px-3 py-2.5 font-medium w-20">Sans TVA</th>}
                     <th className="w-8 pr-2"></th>
                   </tr>
                 </thead>
@@ -688,6 +692,16 @@ export default function NouveauDevisClient({
                           <td className="px-8 py-2 text-right text-sm font-medium text-gray-800 whitespace-nowrap">
                             {formatNumber(lineTotal(l))}
                           </td>
+                          {form.tva && (
+                            <td className="px-3 py-2 text-center">
+                              <button
+                                onClick={() => updateLine(l.id, { tva_exempt: !l.tva_exempt })}
+                                className={`w-8 h-4 rounded-full transition-colors relative cursor-pointer ${l.tva_exempt ? "bg-orange-500" : "bg-gray-200"}`}
+                              >
+                                <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${l.tva_exempt ? "translate-x-4" : "translate-x-0.5"}`} />
+                              </button>
+                            </td>
+                          )}
                           <td className="pr-2 py-2">
                             <button onClick={() => removeLine(l.id)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 transition">
                               <X className="w-3.5 h-3.5" />
@@ -739,12 +753,18 @@ export default function NouveauDevisClient({
                     <span className="text-sm">{t("tva18")}</span>
                   </label>
                   {form.tva && (
-                    <span className="font-medium text-gray-700">{formatNumber(total * 0.18)} {form.currency}</span>
+                    <span className="font-medium text-gray-700">{formatNumber(tvaAmount)} {form.currency}</span>
                   )}
                 </div>
+                {form.tva && totalTaxable < total && (
+                  <div className="flex justify-between text-gray-400 text-xs">
+                    <span>Base taxable</span>
+                    <span>{formatNumber(totalTaxable)} {form.currency}</span>
+                  </div>
+                )}
                 <div className="flex justify-between font-bold text-gray-900 text-base pt-2 border-t border-gray-200">
                   <span>{t("totalTtc")}</span>
-                  <span>{formatNumber(total * (form.tva ? 1.18 : 1))} {form.currency}</span>
+                  <span>{formatNumber(total + tvaAmount)} {form.currency}</span>
                 </div>
               </div>
             </div>

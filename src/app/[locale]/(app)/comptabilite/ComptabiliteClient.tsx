@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Plus, Building2, Smartphone, Banknote, ArrowDownLeft, ArrowUpRight, MoreVertical, X, BarChart2 } from "lucide-react"
+import { Plus, Building2, Smartphone, Banknote, ArrowDownLeft, ArrowUpRight, MoreVertical, X, BarChart2, Trash2 } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
@@ -29,6 +29,7 @@ interface Transaction {
 
 interface Props {
   locale: string
+  isSuperAdmin?: boolean
   clientStats: {
     draft: InvoiceStat[]; unpaid: InvoiceStat[]; overdue: InvoiceStat[]
     draftAmount: number; unpaidAmount: number; overdueAmount: number
@@ -363,17 +364,20 @@ function TransactionsDrawer({ accountId, accounts, onClose, onNewTx, refreshKey 
 interface ConfigForm { name: string; institution: string; account_number: string; currency: string; type: string; target_balance: string }
 interface AccInfo { id: string; name: string; balance: number; currency: string }
 
-function ConfigModal({ accountId, acc, form, setForm, onClose, onSaved }: {
+function ConfigModal({ accountId, acc, form, setForm, onClose, onSaved, isSuperAdmin }: {
   accountId: string
   acc: AccInfo | null
   form: ConfigForm
   setForm: React.Dispatch<React.SetStateAction<ConfigForm>>
   onClose: () => void
   onSaved: () => void
+  isSuperAdmin?: boolean
 }) {
   const [saving, setSaving] = useState(false)
   const [resetting, setResetting] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   if (!acc) return null
@@ -410,7 +414,7 @@ function ConfigModal({ accountId, acc, form, setForm, onClose, onSaved }: {
     setError(null)
     setResetting(true)
     try {
-      const res = await fetch(`/api/treasury/accounts/${accountId}`, { method: "DELETE" })
+      const res = await fetch(`/api/treasury/accounts/${accountId}?action=reset`, { method: "DELETE" })
       const json = await res.json()
       if (!res.ok) { setError(json.error ?? `Erreur ${res.status}`); return }
       setConfirmReset(false)
@@ -419,6 +423,22 @@ function ConfigModal({ accountId, acc, form, setForm, onClose, onSaved }: {
       setError(String(e))
     } finally {
       setResetting(false)
+    }
+  }
+
+  async function deleteAccount() {
+    setError(null)
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/treasury/accounts/${accountId}?action=purge`, { method: "DELETE" })
+      const json = await res.json()
+      if (!res.ok) { setError(json.error ?? `Erreur ${res.status}`); return }
+      setConfirmDelete(false)
+      onSaved()
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -474,6 +494,34 @@ function ConfigModal({ accountId, acc, form, setForm, onClose, onSaved }: {
           )}
         </div>
 
+        {/* Supprimer le compte — super admin uniquement */}
+        {isSuperAdmin && (
+          <div className="border-t border-red-100 pt-4">
+            <label className="block text-xs font-semibold text-red-500 uppercase tracking-wide mb-1 flex items-center gap-1.5">
+              <Trash2 className="w-3.5 h-3.5" /> Supprimer le compte
+            </label>
+            <p className="text-xs text-gray-400 mb-3">Supprime définitivement ce compte bancaire et tout son historique. Action irréversible.</p>
+            {!confirmDelete ? (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="px-3 py-2 text-sm font-medium rounded-lg border border-red-300 text-red-700 bg-red-50 hover:bg-red-100 transition-colors flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Supprimer définitivement
+              </button>
+            ) : (
+              <div className="bg-red-50 border border-red-300 rounded-lg p-3 flex items-center justify-between gap-3">
+                <p className="text-sm text-red-800 font-semibold">Supprimer définitivement &quot;{acc?.name}&quot; ?</p>
+                <div className="flex gap-2 shrink-0">
+                  <button onClick={() => setConfirmDelete(false)} className="px-3 py-1.5 text-xs font-medium rounded-lg bg-white border border-gray-200 text-gray-600 hover:bg-gray-50">Annuler</button>
+                  <button onClick={deleteAccount} disabled={deleting} className="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-700 text-white hover:bg-red-800 disabled:opacity-50">
+                    {deleting ? "…" : "Supprimer"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
         <div className="flex justify-end gap-3 pt-2">
           <Button variant="secondary" onClick={onClose}>Annuler</Button>
@@ -485,7 +533,7 @@ function ConfigModal({ accountId, acc, form, setForm, onClose, onSaved }: {
 }
 
 /* ─── Composant principal ────────────────────────────── */
-export default function ComptabiliteClient({ locale, clientStats, purchaseStats, accounts, transactions }: Props) {
+export default function ComptabiliteClient({ locale, isSuperAdmin, clientStats, purchaseStats, accounts, transactions }: Props) {
   const router = useRouter()
   const [drawerAccountId, setDrawerAccountId] = useState<string | null>(null)
   const [configAccountId, setConfigAccountId] = useState<string | null>(null)
@@ -765,6 +813,7 @@ export default function ComptabiliteClient({ locale, clientStats, purchaseStats,
           setForm={setConfigForm}
           onClose={() => setConfigAccountId(null)}
           onSaved={() => { setConfigAccountId(null); router.refresh() }}
+          isSuperAdmin={isSuperAdmin}
         />
       )}
     </div>

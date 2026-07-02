@@ -21,7 +21,7 @@ export default async function DevisDetailPage({ params }: { params: Promise<{ lo
       account:accounts(id, name, country),
       contact:contacts(id, first_name, last_name),
       salesperson:employees(full_name),
-      lines:sales_order_lines(id, description, quantity, unit_price, discount, position, product_id, product:products(name, reference))
+      lines:sales_order_lines(id, description, quantity, unit_price, discount, position, product_id, tva_exempt, product:products(name, reference))
     `)
     .eq("id", id)
     .single()
