@@ -42,9 +42,9 @@ export default async function ComptabilitePage({ params }: { params: Promise<{ l
       .select("id, number, status, currency, total_ht, total_ttc, balance, invoice_date")
       .order("invoice_date", { ascending: false })
       .limit(200),
-    // Comptes de trésorerie (anon key OK, RLS allows SELECT)
-    db.from("treasury_balances")
-      .select("*")
+    // Comptes de trésorerie avec swift/iban (admin key pour bypasser RLS)
+    adminDb.from("treasury_accounts")
+      .select("id, name, type, institution, account_number, swift, iban, currency, color, is_active, initial_balance, total_in, total_out")
       .eq("is_active", true)
       .order("name"),
     // Dernières transactions (admin key needed to bypass RLS)
@@ -77,13 +77,18 @@ export default async function ComptabilitePage({ params }: { params: Promise<{ l
     toPayAmount:  allPurchases.filter(p => p.status === "pending" || p.status === "partial").reduce((s, p) => s + Number(p.balance ?? p.total_ht), 0),
   }
 
-  const accounts = (treasuryAccounts ?? []).map(a => ({
-    ...a,
-    balance:         Number(a.balance),
-    total_in:        Number(a.total_in),
-    total_out:       Number(a.total_out),
-    initial_balance: Number(a.initial_balance),
-  }))
+  const accounts = (treasuryAccounts ?? []).map(a => {
+    const totalIn  = Number(a.total_in)
+    const totalOut = Number(a.total_out)
+    const initial  = Number(a.initial_balance)
+    return {
+      ...a,
+      balance:         initial + totalIn - totalOut,
+      total_in:        totalIn,
+      total_out:       totalOut,
+      initial_balance: initial,
+    }
+  })
 
   return (
     <ComptabiliteClient
