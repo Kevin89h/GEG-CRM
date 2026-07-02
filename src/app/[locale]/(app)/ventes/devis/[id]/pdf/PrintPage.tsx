@@ -93,12 +93,7 @@ export default function PrintPage({
   const logoUrl = docSettings?.logo_url ?? null
   const bankMeta = (docSettings?.bank_details as BankDetails | null) ?? { tva_key: "5X" }
 
-  const BANK_ACCOUNTS = bankAccounts.length > 0 ? bankAccounts : [
-    { institution: "ECOBANK",     account_number: "10001730805226290", swift: "ECOCGNCN", iban: null, currency: "GNF" },
-    { institution: "ECOBANK",     account_number: "100017308064086",   swift: "ECOCGNCN", iban: null, currency: "GNF" },
-    { institution: "ACCESS BANK", account_number: "36001010000215460", swift: null,        iban: null, currency: "GNF" },
-    { institution: "VISTA BANK",  account_number: "2842400145744130",  swift: null, iban: null, currency: "GNF" },
-  ]
+  const BANK_ACCOUNTS = bankAccounts
 
   const docLabel = docType === "bon-livraison" ? "BON DE LIVRAISON"
     : status === "confirmed" ? "BON DE COMMANDE"

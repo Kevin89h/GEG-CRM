@@ -63,7 +63,7 @@ export default async function DevisPdfPage({ params }: { params: Promise<{ local
       locale={locale}
       docType="devis"
       docSettings={docSettings ?? null}
-      bankAccounts={bankAccounts ?? []}
+      bankAccounts={(bankAccounts ?? []).map(a => ({ ...a, swift: (a as Record<string,unknown>).swift as string|null ?? null, iban: (a as Record<string,unknown>).iban as string|null ?? null }))}
     />
   )
 }
