@@ -28,10 +28,11 @@ export default async function StockPage() {
   const [{ data: levels }, { data: warehouses }, { data: products }] = await Promise.all([
     supabase
       .from("stock_levels")
-      .select("*, product:products(id, name, reference, category:product_categories(name, color), unit:units(name)), warehouse:warehouses(id, name, city)")
+      .select("*, product:products!inner(id, name, reference, product_type, category:product_categories(name, color), unit:units(name)), warehouse:warehouses(id, name, city)")
+      .neq("product.product_type", "service")
       .order("updated_at", { ascending: false }),
     supabase.from("warehouses").select("*").eq("is_active", true).order("name"),
-    supabase.from("products").select("id, name, reference, category:product_categories(name, color), unit:units(name)").eq("is_active", true).order("name"),
+    supabase.from("products").select("id, name, reference, category:product_categories(name, color), unit:units(name)").eq("is_active", true).neq("product_type", "service").order("name"),
   ])
 
   const typedLevels: LevelRow[] = (levels ?? []).map((l: Record<string, unknown>) => ({
