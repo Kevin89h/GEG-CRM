@@ -31,6 +31,7 @@ interface Order {
   date_order?: string | null
   payment_terms?: string | null
   client_order_ref?: string | null
+  tva?: boolean | null
   account: { id: string; name: string; country: string | null } | null
   contact: { id: string; first_name: string; last_name: string } | null
   salesperson?: { full_name: string } | null
@@ -438,10 +439,24 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
               <div className="w-64 space-y-2">
                 <div className="flex justify-between text-sm text-gray-500">
                   <span>{t("totalHT")}</span>
-                  <span className="font-bold text-gray-900">
+                  <span className="font-semibold text-gray-900">
                     {formatNumber(total)} {order.currency}
                   </span>
                 </div>
+                {order.tva && (
+                  <>
+                    <div className="flex justify-between text-sm text-gray-500">
+                      <span>TVA 18%</span>
+                      <span className="font-semibold text-gray-900">
+                        {formatNumber(total * 0.18)} {order.currency}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm font-bold text-gray-900 border-t border-gray-200 pt-2">
+                      <span>Total TTC</span>
+                      <span>{formatNumber(total * 1.18)} {order.currency}</span>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>
