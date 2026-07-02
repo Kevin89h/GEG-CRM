@@ -22,7 +22,7 @@ async function track17(number: string, carrier: string) {
     const regRes = await fetch("https://api.17track.net/track/v2/register", {
       method: "POST",
       headers: { "Content-Type": "application/json", "17token": apiKey },
-      body: JSON.stringify([{ number, carrier: 190 }]),
+      body: JSON.stringify([{ number, carrier: 0 }]), // 0 = auto-detect
     })
     const regJson = await regRes.json()
     console.log("17track register:", JSON.stringify(regJson))
