@@ -94,23 +94,36 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
     const { supabase, db } = getCompanyClientBrowser()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
+
+    // Verifier quels produits ont reellement eu une sortie lors de la confirmation
+    const { data: outMoves } = await db
+      .from("stock_moves")
+      .select("product_id, quantity")
+      .eq("type", "out")
+      .eq("reference", order.number)
+    if (!outMoves?.length) return // Aucune sortie enregistree, rien a restaurer
+
+    const deductedQty: Record<string, number> = {}
+    for (const m of outMoves) {
+      deductedQty[m.product_id] = (deductedQty[m.product_id] ?? 0) + m.quantity
+    }
+
     const today = new Date().toISOString().split("T")[0]
-    const moves = productLines.map((l: any) => ({
+    const moves = Object.entries(deductedQty).map(([product_id, quantity]) => ({
       type: "in" as const,
-      product_id: l.product_id,
+      product_id,
       to_warehouse_id: firstWarehouse!.id,
-      quantity: l.quantity,
+      quantity,
       reference: order.number,
       notes: `Retour annulation BC ${order.number}`,
       date: today,
       user_id: user.id,
     }))
     await db.from("stock_moves").insert(moves)
-    for (const l of productLines) {
-      const pid = l.product_id as string
-      const current = stockByProduct[pid] ?? 0
+    for (const [product_id, quantity] of Object.entries(deductedQty)) {
+      const current = stockByProduct[product_id] ?? 0
       await db.from("stock_levels")
-        .upsert({ product_id: pid, warehouse_id: firstWarehouse!.id, quantity: current + l.quantity }, { onConflict: "product_id,warehouse_id" })
+        .upsert({ product_id, warehouse_id: firstWarehouse!.id, quantity: current + quantity }, { onConflict: "product_id,warehouse_id" })
     }
   }
 
