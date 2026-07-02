@@ -20,6 +20,7 @@ interface Line {
   quantity: number
   unit_price: number
   discount: number
+  tva_rate?: number | null
 }
 
 interface Payment {
@@ -93,6 +94,14 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
   function lineTotal(l: Line) {
     return l.quantity * l.unit_price * (1 - l.discount / 100)
   }
+
+  const totalHT = invoice.lines.reduce((s, l) => s + lineTotal(l), 0)
+  const totalTVA = invoice.lines.reduce((s, l) => {
+    const rate = l.tva_rate ?? 0
+    return s + (rate > 0 ? lineTotal(l) * rate / 100 : 0)
+  }, 0)
+  const totalTTC = totalHT + totalTVA
+  const hasTva = totalTVA > 0
 
   const isPaid = invoice.status === "paid"
   const isCancelled = invoice.status === "cancelled"
@@ -465,13 +474,23 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
             </button>
           </div>
         )}
-        <div className="border-t border-gray-100 px-4 py-3 flex justify-end">
-          <p className="font-bold text-gray-900">
-            {t("totalHtLabel")} : {formatCurrency(
-              isDraft ? invoice.lines.reduce((s, l) => s + lineTotal(l), 0) : invoice.total_ht,
-              invoice.currency as "USD" | "GNF" | "EUR"
-            )}
-          </p>
+        <div className="border-t border-gray-100 px-4 py-3 flex flex-col items-end gap-1 text-sm">
+          <div className="flex gap-8 text-gray-600">
+            <span>{t("totalHtLabel")}</span>
+            <span className="font-medium text-gray-900">{formatCurrency(totalHT, invoice.currency as "USD" | "GNF" | "EUR")}</span>
+          </div>
+          {hasTva && (
+            <div className="flex gap-8 text-gray-600">
+              <span>TVA (18%)</span>
+              <span className="font-medium text-gray-900">{formatCurrency(totalTVA, invoice.currency as "USD" | "GNF" | "EUR")}</span>
+            </div>
+          )}
+          {hasTva && (
+            <div className="flex gap-8 font-bold text-gray-900 text-base pt-1 border-t border-gray-200 mt-1">
+              <span>Total TTC</span>
+              <span>{formatCurrency(totalTTC, invoice.currency as "USD" | "GNF" | "EUR")}</span>
+            </div>
+          )}
         </div>
       </div>
 

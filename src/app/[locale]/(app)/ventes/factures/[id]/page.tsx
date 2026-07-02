@@ -20,7 +20,7 @@ export default async function FactureDetailPage({ params }: { params: Promise<{ 
       .eq("id", id)
       .single(),
     db.from("invoice_lines")
-      .select("id, product_id, description, quantity, unit_price, discount, position")
+      .select("id, product_id, description, quantity, unit_price, discount, position, tva_rate")
       .eq("invoice_id", id)
       .order("position"),
     db.from("payments")
