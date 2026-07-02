@@ -53,7 +53,7 @@ export default async function FacturePdfPage({ params }: { params: Promise<{ loc
       quantity: Number(l.quantity) || 0,
       unit_price: Number(l.unit_price) || 0,
       discount: Number(l.discount) || 0,
-      tva_rate: Number(l.tva_rate) || null,
+      tva_rate: l.tva_rate != null ? Number(l.tva_rate) : null,
       product: Array.isArray(l.product)
         ? (l.product[0] ?? null)
         : (l.product as { name: string; reference: string | null } | null),

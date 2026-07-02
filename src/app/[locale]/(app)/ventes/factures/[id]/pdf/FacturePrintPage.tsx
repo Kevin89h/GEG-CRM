@@ -107,7 +107,7 @@ export default function FacturePrintPage({
 
   const tvaByRate: Record<number, number> = {}
   for (const l of lines) {
-    const rate = l.tva_rate ?? defaultTva
+    const rate = l.tva_rate != null ? l.tva_rate : defaultTva
     if (rate > 0) {
       const sub = l.quantity * l.unit_price * (1 - (l.discount ?? 0) / 100)
       tvaByRate[rate] = (tvaByRate[rate] ?? 0) + sub * rate / 100
@@ -389,7 +389,7 @@ export default function FacturePrintPage({
                 {lines.map(l => {
                   const disc = 1 - (l.discount ?? 0) / 100
                   const sub = l.quantity * l.unit_price * disc
-                  const rate = l.tva_rate ?? defaultTva
+                  const rate = l.tva_rate != null ? l.tva_rate : defaultTva
                   return (
                     <tr key={l.id}>
                       <td>
