@@ -8,7 +8,7 @@ import { useTranslations } from "next-intl"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { formatNumber } from "@/lib/utils"
 
-/* ─── Types ─────────────────────────────────────────────── */
+/* --- Types ----------------------------------------------- */
 interface Account  { id: string; name: string; salesperson_id: string | null }
 interface Contact  { id: string; first_name: string; last_name: string; account_id: string | null }
 interface Product  { id: string; name: string; reference: string | null; sell_price: number | null; currency: string; unit: { id: string; name: string } | null }
@@ -49,7 +49,7 @@ function newNoteLine(): Line {
   return { id: uid(), kind: "note", product_id: "", description: "", quantity: "", unit_id: "", unit_price: "", discount: "" }
 }
 
-/* ─── Composant autocomplete client ──────────────────────── */
+/* --- Composant autocomplete client ------------------------ */
 function AccountPicker({ accounts, value, onSelect, onCreateNew }: {
   accounts: Account[]
   value: string
@@ -129,7 +129,7 @@ function AccountPicker({ accounts, value, onSelect, onCreateNew }: {
   )
 }
 
-/* ─── Composant autocomplete produit ─────────────────────── */
+/* --- Composant autocomplete produit ----------------------- */
 function ProductPicker({ products, value, onChange, onCreateNew, lineIndex }: {
   products: Product[]
   value: string
@@ -208,7 +208,7 @@ function ProductPicker({ products, value, onChange, onCreateNew, lineIndex }: {
   )
 }
 
-/* ─── Modal wrapper ──────────────────────────────────────── */
+/* --- Modal wrapper ---------------------------------------- */
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -224,7 +224,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   )
 }
 
-/* ─── Composant principal ────────────────────────────────── */
+/* --- Composant principal ---------------------------------- */
 export default function NouveauDevisClient({
   accounts: initAccounts, contacts, products: initProducts, employees, units, locale,
 }: Props) {
@@ -270,7 +270,7 @@ export default function NouveauDevisClient({
     { value: "avance",    label: t("paymentTermAvance") },
   ]
 
-  /* ── Helpers form ── */
+  /* -- Helpers form -- */
   function setF<K extends keyof typeof form>(k: K, v: typeof form[K]) {
     setForm(f => ({ ...f, [k]: v }))
   }
@@ -285,7 +285,7 @@ export default function NouveauDevisClient({
     }))
   }
 
-  /* ── Helpers lignes ── */
+  /* -- Helpers lignes -- */
   function addProductLine() { setLines(ls => [...ls, newProductLine()]) }
   function addNoteLine()    { setLines(ls => [...ls, newNoteLine()]) }
 
@@ -317,7 +317,7 @@ export default function NouveauDevisClient({
   const tvaAmount = form.tva ? totalTaxable * 0.18 : 0
   const filteredContacts = contacts.filter(c => !form.account_id || c.account_id === form.account_id)
 
-  /* ── Création client ── */
+  /* -- Création client -- */
   async function handleCreateClient() {
     if (!cForm.name.trim()) { setCError(t("erreurNomRequis")); return }
     setCSaving(true); setCError(null)
@@ -334,7 +334,7 @@ export default function NouveauDevisClient({
     setCSaving(false)
   }
 
-  /* ── Création produit ── */
+  /* -- Création produit -- */
   function openProductModal(lineIndex: number) {
     setPendingLineIndex(lineIndex)
     setPForm({ name: "", reference: "", sell_price: "", unit_id: units[0]?.id ?? "" })
@@ -370,7 +370,7 @@ export default function NouveauDevisClient({
     setPSaving(false)
   }
 
-  /* ── Enregistrement ── */
+  /* -- Enregistrement -- */
   async function handleSave() {
     if (!form.account_id) { setError(t("veuillezselectionnerclient")); return }
     const productLines = lines.filter(l => l.kind === "product")
@@ -424,7 +424,7 @@ export default function NouveauDevisClient({
     router.refresh()
   }
 
-  /* ─── Rendu ─────────────────────────────────────────────── */
+  /* --- Rendu ----------------------------------------------- */
   return (
     <div className="max-w-5xl mx-auto pb-16">
 
@@ -800,7 +800,7 @@ export default function NouveauDevisClient({
         <div className="mt-4 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">{error}</div>
       )}
 
-      {/* ── Modal Nouveau client ─────────────────────────────── */}
+      {/* -- Modal Nouveau client ------------------------------- */}
       {showClientModal && (
         <Modal title={t("modalNouveauClient")} onClose={() => setShowClientModal(false)}>
           <div className="space-y-4">
@@ -832,7 +832,7 @@ export default function NouveauDevisClient({
         </Modal>
       )}
 
-      {/* ── Modal Nouveau produit ────────────────────────────── */}
+      {/* -- Modal Nouveau produit ------------------------------ */}
       {showProductModal && (
         <Modal title={t("modalNouveauProduit")} onClose={() => setShowProductModal(false)}>
           <div className="space-y-4">
