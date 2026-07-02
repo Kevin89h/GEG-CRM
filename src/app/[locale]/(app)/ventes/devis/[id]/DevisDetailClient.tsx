@@ -230,15 +230,20 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
     if (error || !invoice) { setLoading(false); return }
 
     if (order.lines.length > 0) {
-      const lineRows = order.lines.map((l, i) => ({
-        invoice_id: invoice.id,
-        product_id: (l as unknown as { product_id: string }).product_id ?? null,
-        description: l.description,
-        quantity: l.quantity,
-        unit_price: l.unit_price,
-        discount: l.discount,
-        position: i,
-      }))
+      const tvaActive = (order as unknown as { tva?: boolean }).tva === true
+      const lineRows = order.lines.map((l, i) => {
+        const exempt = (l as unknown as { tva_exempt?: boolean }).tva_exempt === true
+        return {
+          invoice_id: invoice.id,
+          product_id: (l as unknown as { product_id: string }).product_id ?? null,
+          description: l.description,
+          quantity: l.quantity,
+          unit_price: l.unit_price,
+          discount: l.discount,
+          position: i,
+          tva_rate: tvaActive && !exempt ? 18 : 0,
+        }
+      })
       await db.from("invoice_lines").insert(lineRows)
     }
 
