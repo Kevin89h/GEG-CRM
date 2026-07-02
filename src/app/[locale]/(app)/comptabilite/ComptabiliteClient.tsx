@@ -16,7 +16,7 @@ interface PurchaseStat { id: string; status: string; currency: string; total_ht:
 
 interface TreasuryAccount {
   id: string; name: string; type: string; institution: string | null
-  account_number: string | null
+  account_number: string | null; swift: string | null; iban: string | null
   currency: string; color: string; is_active: boolean
   balance: number; total_in: number; total_out: number
 }
@@ -361,7 +361,7 @@ function TransactionsDrawer({ accountId, accounts, onClose, onNewTx, refreshKey 
 }
 
 /* ─── Modal configuration compte (composant séparé pour éviter closure stale) ── */
-interface ConfigForm { name: string; institution: string; account_number: string; currency: string; type: string; target_balance: string }
+interface ConfigForm { name: string; institution: string; account_number: string; swift: string; iban: string; currency: string; type: string; target_balance: string }
 interface AccInfo { id: string; name: string; balance: number; currency: string }
 
 function ConfigModal({ accountId, acc, form, setForm, onClose, onSaved, isSuperAdmin }: {
@@ -391,6 +391,8 @@ function ConfigModal({ accountId, acc, form, setForm, onClose, onSaved, isSuperA
         name: form.name,
         institution: form.institution || null,
         account_number: form.account_number || null,
+        swift: form.swift || null,
+        iban: form.iban || null,
         currency: form.currency,
         type: form.type,
       }
@@ -456,6 +458,10 @@ function ConfigModal({ accountId, acc, form, setForm, onClose, onSaved, isSuperA
         </div>
         <Input label="Institution" value={form.institution} onChange={e => setForm(f => ({ ...f, institution: e.target.value }))} placeholder="ECOBANK, ACCESS BANK…" />
         <Input label="Numéro de compte" value={form.account_number} onChange={e => setForm(f => ({ ...f, account_number: e.target.value }))} placeholder="010001730805226291" />
+        <div className="grid grid-cols-2 gap-3">
+          <Input label="Code SWIFT / BIC" value={form.swift} onChange={e => setForm(f => ({ ...f, swift: e.target.value }))} placeholder="ECOCGNCO" />
+          <Input label="IBAN" value={form.iban} onChange={e => setForm(f => ({ ...f, iban: e.target.value }))} placeholder="GN00 XXXX XXXX XXXX XXXX XX" />
+        </div>
 
         {/* Correction directe du solde */}
         <div className="border-t border-gray-100 pt-4">
@@ -537,7 +543,7 @@ export default function ComptabiliteClient({ locale, isSuperAdmin, clientStats, 
   const router = useRouter()
   const [drawerAccountId, setDrawerAccountId] = useState<string | null>(null)
   const [configAccountId, setConfigAccountId] = useState<string | null>(null)
-  const [configForm, setConfigForm] = useState({ name: "", institution: "", account_number: "", currency: "GNF", type: "bank", target_balance: "" })
+  const [configForm, setConfigForm] = useState({ name: "", institution: "", account_number: "", swift: "", iban: "", currency: "GNF", type: "bank", target_balance: "" })
   const [txModal, setTxModal] = useState(false)
   const [txRefreshKey, setTxRefreshKey] = useState(0)
   const [accountModal, setAccountModal] = useState(false)
@@ -556,7 +562,7 @@ export default function ComptabiliteClient({ locale, isSuperAdmin, clientStats, 
 
   const [accForm, setAccForm] = useState({
     name: "", type: "bank" as "bank" | "mobile_money" | "cash",
-    institution: "", account_number: "",
+    institution: "", account_number: "", swift: "", iban: "",
     currency: "GNF" as "GNF" | "USD" | "EUR",
     initial_balance: "0", color: "blue",
   })
@@ -610,6 +616,8 @@ export default function ComptabiliteClient({ locale, isSuperAdmin, clientStats, 
           name: accForm.name, type: accForm.type,
           institution: accForm.institution || null,
           account_number: accForm.account_number || null,
+          swift: accForm.swift || null,
+          iban: accForm.iban || null,
           currency: accForm.currency,
           initial_balance: accForm.initial_balance,
           color: accForm.color,
@@ -701,7 +709,7 @@ export default function ComptabiliteClient({ locale, isSuperAdmin, clientStats, 
             onTransact={(id) => setDrawerAccountId(id)}
             onConfig={(id) => {
               const acc = accounts.find(a => a.id === id)
-              if (acc) setConfigForm({ name: acc.name, institution: acc.institution ?? "", account_number: acc.account_number ?? "", currency: acc.currency, type: acc.type, target_balance: "" })
+              if (acc) setConfigForm({ name: acc.name, institution: acc.institution ?? "", account_number: acc.account_number ?? "", swift: acc.swift ?? "", iban: acc.iban ?? "", currency: acc.currency, type: acc.type, target_balance: "" })
               setConfigAccountId(id)
             }}
           />
@@ -783,6 +791,10 @@ export default function ComptabiliteClient({ locale, isSuperAdmin, clientStats, 
           </div>
           <Input label="Institution" value={accForm.institution} onChange={e => setAccForm(f => ({ ...f, institution: e.target.value }))} placeholder="Ecobank, Orange Money…" />
           <Input label="N° de compte / téléphone" value={accForm.account_number} onChange={e => setAccForm(f => ({ ...f, account_number: e.target.value }))} />
+          <div className="grid grid-cols-2 gap-3">
+            <Input label="Code SWIFT / BIC" value={accForm.swift} onChange={e => setAccForm(f => ({ ...f, swift: e.target.value }))} placeholder="ECOCGNCO" />
+            <Input label="IBAN" value={accForm.iban} onChange={e => setAccForm(f => ({ ...f, iban: e.target.value }))} placeholder="GN00 XXXX XXXX XXXX XXXX XX" />
+          </div>
           <Input label="Solde initial" type="number" value={accForm.initial_balance} onChange={e => setAccForm(f => ({ ...f, initial_balance: e.target.value }))} />
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Couleur</label>

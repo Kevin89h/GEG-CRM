@@ -16,7 +16,7 @@ async function getAdminDb() {
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const { name, type, institution, account_number, currency, initial_balance, color } = body
+    const { name, type, institution, account_number, swift, iban, currency, initial_balance, color } = body
 
     if (!name) return NextResponse.json({ error: "Nom requis" }, { status: 400 })
 
@@ -26,6 +26,8 @@ export async function POST(req: Request) {
       type: type ?? "bank",
       institution: institution || null,
       account_number: account_number || null,
+      swift: swift || null,
+      iban: iban || null,
       currency: currency ?? "GNF",
       initial_balance: parseFloat(initial_balance) || 0,
       color: color ?? "blue",

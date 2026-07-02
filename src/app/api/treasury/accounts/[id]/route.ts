@@ -20,7 +20,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   try {
     const { id } = await params
     const body = await req.json()
-    const { name, type, institution, account_number, currency, initial_balance, target_balance } = body
+    const { name, type, institution, account_number, swift, iban, currency, initial_balance, target_balance } = body
 
     if (!name) return NextResponse.json({ error: "Nom requis" }, { status: 400 })
 
@@ -29,6 +29,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       name, type,
       institution: institution || null,
       account_number: account_number || null,
+      swift: swift || null,
+      iban: iban || null,
       currency,
     }
 
