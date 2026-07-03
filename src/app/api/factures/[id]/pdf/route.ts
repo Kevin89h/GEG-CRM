@@ -27,7 +27,7 @@ export async function GET(
   const nif = (ds as Record<string, string> | null)?.nif ?? "446243099"
   const color = (ds as Record<string, string> | null)?.brand_color ?? "#1e3a5f"
 
-  const footerTemplate = `<div style="width:100%;background:${color};padding:10px 24px;display:flex;justify-content:center;align-items:center;gap:0;flex-wrap:wrap;font-family:Arial,Helvetica,sans-serif;font-size:9px;box-sizing:border-box;-webkit-print-color-adjust:exact;color-adjust:exact;">
+  const footerTemplate = `<div style="width:100%;background:${color};padding:9px 24px;display:flex;justify-content:center;align-items:center;gap:0;flex-wrap:wrap;font-family:Arial,Helvetica,sans-serif;font-size:9px;box-sizing:border-box;-webkit-print-color-adjust:exact;color-adjust:exact;">
     ${phone ? `<div style="display:flex;align-items:center;gap:5px;color:rgba(255,255,255,.9);padding:0 14px;">📞 <strong style="color:white">${phone}</strong></div>` : ""}
     ${phone && website ? `<div style="width:1px;height:16px;background:rgba(255,255,255,.25);flex-shrink:0;"></div>` : ""}
     ${website ? `<div style="display:flex;align-items:center;gap:5px;color:rgba(255,255,255,.9);padding:0 14px;">🌐 <strong style="color:white">${website}</strong></div>` : ""}
@@ -86,6 +86,7 @@ export async function GET(
     await page.goto(url, { waitUntil: "networkidle0", timeout: 30000 })
 
     // Hide chat widget, nav overlays, and HTML footer bar (replaced by PDF native footer)
+    // Add padding-bottom so last content never hides behind the footer margin
     await page.addStyleTag({ content: `
       [data-no-pdf], .no-print,
       nav, header:not(.doc-header),
@@ -94,6 +95,7 @@ export async function GET(
       #fc_widget, [id*="freshchat"],
       #hubspot-messages-iframe-container,
       .footer-bar { display: none !important; }
+      .page { padding-bottom: 8px !important; }
     ` })
 
     const pdf = await page.pdf({
@@ -102,7 +104,7 @@ export async function GET(
       displayHeaderFooter: true,
       headerTemplate: "<span></span>",
       footerTemplate,
-      margin: { top: "0", right: "0", bottom: "36px", left: "0" },
+      margin: { top: "0", right: "0", bottom: "38px", left: "0" },
     })
 
     await browser.close()
