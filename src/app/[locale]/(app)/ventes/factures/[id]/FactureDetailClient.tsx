@@ -129,6 +129,19 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
     await updateLine(lineId, "tva_rate", newRate)
   }
 
+  async function toggleAllTva() {
+    const newRate = hasTva ? 0 : 18
+    await fetch(`/api/invoices/${invoice.id}/tva`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tva_rate: newRate }),
+    })
+    setInvoice(prev => ({
+      ...prev,
+      lines: prev.lines.map(l => ({ ...l, tva_rate: newRate })),
+    }))
+  }
+
   async function deleteLine(lineId: string) {
     await fetch(`/api/invoices/${invoice.id}/lines/${lineId}`, { method: "DELETE" })
     setInvoice(prev => ({ ...prev, lines: prev.lines.filter(l => l.id !== lineId) }))
@@ -497,9 +510,19 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
         </table>
         </div>
         {canEdit && (
-          <div className="px-4 py-2 border-t border-gray-50">
+          <div className="px-4 py-2 border-t border-gray-50 flex items-center justify-between">
             <button onClick={addLine} className="text-sm text-blue-600 hover:text-blue-500 font-medium transition-colors">
               + Ajouter une ligne
+            </button>
+            <button
+              onClick={toggleAllTva}
+              className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors border ${
+                hasTva
+                  ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
+                  : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              {hasTva ? "TVA 18% activée — désactiver" : "Activer TVA 18%"}
             </button>
           </div>
         )}
