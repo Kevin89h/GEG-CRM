@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/Badge"
 import { Modal } from "@/components/ui/Modal"
 import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
-import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import type { Account, AccountType } from "@/types"
 
 interface Employee { id: string; full_name: string }
@@ -34,6 +33,7 @@ export default function AccountsClient({ accounts: initial, employees }: Props) 
   const [filterType, setFilterType] = useState<AccountType | "all">("all")
   const [modalOpen, setModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [form, setForm] = useState({
     name: "", type: "enterprise" as AccountType, industry: "",
     country: "Guinée", city: "", phone: "", email: "", website: "", notes: "",
@@ -49,17 +49,21 @@ export default function AccountsClient({ accounts: initial, employees }: Props) 
 
   async function handleSave() {
     setSaving(true)
-    const { supabase, db } = getCompanyClientBrowser()
-    const { data, error } = await db
-      .from("accounts")
-      .insert([{ ...form, salesperson_id: form.salesperson_id || null }])
-      .select("*, contacts(count), deals(count)")
-      .single()
-    if (!error && data) {
-      setAccounts(prev => [data, ...prev])
-      setModalOpen(false)
-      setForm({ name: "", type: "enterprise", industry: "", country: "Guinée", city: "", phone: "", email: "", website: "", notes: "", salesperson_id: "" })
+    setSaveError(null)
+    const res = await fetch("/api/accounts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...form, salesperson_id: form.salesperson_id || null }),
+    })
+    const json = await res.json()
+    if (!res.ok) {
+      setSaveError(json.error ?? "Erreur lors de la création du compte")
+      setSaving(false)
+      return
     }
+    setAccounts(prev => [json, ...prev])
+    setModalOpen(false)
+    setForm({ name: "", type: "enterprise", industry: "", country: "Guinée", city: "", phone: "", email: "", website: "", notes: "", salesperson_id: "" })
     setSaving(false)
   }
 
@@ -211,6 +215,9 @@ export default function AccountsClient({ accounts: initial, employees }: Props) 
             onChange={e => setForm(f => ({ ...f, salesperson_id: e.target.value }))}
             options={[{ value: "", label: "— Aucun commercial —" }, ...employees.map(e => ({ value: e.id, label: e.full_name }))]}
           />
+          {saveError && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg">{saveError}</p>
+          )}
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" onClick={() => setModalOpen(false)}>{t("cancel")}</Button>
             <Button onClick={handleSave} disabled={!form.name || saving}>{t("save")}</Button>

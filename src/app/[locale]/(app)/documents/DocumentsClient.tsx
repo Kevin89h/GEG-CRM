@@ -1,12 +1,12 @@
 "use client"
 
 import { useState, useRef } from "react"
+import { createClient } from "@/lib/supabase/client"
 import {
   FolderOpen, Upload, Search, File, FileText, Trash2,
   ExternalLink, Plus, X, Tag, Lock, Building2, ShieldCheck,
   Download,
 } from "lucide-react"
-import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { formatDate } from "@/lib/utils"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -93,7 +93,6 @@ function formatSize(bytes: number | null): string {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function DocumentsClient({ documents: initial, categories, accounts, userRole, isAdmin }: Props) {
-  const { supabase, db } = getCompanyClientBrowser()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [docs, setDocs] = useState(initial)
@@ -148,6 +147,7 @@ export default function DocumentsClient({ documents: initial, categories, accoun
     setUploading(true)
     setUploadError("")
     try {
+      const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error("Non authentifié")
 
@@ -157,9 +157,10 @@ export default function DocumentsClient({ documents: initial, categories, accoun
 
       const { data: { publicUrl } } = supabase.storage.from("documents").getPublicUrl(path)
 
-      const { data, error: dbError } = await db
-        .from("documents")
-        .insert({
+      const res = await fetch("/api/documents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           name: docName.trim(),
           description: docDesc.trim() || null,
           category_id: docCat || null,
@@ -172,19 +173,16 @@ export default function DocumentsClient({ documents: initial, categories, accoun
           visibility: docVisibility,
           is_company_doc: isCompanyDoc,
           doc_type: isCompanyDoc ? docType || null : null,
-        })
-        .select(`id, name, description, file_url, file_name, file_size, file_type, created_at,
-          visibility, is_company_doc, doc_type,
-          category:document_categories(id, name, color),
-          account:accounts(id, name)`)
-        .single()
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? "Erreur serveur")
 
-      if (dbError) throw dbError
-      if (data) {
+      if (json) {
         const normalized = {
-          ...data,
-          category: Array.isArray(data.category) ? (data.category[0] ?? null) : data.category,
-          account:  Array.isArray(data.account)  ? (data.account[0]  ?? null) : data.account,
+          ...json,
+          category: Array.isArray(json.category) ? (json.category[0] ?? null) : json.category,
+          account:  Array.isArray(json.account)  ? (json.account[0]  ?? null) : json.account,
         } as Document
         setDocs(prev => [normalized, ...prev])
       }
@@ -199,11 +197,12 @@ export default function DocumentsClient({ documents: initial, categories, accoun
 
   async function handleDelete(doc: Document) {
     if (!confirm(`Supprimer "${doc.name}" ?`)) return
-    const urlParts = doc.file_url.split("/documents/")
-    if (urlParts[1]) {
-      await supabase.storage.from("documents").remove([decodeURIComponent(urlParts[1])])
+    const res = await fetch(`/api/documents/${doc.id}`, { method: "DELETE" })
+    if (!res.ok) {
+      const json = await res.json()
+      setUploadError(json.error ?? "Erreur lors de la suppression")
+      return
     }
-    await db.from("documents").delete().eq("id", doc.id)
     setDocs(prev => prev.filter(d => d.id !== doc.id))
   }
 

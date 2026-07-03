@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/Badge"
 import { Modal } from "@/components/ui/Modal"
 import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
-import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import type { Activity, ActivityType } from "@/types"
 
 type ActivityFull = Activity & {
@@ -43,6 +42,7 @@ export default function ActivitiesClient({ activities: initial, accounts, deals,
   const [activities, setActivities] = useState(initial)
   const [modalOpen, setModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [form, setForm] = useState({
     type: "call" as ActivityType,
     subject: "",
@@ -57,29 +57,41 @@ export default function ActivitiesClient({ activities: initial, accounts, deals,
 
   async function handleSave() {
     setSaving(true)
-    const { supabase, db } = getCompanyClientBrowser()
-    const { data, error } = await db
-      .from("activities")
-      .insert([{
-        ...form,
-        account_id: form.account_id || null,
-        deal_id: form.deal_id || null,
-        follow_up_date: form.follow_up_date || null,
-      }])
-      .select("*, account:accounts(id, name), deal:deals(id, title), contact:contacts(id, first_name, last_name)")
-      .single()
-    if (!error && data) {
+    setSaveError(null)
+    try {
+      const res = await fetch("/api/activities", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...form,
+          account_id: form.account_id || null,
+          deal_id: form.deal_id || null,
+          follow_up_date: form.follow_up_date || null,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setSaveError(data.error ?? "Erreur lors de la création"); setSaving(false); return }
       setActivities(prev => [data, ...prev])
       setModalOpen(false)
       setForm({ type: "call", subject: "", notes: "", date: new Date().toISOString().slice(0, 16), follow_up_date: "", completed: false, account_id: "", deal_id: "", user_id: currentUserId })
+    } catch {
+      setSaveError("Erreur réseau, veuillez réessayer")
     }
     setSaving(false)
   }
 
   async function toggleComplete(id: string, completed: boolean) {
-    const { supabase, db } = getCompanyClientBrowser()
-    await db.from("activities").update({ completed: !completed }).eq("id", id)
+    // Optimistic update
     setActivities(prev => prev.map(a => a.id === id ? { ...a, completed: !completed } : a))
+    const res = await fetch(`/api/activities/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ completed: !completed }),
+    })
+    if (!res.ok) {
+      // Roll back on failure
+      setActivities(prev => prev.map(a => a.id === id ? { ...a, completed } : a))
+    }
   }
 
   const upcoming = activities.filter(a => !a.completed && a.follow_up_date)
@@ -170,6 +182,7 @@ export default function ActivitiesClient({ activities: initial, accounts, deals,
               className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
             />
           </div>
+          {saveError && <p className="text-sm text-red-600">{saveError}</p>}
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" onClick={() => setModalOpen(false)}>{t("cancel")}</Button>
             <Button onClick={handleSave} disabled={!form.subject || saving}>{t("save")}</Button>

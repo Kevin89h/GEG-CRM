@@ -8,6 +8,7 @@ interface InvoiceLine {
   unit_price: number
   discount: number
   position: number
+  tva_rate: number
 }
 
 export async function POST(req: NextRequest) {

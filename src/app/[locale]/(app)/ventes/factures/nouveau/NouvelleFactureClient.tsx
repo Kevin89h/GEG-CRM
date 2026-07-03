@@ -201,6 +201,7 @@ export default function NouvelleFactureClient({ locale, accounts, products, trea
         unit_price: l.kind === "note" ? 0 : parseFloat(l.unit_price) || 0,
         discount: parseFloat(l.discount) || 0,
         position: i,
+        tva_rate: 0,
       }))
 
     const res = await fetch("/api/factures", {

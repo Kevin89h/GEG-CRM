@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
 import { Modal } from "@/components/ui/Modal"
-import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { formatCurrency, formatDate } from "@/lib/utils"
 
 interface TreasuryAccount {
@@ -64,6 +63,7 @@ export default function TresorerieClient({ accounts: initial, transactions: init
   const [txModal, setTxModal] = useState(false)
   const [accountModal, setAccountModal] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const [txForm, setTxForm] = useState({
     account_id: accounts[0]?.id ?? "",
@@ -98,9 +98,7 @@ export default function TresorerieClient({ accounts: initial, transactions: init
   async function saveTransaction() {
     if (!txForm.amount || !txForm.description) return
     setSaving(true)
-    const { supabase, db } = getCompanyClientBrowser()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setSaving(false); return }
+    setError(null)
 
     const isTransfer = txForm.type === "transfer_out"
     const rows: Record<string, unknown>[] = [{
@@ -113,7 +111,6 @@ export default function TresorerieClient({ accounts: initial, transactions: init
       category: txForm.category || null,
       transfer_account_id: isTransfer ? txForm.transfer_account_id : null,
       date: new Date(txForm.date).toISOString(),
-      user_id: user.id,
     }]
 
     if (isTransfer && txForm.transfer_account_id) {
@@ -127,26 +124,36 @@ export default function TresorerieClient({ accounts: initial, transactions: init
         category: txForm.category || null,
         transfer_account_id: txForm.account_id,
         date: new Date(txForm.date).toISOString(),
-        user_id: user.id,
       })
     }
 
-    const { data } = await db.from("treasury_transactions").insert(rows).select("*")
-    if (data) {
-      setTransactions(prev => [...(data as Transaction[]), ...prev])
-      // Recalculate balances client-side
-      const amt = parseFloat(txForm.amount)
-      setAccounts(prev => prev.map(a => {
-        if (a.id === txForm.account_id) {
-          const delta = txForm.type === "credit" ? amt : -amt
-          return { ...a, balance: a.balance + delta }
-        }
-        if (isTransfer && a.id === txForm.transfer_account_id) {
-          return { ...a, balance: a.balance + amt }
-        }
-        return a
-      }))
+    const res = await fetch("/api/tresorerie/transactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rows }),
+    })
+    const json = await res.json()
+
+    if (!res.ok) {
+      setError(json.error ?? "Erreur lors de l'enregistrement du mouvement")
+      setSaving(false)
+      return
     }
+
+    const data: Transaction[] = json
+    setTransactions(prev => [...data, ...prev])
+    // Recalculate balances client-side
+    const amt = parseFloat(txForm.amount)
+    setAccounts(prev => prev.map(a => {
+      if (a.id === txForm.account_id) {
+        const delta = txForm.type === "credit" ? amt : -amt
+        return { ...a, balance: a.balance + delta }
+      }
+      if (isTransfer && a.id === txForm.transfer_account_id) {
+        return { ...a, balance: a.balance + amt }
+      }
+      return a
+    }))
     setTxModal(false)
     setSaving(false)
   }
@@ -154,22 +161,32 @@ export default function TresorerieClient({ accounts: initial, transactions: init
   async function saveAccount() {
     if (!accForm.name) return
     setSaving(true)
-    const { supabase, db } = getCompanyClientBrowser()
-    const { data } = await db.from("treasury_accounts").insert([{
-      name: accForm.name,
-      type: accForm.type,
-      institution: accForm.institution || null,
-      account_number: accForm.account_number || null,
-      currency: accForm.currency,
-      initial_balance: parseFloat(accForm.initial_balance) || 0,
-      color: accForm.color,
-    }]).select("*").single()
+    setError(null)
 
-    if (data) {
-      setAccounts(prev => [...prev, { ...data, balance: data.initial_balance, total_in: 0, total_out: 0 }])
-      setAccountModal(false)
-      setAccForm({ name: "", type: "bank", institution: "", account_number: "", currency: "GNF", initial_balance: "0", color: "blue" })
+    const res = await fetch("/api/tresorerie/accounts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: accForm.name,
+        type: accForm.type,
+        institution: accForm.institution || null,
+        account_number: accForm.account_number || null,
+        currency: accForm.currency,
+        initial_balance: parseFloat(accForm.initial_balance) || 0,
+        color: accForm.color,
+      }),
+    })
+    const json = await res.json()
+
+    if (!res.ok) {
+      setError(json.error ?? "Erreur lors de la création du compte")
+      setSaving(false)
+      return
     }
+
+    setAccounts(prev => [...prev, { ...json, balance: json.initial_balance, total_in: 0, total_out: 0 }])
+    setAccountModal(false)
+    setAccForm({ name: "", type: "bank", institution: "", account_number: "", currency: "GNF", initial_balance: "0", color: "blue" })
     setSaving(false)
   }
 
@@ -310,8 +327,15 @@ export default function TresorerieClient({ accounts: initial, transactions: init
         )}
       </div>
 
+      {/* Error banner */}
+      {error && (
+        <div className="mb-4 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
       {/* Modal mouvement */}
-      <Modal open={txModal} onClose={() => setTxModal(false)} title="Nouveau mouvement">
+      <Modal open={txModal} onClose={() => { setTxModal(false); setError(null) }} title="Nouveau mouvement">
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             {(["credit", "debit", "transfer_out"] as const).map(type => (
@@ -391,7 +415,7 @@ export default function TresorerieClient({ accounts: initial, transactions: init
       </Modal>
 
       {/* Modal nouveau compte */}
-      <Modal open={accountModal} onClose={() => setAccountModal(false)} title="Nouveau compte de trésorerie">
+      <Modal open={accountModal} onClose={() => { setAccountModal(false); setError(null) }} title="Nouveau compte de trésorerie">
         <div className="space-y-4">
           <Input label="Nom du compte *" value={accForm.name} onChange={e => setAccForm(f => ({ ...f, name: e.target.value }))} placeholder="Ecobank GNF, Orange Money, Caisse principale…" />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

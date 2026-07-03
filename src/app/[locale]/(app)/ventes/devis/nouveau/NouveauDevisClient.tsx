@@ -321,14 +321,15 @@ export default function NouveauDevisClient({
   async function handleCreateClient() {
     if (!cForm.name.trim()) { setCError(t("erreurNomRequis")); return }
     setCSaving(true); setCError(null)
-    const { db } = getCompanyClientBrowser()
-    const { data, error: err } = await db
-      .from("accounts")
-      .insert([{ name: cForm.name.trim(), type: cForm.type, phone: cForm.phone || null, email: cForm.email || null, country: cForm.country || null, is_active: true }])
-      .select("id, name, salesperson_id").single()
-    if (err || !data) { setCError(err?.message ?? t("erreur")); setCSaving(false); return }
-    setAccounts(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
-    onAccountChange(data.id)
+    const res = await fetch("/api/accounts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: cForm.name.trim(), type: cForm.type, phone: cForm.phone || null, email: cForm.email || null, country: cForm.country || null, is_active: true }),
+    })
+    const json = await res.json()
+    if (!res.ok) { setCError(json.error ?? t("erreur")); setCSaving(false); return }
+    setAccounts(prev => [...prev, json].sort((a, b) => a.name.localeCompare(b.name)))
+    onAccountChange(json.id)
     setShowClientModal(false)
     setCForm({ name: "", type: "prospect", phone: "", email: "", country: "Guinée" })
     setCSaving(false)
@@ -345,23 +346,24 @@ export default function NouveauDevisClient({
   async function handleCreateProduct() {
     if (!pForm.name.trim()) { setPError(t("erreurNomRequis")); return }
     setPSaving(true); setPError(null)
-    const { db } = getCompanyClientBrowser()
-    const { data, error: err } = await db
-      .from("products")
-      .insert([{ name: pForm.name.trim(), reference: pForm.reference || null, sell_price: pForm.sell_price ? parseFloat(pForm.sell_price) : null, currency: form.currency, unit_id: pForm.unit_id || null, is_active: true }])
-      .select("id, name, reference, sell_price, currency, unit_id").single()
-    if (err || !data) { setPError(err?.message ?? t("erreur")); setPSaving(false); return }
-    const unitObj = units.find(u => u.id === data.unit_id) ?? null
-    const productWithUnit = { ...data, unit: unitObj ? { id: unitObj.id, name: unitObj.name } : null }
+    const res = await fetch("/api/stock/produits", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: pForm.name.trim(), reference: pForm.reference || null, sell_price: pForm.sell_price ? parseFloat(pForm.sell_price) : null, currency: form.currency, unit_id: pForm.unit_id || null, is_active: true }),
+    })
+    const json = await res.json()
+    if (!res.ok) { setPError(json.error ?? t("erreur")); setPSaving(false); return }
+    const unitObj = units.find(u => u.id === json.unit_id) ?? null
+    const productWithUnit = { ...json, unit: unitObj ? { id: unitObj.id, name: unitObj.name } : null }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     setProducts(prev => [...prev, productWithUnit as any].sort((a, b) => a.name.localeCompare(b.name)))
     if (pendingLineIndex !== null) {
       const targetLine = lines[pendingLineIndex]
       if (targetLine) {
         updateLine(targetLine.id, {
-          product_id: data.id,
-          description: data.name,
-          unit_price: String(data.sell_price ?? 0),
+          product_id: json.id,
+          description: json.name,
+          unit_price: String(json.sell_price ?? 0),
           unit_id: unitObj?.id ?? "",
         })
       }

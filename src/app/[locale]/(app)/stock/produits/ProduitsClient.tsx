@@ -10,7 +10,6 @@ import { Badge } from "@/components/ui/Badge"
 import { Modal } from "@/components/ui/Modal"
 import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
-import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { formatCurrency } from "@/lib/utils"
 import { exportToXls } from "@/lib/exportXls"
 import type { ProductCategory, Unit } from "@/types"
@@ -70,10 +69,10 @@ export default function ProduitsClient({ products: initial, categories, units }:
   async function handleSave() {
     setSaving(true)
     setSaveError("")
-    const { db } = getCompanyClientBrowser()
-    const { data, error } = await db
-      .from("products")
-      .insert([{
+    const res = await fetch("/api/stock/produits", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
         name: form.name,
         reference: form.reference || null,
         description: form.description || null,
@@ -83,13 +82,13 @@ export default function ProduitsClient({ products: initial, categories, units }:
         buy_price_currency: form.buy_price_currency,
         sell_price: form.sell_price ? parseFloat(form.sell_price) : null,
         currency: form.currency,
-      }])
-      .select("*, category:product_categories(id, name, color), unit:units(id, name, type)")
-      .single()
-    if (error) {
-      setSaveError(error.message)
-    } else if (data) {
-      setProducts(prev => [data, ...prev])
+      }),
+    })
+    const json = await res.json()
+    if (!res.ok) {
+      setSaveError(json.error ?? "Erreur serveur")
+    } else if (json) {
+      setProducts(prev => [json, ...prev])
       setModalOpen(false)
       setSaveError("")
       setForm({ reference: "", name: "", description: "", category_id: categories[0]?.id ?? "", unit_id: units[0]?.id ?? "", buy_price: "", buy_price_currency: "GNF", sell_price: "", currency: "GNF" })

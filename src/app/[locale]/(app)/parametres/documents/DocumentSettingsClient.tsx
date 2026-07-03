@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react"
 import { Upload, Save, Eye, Building2, Phone, Mail, Globe, FileText, Palette, Landmark } from "lucide-react"
-import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
+import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser" // storage upload only
 
 interface Settings {
   id?: string
@@ -90,6 +90,7 @@ export default function DocumentSettingsClient({ settings: initial, companyId }:
   )
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [preview, setPreview] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
@@ -101,7 +102,7 @@ export default function DocumentSettingsClient({ settings: initial, companyId }:
 
   async function uploadLogo(file: File) {
     setUploading(true)
-    const { supabase, db } = getCompanyClientBrowser()
+    const { supabase } = getCompanyClientBrowser()
     const ext = file.name.split(".").pop()
     const path = `${companyId}/logo.${ext}`
     const { error } = await supabase.storage.from("logos").upload(path, file, { upsert: true })
@@ -114,22 +115,30 @@ export default function DocumentSettingsClient({ settings: initial, companyId }:
 
   async function save() {
     setSaving(true)
-    const { supabase, db } = getCompanyClientBrowser()
+    setSaveError(null)
     const tvaStr = (form as Record<string, unknown>).tva_rate_str as string | undefined
-    const payload = {
+    const payload: Record<string, unknown> = {
       ...form,
       tva_rate: tvaStr ? parseFloat(tvaStr) : (form.tva_rate ?? 18),
       company_id: companyId,
       updated_at: new Date().toISOString(),
     }
-    delete (payload as Record<string, unknown>).tva_rate_str
+    delete payload.tva_rate_str
 
-    if (form.id) {
-      await db.from("document_settings").update(payload).eq("id", form.id)
-    } else {
-      const { data } = await db.from("document_settings").insert([payload]).select("id").single()
-      if (data) setForm(f => ({ ...f, id: data.id }))
+    const res = await fetch("/api/parametres/document-settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+    const json = await res.json()
+
+    if (!res.ok) {
+      setSaveError(json.error ?? "Erreur lors de l'enregistrement")
+      setSaving(false)
+      return
     }
+
+    if (!form.id && json?.id) setForm(f => ({ ...f, id: json.id }))
     setSaving(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 3000)
@@ -158,6 +167,12 @@ export default function DocumentSettingsClient({ settings: initial, companyId }:
           </button>
         </div>
       </div>
+
+      {saveError && (
+        <div className="mb-4 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+          {saveError}
+        </div>
+      )}
 
       <div className={`grid gap-6 ${preview ? "grid-cols-2" : "grid-cols-1"}`}>
         {/* Form */}

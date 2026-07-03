@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
 import { Modal } from "@/components/ui/Modal"
-import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
+import { createClient } from "@/lib/supabase/client"
 import { formatDate, formatCurrency, formatNumber } from "@/lib/utils"
 import DocumentLayout from "@/components/print/DocumentLayout"
 
@@ -190,36 +190,37 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
 
   async function createDeliveryNote() {
     setCreatingBL(true)
-    const { supabase, db } = getCompanyClientBrowser()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setCreatingBL(false); return }
+    setError(null)
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { setError("Non authentifié"); setCreatingBL(false); return }
 
-    const { data: dn } = await db
-      .from("delivery_notes")
-      .insert([{
-        number: "",
-        invoice_id: invoice.id,
-        account_id: invoice.account ? (invoice as unknown as Record<string, unknown>).account_id as string : null,
-        status: "draft",
-        user_id: user.id,
-      }])
-      .select("id")
-      .single()
-
-    if (!dn) { setCreatingBL(false); return }
-
-    // Copier les lignes de la facture
-    await db.from("delivery_note_lines").insert(
-      invoice.lines.map((l, i) => ({
-        delivery_note_id: dn.id,
-        product_id: l.product_id ?? null,
-        description: l.description,
-        quantity: l.quantity,
-        position: i,
-      }))
-    )
-
-    router.push(`/${locale}/ventes/bons-livraison/${dn.id}`)
+      const accountId = invoice.account ? (invoice as unknown as Record<string, unknown>).account_id as string : null
+      const res = await fetch(`/api/factures/${invoice.id}/create-delivery-note`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.id,
+          accountId,
+          lines: invoice.lines.map(l => ({
+            product_id: l.product_id ?? null,
+            description: l.description,
+            quantity: l.quantity,
+          })),
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) {
+        setError(json.error ?? "Erreur lors de la création du bon de livraison")
+        setCreatingBL(false)
+        return
+      }
+      router.push(`/${locale}/ventes/bons-livraison/${json.deliveryNoteId}`)
+    } catch {
+      setError("Erreur inattendue")
+      setCreatingBL(false)
+    }
   }
 
   async function savePayment() {
@@ -229,7 +230,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
     setSaving(true)
     setError(null)
 
-    const { supabase } = getCompanyClientBrowser()
+    const supabase = createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setError(t("notAuthenticated")); setSaving(false); return }
 

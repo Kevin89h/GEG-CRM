@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import { Plus, TrendingUp } from "lucide-react"
-import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { formatDate } from "@/lib/utils"
 
 interface Rate {
@@ -32,6 +31,7 @@ export default function TauxDeChangeClient({ rates: initialRates }: Props) {
   const [rates, setRates] = useState(initialRates)
   const [form, setForm] = useState({ from: "USD" as Currency, to: "GNF" as Currency, rate: "", notes: "", date: new Date().toISOString().slice(0, 10) })
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   // Group by pair, latest first
   const byPair: Record<string, Rate[]> = {}
@@ -44,18 +44,26 @@ export default function TauxDeChangeClient({ rates: initialRates }: Props) {
   async function addRate() {
     if (!form.rate || form.from === form.to) return
     setSaving(true)
-    const { supabase, db } = getCompanyClientBrowser()
-    const { data } = await db.from("exchange_rates").insert([{
-      from_currency: form.from,
-      to_currency: form.to,
-      rate: parseFloat(form.rate),
-      effective_date: form.date,
-      notes: form.notes || null,
-    }]).select("*").single()
-    if (data) {
-      setRates(prev => [data as Rate, ...prev].sort((a, b) => b.effective_date.localeCompare(a.effective_date)))
-      setForm(f => ({ ...f, rate: "", notes: "" }))
+    setError(null)
+    const res = await fetch("/api/parametres/taux-de-change", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from_currency: form.from,
+        to_currency: form.to,
+        rate: parseFloat(form.rate),
+        effective_date: form.date,
+        notes: form.notes || null,
+      }),
+    })
+    const json = await res.json()
+    if (!res.ok) {
+      setError(json.error ?? "Erreur lors de l'enregistrement du taux")
+      setSaving(false)
+      return
     }
+    setRates(prev => [json as Rate, ...prev].sort((a, b) => b.effective_date.localeCompare(a.effective_date)))
+    setForm(f => ({ ...f, rate: "", notes: "" }))
     setSaving(false)
   }
 
@@ -87,6 +95,13 @@ export default function TauxDeChangeClient({ rates: initialRates }: Props) {
           </div>
         ))}
       </div>
+
+      {/* Error banner */}
+      {error && (
+        <div className="mb-4 px-4 py-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">
+          {error}
+        </div>
+      )}
 
       {/* Add rate form */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 mb-8">
@@ -146,6 +161,9 @@ export default function TauxDeChangeClient({ rates: initialRates }: Props) {
             />
           </div>
         </div>
+        {error && (
+          <p className="text-sm text-red-600 mb-3">{error}</p>
+        )}
         <button
           onClick={addRate}
           disabled={!form.rate || saving || form.from === form.to}

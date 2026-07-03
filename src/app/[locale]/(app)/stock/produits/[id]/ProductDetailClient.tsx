@@ -9,7 +9,6 @@ import {
   FileText, Shield, Upload, Trash2, Download, Lock, Eye, AlertTriangle, SlidersHorizontal,
 } from "lucide-react"
 import { useTranslations } from "next-intl"
-import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { createClient } from "@/lib/supabase/client"
 import { formatCurrency, formatNumber, formatDate } from "@/lib/utils"
 import { Button } from "@/components/ui/Button"
@@ -168,9 +167,11 @@ export default function ProductDetailClient({
     })
   }
 
+  const [saveError, setSaveError] = useState<string | null>(null)
+
   async function save() {
     setSaving(true)
-    const { db } = getCompanyClientBrowser()
+    setSaveError(null)
     const updateData: Record<string, unknown> = {
       name: form.name,
       reference: form.reference || null,
@@ -194,13 +195,17 @@ export default function ProductDetailClient({
       updateData.origin = form.origin || null
       updateData.internal_notes = form.internal_notes || null
     }
-    const { data, error } = await db.from("products").update(updateData)
-      .eq("id", product.id)
-      .select("*, category:product_categories(id, name, color), unit:units(id, name, type)")
-      .single()
-    if (!error && data) {
-      setProduct(data as Product)
+    const res = await fetch(`/api/stock/produits/${product.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updateData),
+    })
+    const json = await res.json()
+    if (res.ok && json) {
+      setProduct(json as Product)
       setEditing(false)
+    } else {
+      setSaveError(json.error ?? "Erreur lors de la sauvegarde")
     }
     setSaving(false)
   }
@@ -209,8 +214,6 @@ export default function ProductDetailClient({
     setUploading(true)
     try {
       const supabase = createClient()
-      const { db } = getCompanyClientBrowser()
-      const ext = file.name.split(".").pop()
       const path = `${product.id}/${Date.now()}-${file.name}`
       const { error: storageError } = await supabase.storage
         .from("product-documents")
@@ -218,15 +221,18 @@ export default function ProductDetailClient({
       if (storageError) throw storageError
 
       const { data: urlData } = supabase.storage.from("product-documents").getPublicUrl(path)
-      const { data: doc, error: dbError } = await db.from("product_documents").insert({
-        product_id: product.id,
-        type: uploadType,
-        name: file.name,
-        url: urlData.publicUrl,
-        file_size: file.size,
-      }).select().single()
-
-      if (!dbError && doc) {
+      const docRes = await fetch(`/api/stock/produits/${product.id}/documents`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: uploadType,
+          name: file.name,
+          url: urlData.publicUrl,
+          file_size: file.size,
+        }),
+      })
+      const doc = await docRes.json()
+      if (docRes.ok && doc) {
         setDocuments(prev => [doc as ProductDocument, ...prev])
       }
     } finally {
@@ -235,20 +241,27 @@ export default function ProductDetailClient({
     }
   }
 
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
   async function deleteProduct() {
     setDeleting(true)
-    const { db } = getCompanyClientBrowser()
-    await db.from("products").delete().eq("id", product.id)
-    router.push(`/${locale}/stock/produits`)
+    setDeleteError(null)
+    const res = await fetch(`/api/stock/produits/${product.id}`, { method: "DELETE" })
+    if (res.ok) {
+      router.push(`/${locale}/stock/produits`)
+    } else {
+      const json = await res.json()
+      setDeleteError(json.error ?? "Erreur lors de la suppression")
+      setDeleting(false)
+      setConfirmDelete(false)
+    }
   }
 
-  async function deleteDocument(docId: string, url: string) {
-    const { db } = getCompanyClientBrowser()
-    const supabase = createClient()
-    const path = url.split("/product-documents/")[1]
-    if (path) await supabase.storage.from("product-documents").remove([path])
-    await db.from("product_documents").delete().eq("id", docId)
-    setDocuments(prev => prev.filter(d => d.id !== docId))
+  async function deleteDocument(docId: string) {
+    const res = await fetch(`/api/stock/produits/${product.id}/documents/${docId}`, { method: "DELETE" })
+    if (res.ok) {
+      setDocuments(prev => prev.filter(d => d.id !== docId))
+    }
   }
 
   const stockValue = totalStock * (product.buy_price ?? 0)
@@ -733,7 +746,7 @@ export default function ProductDetailClient({
                                 <Download className="w-4 h-4" />
                               </a>
                               {isAdmin && (
-                                <button onClick={() => deleteDocument(doc.id, doc.url)}
+                                <button onClick={() => deleteDocument(doc.id)}
                                   className="text-gray-300 hover:text-red-500 transition p-1 opacity-0 group-hover:opacity-100">
                                   <Trash2 className="w-4 h-4" />
                                 </button>
@@ -820,6 +833,9 @@ export default function ProductDetailClient({
             <p className="text-sm text-gray-600 bg-gray-50 rounded-lg px-4 py-3 mb-5">
               <span className="font-semibold">{product.name}</span> {t("confirmDeleteBody")}
             </p>
+            {deleteError && (
+              <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">{deleteError}</p>
+            )}
             <div className="flex gap-3">
               <button onClick={() => setConfirmDelete(false)}
                 className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition">

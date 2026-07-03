@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/Badge"
 import { Modal } from "@/components/ui/Modal"
 import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
-import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { formatCurrency } from "@/lib/utils"
 import type { Deal, DealStage } from "@/types"
 
@@ -38,6 +37,8 @@ export default function DealsClient({ deals: initial, accounts, profiles, curren
   const [view, setView] = useState<"kanban" | "list">("kanban")
   const [modalOpen, setModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [stageError, setStageError] = useState<string | null>(null)
   const [form, setForm] = useState({
     title: "", account_id: accounts[0]?.id ?? "", stage: "lead" as DealStage,
     value: "", currency: "GNF" as "USD" | "GNF" | "EUR",
@@ -46,28 +47,44 @@ export default function DealsClient({ deals: initial, accounts, profiles, curren
 
   async function handleSave() {
     setSaving(true)
-    const { supabase, db } = getCompanyClientBrowser()
-    const { data, error } = await db
-      .from("deals")
-      .insert([{
-        ...form,
-        value: form.value ? parseFloat(form.value) : null,
-        probability: form.probability ? parseInt(form.probability) : null,
-      }])
-      .select("*, account:accounts(id, name)")
-      .single()
-    if (!error && data) {
+    setSaveError(null)
+    try {
+      const res = await fetch("/api/deals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...form,
+          value: form.value ? parseFloat(form.value) : null,
+          probability: form.probability ? parseInt(form.probability) : null,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setSaveError(data.error ?? "Erreur lors de la création"); setSaving(false); return }
       setDeals(prev => [data, ...prev])
       setModalOpen(false)
       setForm({ title: "", account_id: accounts[0]?.id ?? "", stage: "lead", value: "", currency: "GNF", probability: "20", close_date: "", owner_id: currentUserId, notes: "" })
+    } catch {
+      setSaveError("Erreur réseau, veuillez réessayer")
     }
     setSaving(false)
   }
 
   async function updateStage(dealId: string, newStage: DealStage) {
-    const { supabase, db } = getCompanyClientBrowser()
-    await db.from("deals").update({ stage: newStage }).eq("id", dealId)
+    const previousStage = deals.find(d => d.id === dealId)?.stage
+    // Optimistic update
     setDeals(prev => prev.map(d => d.id === dealId ? { ...d, stage: newStage } : d))
+    setStageError(null)
+    const res = await fetch(`/api/deals/${dealId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ stage: newStage }),
+    })
+    if (!res.ok) {
+      // Roll back
+      if (previousStage) setDeals(prev => prev.map(d => d.id === dealId ? { ...d, stage: previousStage } : d))
+      const data = await res.json().catch(() => ({}))
+      setStageError(data.error ?? "Impossible de changer l'étape")
+    }
   }
 
   const totalPipeline = deals
@@ -76,6 +93,12 @@ export default function DealsClient({ deals: initial, accounts, profiles, curren
 
   return (
     <div>
+      {stageError && (
+        <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 flex items-center justify-between">
+          <span>{stageError}</span>
+          <button onClick={() => setStageError(null)} className="ml-4 text-red-400 hover:text-red-600">✕</button>
+        </div>
+      )}
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <div>
@@ -271,6 +294,7 @@ export default function DealsClient({ deals: initial, accounts, profiles, curren
             value={form.close_date}
             onChange={e => setForm(f => ({ ...f, close_date: e.target.value }))}
           />
+          {saveError && <p className="text-sm text-red-600">{saveError}</p>}
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" onClick={() => setModalOpen(false)}>{t("cancel")}</Button>
             <Button onClick={handleSave} disabled={!form.title || !form.account_id || saving}>{t("save")}</Button>

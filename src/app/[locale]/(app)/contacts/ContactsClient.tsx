@@ -8,7 +8,6 @@ import { Modal } from "@/components/ui/Modal"
 import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
 import { Badge } from "@/components/ui/Badge"
-import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { initials } from "@/lib/utils"
 import type { Contact } from "@/types"
 
@@ -25,6 +24,7 @@ export default function ContactsClient({ contacts: initial, accounts }: Props) {
   const [search, setSearch] = useState("")
   const [modalOpen, setModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [form, setForm] = useState({
     first_name: "", last_name: "", title: "", email: "",
     phone: "", account_id: accounts[0]?.id ?? "", is_primary: false, notes: "",
@@ -37,17 +37,21 @@ export default function ContactsClient({ contacts: initial, accounts }: Props) {
 
   async function handleSave() {
     setSaving(true)
-    const { db } = getCompanyClientBrowser()
-    const { data, error } = await db
-      .from("contacts")
-      .insert([form])
-      .select("*, account:accounts(id, name, type)")
-      .single()
-    if (!error && data) {
-      setContacts(prev => [data, ...prev])
-      setModalOpen(false)
-      setForm({ first_name: "", last_name: "", title: "", email: "", phone: "", account_id: accounts[0]?.id ?? "", is_primary: false, notes: "" })
+    setSaveError(null)
+    const res = await fetch("/api/contacts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(form),
+    })
+    const json = await res.json()
+    if (!res.ok) {
+      setSaveError(json.error ?? "Erreur lors de la création du contact")
+      setSaving(false)
+      return
     }
+    setContacts(prev => [json, ...prev])
+    setModalOpen(false)
+    setForm({ first_name: "", last_name: "", title: "", email: "", phone: "", account_id: accounts[0]?.id ?? "", is_primary: false, notes: "" })
     setSaving(false)
   }
 
@@ -159,6 +163,9 @@ export default function ContactsClient({ contacts: initial, accounts }: Props) {
             />
             {t("primary")}
           </label>
+          {saveError && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg">{saveError}</p>
+          )}
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" onClick={() => setModalOpen(false)}>{t("cancel")}</Button>
             <Button onClick={handleSave} disabled={!form.first_name || !form.last_name || saving}>{t("save")}</Button>

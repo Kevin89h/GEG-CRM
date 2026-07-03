@@ -7,7 +7,6 @@ import { Modal } from "@/components/ui/Modal"
 import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
 import { Badge } from "@/components/ui/Badge"
-import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { formatCurrency, formatDate } from "@/lib/utils"
 
 interface Commission {
@@ -63,8 +62,10 @@ export default function EmployesClient({ employees: initial, treasuryAccounts }:
   const [editEmployee, setEditEmployee] = useState<Employee | null>(null)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [payModal, setPayModal] = useState<{ commissionId: string; amount: number; currency: string; employeeId: string } | null>(null)
   const [payForm, setPayForm] = useState({ treasury_account_id: "", paid_date: new Date().toISOString().slice(0, 10) })
+  const [payError, setPayError] = useState<string | null>(null)
   const [form, setForm] = useState(emptyForm)
 
   function openNew() { setForm(emptyForm); setEditEmployee(null); setModalOpen(true) }
@@ -81,7 +82,7 @@ export default function EmployesClient({ employees: initial, treasuryAccounts }:
   async function handleSave() {
     if (!form.full_name || !form.start_date) return
     setSaving(true)
-    const { supabase, db } = getCompanyClientBrowser()
+    setSaveError(null)
     const payload = {
       full_name: form.full_name,
       title: form.title || null,
@@ -95,43 +96,66 @@ export default function EmployesClient({ employees: initial, treasuryAccounts }:
       notes: form.notes || null,
     }
 
-    if (editEmployee) {
-      const { data } = await db.from("employees").update(payload).eq("id", editEmployee.id).select("*").single()
-      if (data) setEmployees(prev => prev.map(e => e.id === editEmployee.id ? { ...e, ...data } : e))
-    } else {
-      const { data } = await db.from("employees").insert([payload]).select("*").single()
-      if (data) setEmployees(prev => [...prev, { ...(data as Employee), commissions: [] }])
+    try {
+      if (editEmployee) {
+        const res = await fetch(`/api/employes/${editEmployee.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+        const data = await res.json()
+        if (!res.ok) { setSaveError(data.error ?? "Erreur lors de la mise à jour"); setSaving(false); return }
+        setEmployees(prev => prev.map(e => e.id === editEmployee.id ? { ...e, ...data } : e))
+      } else {
+        const res = await fetch("/api/employes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+        const data = await res.json()
+        if (!res.ok) { setSaveError(data.error ?? "Erreur lors de la création"); setSaving(false); return }
+        setEmployees(prev => [...prev, { ...(data as Employee), commissions: [] }])
+      }
+      setModalOpen(false)
+    } catch {
+      setSaveError("Erreur réseau, veuillez réessayer")
     }
-    setModalOpen(false)
     setSaving(false)
   }
 
   async function toggleActive(emp: Employee) {
-    const { supabase, db } = getCompanyClientBrowser()
-    await db.from("employees").update({ is_active: !emp.is_active }).eq("id", emp.id)
+    // Optimistic update
     setEmployees(prev => prev.map(e => e.id === emp.id ? { ...e, is_active: !e.is_active } : e))
+    const res = await fetch(`/api/employes/${emp.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_active: !emp.is_active }),
+    })
+    if (!res.ok) {
+      // Roll back on failure
+      setEmployees(prev => prev.map(e => e.id === emp.id ? { ...e, is_active: emp.is_active } : e))
+    }
   }
 
   async function payCommission() {
     if (!payModal || !payForm.treasury_account_id) return
-    const { supabase, db } = getCompanyClientBrowser()
-    const acct = treasuryAccounts.find(a => a.id === payForm.treasury_account_id)
-    // Create treasury debit transaction
-    const { data: tx } = await db.from("treasury_transactions").insert([{
-      account_id: payForm.treasury_account_id,
-      type: "debit",
-      amount: payModal.amount,
-      currency: payModal.currency,
-      description: "Commission employé",
-      date: payForm.paid_date,
-    }]).select("id").single()
-
-    await db.from("commissions").update({
-      status: "paid",
-      paid_date: payForm.paid_date,
-      treasury_transaction_id: tx?.id ?? null,
-    }).eq("id", payModal.commissionId)
-
+    setPayError(null)
+    const res = await fetch(`/api/employes/${payModal.employeeId}/pay-commission`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        commissionId: payModal.commissionId,
+        amount: payModal.amount,
+        currency: payModal.currency,
+        treasury_account_id: payForm.treasury_account_id,
+        paid_date: payForm.paid_date,
+      }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      setPayError(data.error ?? "Erreur lors du paiement")
+      return
+    }
     setEmployees(prev => prev.map(e => {
       if (e.id !== payModal.employeeId) return e
       return {
@@ -142,8 +166,6 @@ export default function EmployesClient({ employees: initial, treasuryAccounts }:
       }
     }))
     setPayModal(null)
-    // Suppress unused var warning
-    void acct
   }
 
   const active = employees.filter(e => e.is_active)
@@ -304,6 +326,7 @@ export default function EmployesClient({ employees: initial, treasuryAccounts }:
             <Input label="Téléphone" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+224 620 000 000" />
             <Input label="Notes" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optionnel" />
           </div>
+          {saveError && <p className="text-sm text-red-600">{saveError}</p>}
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" onClick={() => setModalOpen(false)}>Annuler</Button>
             <Button onClick={handleSave} disabled={!form.full_name || saving}>{saving ? "Enregistrement…" : "Enregistrer"}</Button>
@@ -326,6 +349,7 @@ export default function EmployesClient({ employees: initial, treasuryAccounts }:
               options={treasuryAccounts.map(a => ({ value: a.id, label: `${a.name} (${a.currency})` }))}
             />
             <Input label="Date de paiement" type="date" value={payForm.paid_date} onChange={e => setPayForm(f => ({ ...f, paid_date: e.target.value }))} />
+            {payError && <p className="text-sm text-red-600">{payError}</p>}
             <div className="flex justify-end gap-3 pt-2">
               <Button variant="secondary" onClick={() => setPayModal(null)}>Annuler</Button>
               <Button onClick={payCommission} disabled={!payForm.treasury_account_id}>Confirmer le paiement</Button>
