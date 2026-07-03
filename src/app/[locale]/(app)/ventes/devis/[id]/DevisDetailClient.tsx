@@ -65,6 +65,11 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
   const [tva, setTva] = useState<boolean>(order.tva ?? false)
   const [lines, setLines] = useState<Line[]>(order.lines)
   const [productSearch, setProductSearch] = useState<Record<string, string>>({})
+  const [orderFields, setOrderFields] = useState({
+    payment_terms: order.payment_terms ?? "",
+    valid_until: order.valid_until ?? "",
+    client_order_ref: order.client_order_ref ?? "",
+  })
   const isDraft = order.status === "draft"
 
   const PAYMENT_TERMS_LABELS: Record<string, string> = {
@@ -167,6 +172,12 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
       description: p.name,
       unit_price: p.sale_price ?? 0,
     }).eq("id", lineId)
+  }
+
+  async function updateOrderField(field: string, value: string) {
+    setOrderFields(prev => ({ ...prev, [field]: value }))
+    const { db } = getCompanyClientBrowser()
+    await db.from("sales_orders").update({ [field]: value || null }).eq("id", order.id)
   }
 
   async function confirm() {
@@ -385,18 +396,54 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
             {order.salesperson && (
               <Field label={t("fieldSalesperson")} value={order.salesperson.full_name} />
             )}
-            {order.client_order_ref && (
-              <Field label={t("fieldClientRef")} value={order.client_order_ref} mono />
-            )}
+            <div>
+              <p className="text-xs text-gray-400 mb-0.5">{t("fieldClientRef")}</p>
+              {isDraft ? (
+                <input
+                  className="w-full text-sm text-gray-900 bg-transparent border-b border-gray-200 hover:border-gray-400 focus:border-blue-500 focus:outline-none py-0.5"
+                  value={orderFields.client_order_ref}
+                  onChange={e => setOrderFields(p => ({ ...p, client_order_ref: e.target.value }))}
+                  onBlur={e => updateOrderField("client_order_ref", e.target.value)}
+                  placeholder="Réf. commande client..."
+                />
+              ) : (
+                <p className="text-sm text-gray-900 font-mono">{order.client_order_ref ?? "—"}</p>
+              )}
+            </div>
           </div>
           <div className="space-y-4">
             <Field label={t("fieldOrderDate")} value={order.date_order ? formatDate(order.date_order, locale) : formatDate(order.created_at, locale)} />
-            {order.valid_until && (
-              <Field label={t("fieldExpiry")} value={formatDate(order.valid_until, locale)} />
-            )}
-            {order.payment_terms && (
-              <Field label={t("fieldPaymentTerms")} value={PAYMENT_TERMS_LABELS[order.payment_terms] ?? order.payment_terms} />
-            )}
+            <div>
+              <p className="text-xs text-gray-400 mb-0.5">{t("fieldExpiry")}</p>
+              {isDraft ? (
+                <input
+                  type="date"
+                  className="text-sm text-gray-900 bg-transparent border-b border-gray-200 hover:border-gray-400 focus:border-blue-500 focus:outline-none py-0.5"
+                  value={orderFields.valid_until}
+                  onChange={e => setOrderFields(p => ({ ...p, valid_until: e.target.value }))}
+                  onBlur={e => updateOrderField("valid_until", e.target.value)}
+                />
+              ) : (
+                <p className="text-sm text-gray-900">{order.valid_until ? formatDate(order.valid_until, locale) : "—"}</p>
+              )}
+            </div>
+            <div>
+              <p className="text-xs text-gray-400 mb-0.5">{t("fieldPaymentTerms")}</p>
+              {isDraft ? (
+                <select
+                  className="text-sm text-gray-900 bg-transparent border-b border-gray-200 hover:border-gray-400 focus:border-blue-500 focus:outline-none py-0.5 w-full"
+                  value={orderFields.payment_terms}
+                  onChange={e => { setOrderFields(p => ({ ...p, payment_terms: e.target.value })); updateOrderField("payment_terms", e.target.value) }}
+                >
+                  <option value="">— Choisir —</option>
+                  {Object.entries(PAYMENT_TERMS_LABELS).map(([k, v]) => (
+                    <option key={k} value={k}>{v}</option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-sm text-gray-900">{order.payment_terms ? (PAYMENT_TERMS_LABELS[order.payment_terms] ?? order.payment_terms) : "—"}</p>
+              )}
+            </div>
             <Field label={t("fieldCurrency")} value={order.currency} />
           </div>
         </div>
