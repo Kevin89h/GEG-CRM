@@ -183,18 +183,18 @@ export default function PrintPage({
         .sig-box { flex: 1; border-top: 1px solid #ccc; padding-top: 8px; font-size: 10px; color: #aaa; text-align: center; }
 
         /* BOTTOM */
-        .bottom { display: flex; justify-content: space-between; align-items: flex-start; padding: 20px 24px 24px; gap: 24px; margin-top: 8px; }
+        .bottom { display: flex; justify-content: space-between; align-items: flex-start; padding: 14px 24px 18px; gap: 24px; margin-top: 6px; }
 
         /* BANK */
         .bank-section { flex: 1; }
-        .bank-section-title { font-size: 8.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .9px; color: #888; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 1px solid #eee; }
-        .bank-currency-group { margin-bottom: 14px; }
+        .bank-section-title { font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .9px; color: #888; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid #eee; }
+        .bank-currency-group { margin-bottom: 8px; }
         .bank-currency-group:last-child { margin-bottom: 0; }
-        .bank-currency-label { font-size: 8px; font-weight: 700; color: white; background: ${color}; padding: 2px 8px; border-radius: 10px; display: inline-block; margin-bottom: 8px; }
-        .bank-row { display: flex; gap: 10px; padding: 5px 0; font-size: 10.5px; align-items: baseline; border-bottom: 1px solid #f0f0f0; }
-        .bank-inst { font-weight: 800; color: #111; min-width: 100px; }
-        .bank-num { color: #111; font-family: 'Courier New', monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; }
-        .bank-meta { font-size: 9px; color: #999; margin-top: 4px; padding-left: 2px; }
+        .bank-currency-label { font-size: 7.5px; font-weight: 700; color: white; background: ${color}; padding: 1px 7px; border-radius: 10px; display: inline-block; margin-bottom: 5px; }
+        .bank-row { display: flex; gap: 8px; padding: 3px 0; font-size: 10px; align-items: baseline; border-bottom: 1px solid #f0f0f0; }
+        .bank-inst { font-weight: 800; color: #111; min-width: 90px; }
+        .bank-num { color: #111; font-family: 'Courier New', monospace; font-size: 10px; font-weight: 600; letter-spacing: 0.5px; }
+        .bank-meta { font-size: 8.5px; color: #999; margin-top: 2px; padding-left: 2px; }
 
         /* CONDITIONS */
         .conditions-block { flex: 1; }
@@ -211,13 +211,13 @@ export default function PrintPage({
         @media print {
           html, body { background: white; }
           .no-print { display: none !important; }
-          @page { size: A4 portrait; margin: 0 0 42px 0; }
+          @page { size: A4 portrait; margin: 0; }
           .page { margin: 0 !important; box-shadow: none !important; width: 210mm; }
-          .footer-bar { position: fixed; bottom: 0; left: 0; right: 0; }
           .bottom { break-inside: avoid; page-break-inside: avoid; }
           .bank-section { break-inside: avoid; page-break-inside: avoid; }
           .bank-currency-group { break-inside: avoid; page-break-inside: avoid; }
           .totals-wrap { break-inside: avoid; page-break-inside: avoid; }
+          .footer-bar { break-before: avoid; page-break-before: avoid; break-inside: avoid; page-break-inside: avoid; }
         }
       `}</style>
 

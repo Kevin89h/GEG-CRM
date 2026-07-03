@@ -304,13 +304,13 @@ export default function FacturePrintPage({
         @media print {
           html, body { background: white; }
           .no-print { display: none !important; }
-          @page { size: A4 portrait; margin: 0 0 42px 0; }
+          @page { size: A4 portrait; margin: 0; }
           .page { margin: 0 !important; box-shadow: none !important; width: 210mm; }
-          .footer-bar { position: fixed; bottom: 0; left: 0; right: 0; }
           .bottom { break-inside: avoid; page-break-inside: avoid; }
           .bank-section { break-inside: avoid; page-break-inside: avoid; }
           .bank-currency-group { break-inside: avoid; page-break-inside: avoid; }
           .totals-block { break-inside: avoid; page-break-inside: avoid; }
+          .footer-bar { break-before: avoid; page-break-before: avoid; break-inside: avoid; page-break-inside: avoid; }
         }
       `}</style>
 
