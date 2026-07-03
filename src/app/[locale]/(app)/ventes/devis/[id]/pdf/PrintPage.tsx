@@ -211,10 +211,13 @@ export default function PrintPage({
         @media print {
           html, body { background: white; }
           .no-print { display: none !important; }
-          @page { size: A4 portrait; margin: 0; }
+          @page { size: A4 portrait; margin: 0 0 42px 0; }
           .page { margin: 0 !important; box-shadow: none !important; width: 210mm; }
-          .bottom { page-break-inside: avoid; }
-          .totals-wrap { page-break-inside: avoid; }
+          .footer-bar { position: fixed; bottom: 0; left: 0; right: 0; }
+          .bottom { break-inside: avoid; page-break-inside: avoid; }
+          .bank-section { break-inside: avoid; page-break-inside: avoid; }
+          .bank-currency-group { break-inside: avoid; page-break-inside: avoid; }
+          .totals-wrap { break-inside: avoid; page-break-inside: avoid; }
         }
       `}</style>
 
@@ -249,20 +252,6 @@ export default function PrintPage({
               </div>
             </td></tr>
           </thead>
-
-          <tfoot className="doc-tfoot">
-            <tr><td>
-              <div className="footer-bar">
-                {phone && <div className="footer-item"><span>📞</span><strong>{phone}</strong></div>}
-                {phone && email && <div className="footer-divider" />}
-                {email && <div className="footer-item"><span>✉</span><strong>{email}</strong></div>}
-                {(phone || email) && website && <div className="footer-divider" />}
-                {website && <div className="footer-item"><span>🌐</span><strong>{website}</strong></div>}
-                {website && nif && <div className="footer-divider" />}
-                {nif && <div className="footer-item"><span style={{ opacity: .65, fontSize: "8.5px" }}>NIF</span><strong>{nif}</strong></div>}
-              </div>
-            </td></tr>
-          </tfoot>
 
           <tbody className="doc-tbody">
             <tr><td>
@@ -409,6 +398,16 @@ export default function PrintPage({
                     {paymentTerms && <div className="cond-item"><span className="cond-label">Paiement : </span>{paymentTerms}</div>}
                   </div>
                 )}
+              </div>
+
+              <div className="footer-bar">
+                {phone && <div className="footer-item"><span>📞</span><strong>{phone}</strong></div>}
+                {phone && email && <div className="footer-divider" />}
+                {email && <div className="footer-item"><span>✉</span><strong>{email}</strong></div>}
+                {(phone || email) && website && <div className="footer-divider" />}
+                {website && <div className="footer-item"><span>🌐</span><strong>{website}</strong></div>}
+                {website && nif && <div className="footer-divider" />}
+                {nif && <div className="footer-item"><span style={{ opacity: .65, fontSize: "8.5px" }}>NIF</span><strong>{nif}</strong></div>}
               </div>
 
             </td></tr>
