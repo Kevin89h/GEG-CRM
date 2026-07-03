@@ -118,22 +118,24 @@ export default function PrintPage({
         .btn-primary { background: ${color}; color: white; }
         .btn-secondary { background: #e5e5e5; color: #333; }
 
-        .page { width: 210mm; margin: 24px auto; background: white; box-shadow: 0 8px 40px rgba(0,0,0,.22); }
-        .page-table { width: 100%; border-collapse: collapse; }
-        .page-body { display: block; position: relative; z-index: 1; }
-        .watermark { position: fixed; width: 380px; height: 380px; left: 50%; top: 50%; transform: translate(-50%, -50%); opacity: 0.05; pointer-events: none; z-index: 0; object-fit: contain; }
+        /* ── LAYOUT PAGE ── */
+        .page { width: 210mm; margin: 24px auto; background: white; box-shadow: 0 8px 40px rgba(0,0,0,.22); position: relative; }
 
-        .stripe { height: 5px; background: linear-gradient(90deg, ${color} 0%, ${color}88 100%); flex-shrink: 0; }
+        /* Table principale pour répétition en-tête/pied à l'impression */
+        .doc-table { width: 100%; border-collapse: collapse; }
+        .doc-thead td, .doc-tfoot td, .doc-tbody td { padding: 0; border: none; }
+
+        .watermark { position: absolute; width: 380px; height: 380px; left: 50%; top: 50%; transform: translate(-50%, -50%); opacity: 0.05; pointer-events: none; z-index: 0; object-fit: contain; }
+
+        .stripe { height: 5px; background: linear-gradient(90deg, ${color} 0%, ${color}88 100%); }
 
         /* HEADER */
         .header { display: flex; justify-content: space-between; align-items: flex-start; padding: 22px 24px 18px; border-bottom: 1px solid #eee; }
         .tagline { font-size: 22px; font-weight: 900; color: ${color}; letter-spacing: -.5px; margin-bottom: 12px; }
         .co-detail { font-size: 9.5px; color: #666; line-height: 1.75; }
-        .co-detail a { color: ${color}; text-decoration: none; font-weight: 600; }
         .logo { height: 52px; object-fit: contain; display: block; margin-bottom: 8px; }
         .logo-initials { font-size: 28px; font-weight: 900; color: ${color}; letter-spacing: -1px; margin-bottom: 4px; }
         .co-name { font-size: 12px; font-weight: 800; color: #111; }
-        .co-addr { font-size: 9.5px; color: #666; line-height: 1.7; margin-top: 3px; }
 
         /* TITLE ROW */
         .title-row { display: flex; justify-content: space-between; align-items: flex-start; padding: 20px 24px 0; gap: 20px; }
@@ -143,11 +145,7 @@ export default function PrintPage({
         .doc-info { text-align: right; flex-shrink: 0; }
         .doc-label-text { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; color: #bbb; margin-bottom: 4px; }
         .doc-number { font-size: 30px; font-weight: 900; color: #111; letter-spacing: -1px; line-height: 1; }
-        .doc-type-badge {
-          display: inline-block; margin-top: 7px;
-          padding: 4px 12px; border-radius: 20px; font-size: 10px; font-weight: 700;
-          background: ${color}18; color: ${color};
-        }
+        .doc-type-badge { display: inline-block; margin-top: 7px; padding: 4px 12px; border-radius: 20px; font-size: 10px; font-weight: 700; background: ${color}18; color: ${color}; }
 
         /* META BAR */
         .meta-bar { display: flex; margin: 18px 24px; border-radius: 8px; overflow: hidden; border: 1px solid #eee; background: #fafafa; }
@@ -156,16 +154,16 @@ export default function PrintPage({
         .meta-cell label { display: block; font-size: 8px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px; color: ${color}; margin-bottom: 5px; }
         .meta-cell span { font-size: 11.5px; font-weight: 700; color: #111; }
 
-        /* TABLE */
+        /* PRODUCTS TABLE — scoped pour éviter conflit avec doc-table */
         .table-wrap { padding: 0 24px; }
-        table { width: 100%; border-collapse: collapse; font-size: 10.5px; }
-        thead tr { background: ${color}; }
-        thead th { padding: 10px 11px; text-align: left; font-size: 8.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: white; }
+        .products-table { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+        .products-table thead tr { background: ${color}; }
+        .products-table thead th { padding: 10px 11px; text-align: left; font-size: 8.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: white; }
         .th-r { text-align: right; }
-        tbody tr { border-bottom: 1px solid #d0d0d0; }
-        tbody tr:nth-child(even) { background: #f5f5f5; }
-        tbody tr:last-child { border-bottom: 2px solid #bbb; }
-        tbody td { padding: 10px 11px; vertical-align: top; }
+        .products-table tbody tr { border-bottom: 1px solid #d0d0d0; }
+        .products-table tbody tr:nth-child(even) { background: #f5f5f5; }
+        .products-table tbody tr:last-child { border-bottom: 2px solid #bbb; }
+        .products-table tbody td { padding: 10px 11px; vertical-align: top; }
         .td-r { text-align: right; }
         .td-desc { font-weight: 600; color: #111; line-height: 1.45; }
         .td-muted { font-size: 9px; color: #999; margin-top: 2px; }
@@ -184,7 +182,7 @@ export default function PrintPage({
         .sig-box { flex: 1; border-top: 1px solid #ccc; padding-top: 8px; font-size: 10px; color: #aaa; text-align: center; }
 
         /* BOTTOM */
-        .bottom { display: flex; justify-content: space-between; align-items: flex-start; padding: 20px 24px 24px; gap: 24px; flex: 1; margin-top: 8px; }
+        .bottom { display: flex; justify-content: space-between; align-items: flex-start; padding: 20px 24px 24px; gap: 24px; margin-top: 8px; }
 
         /* BANK */
         .bank-section { flex: 1; }
@@ -204,7 +202,7 @@ export default function PrintPage({
         .cond-label { font-weight: 700; color: #333; }
 
         /* FOOTER */
-        .footer-bar { background: ${color}; padding: 11px 24px; display: flex; justify-content: center; align-items: center; gap: 0; flex-shrink: 0; flex-wrap: wrap; }
+        .footer-bar { background: ${color}; padding: 11px 24px; display: flex; justify-content: center; align-items: center; gap: 0; flex-wrap: wrap; }
         .footer-item { display: flex; align-items: center; gap: 5px; color: rgba(255,255,255,.9); font-size: 9.5px; padding: 0 14px; }
         .footer-item strong { color: white; }
         .footer-divider { width: 1px; height: 18px; background: rgba(255,255,255,.25); }
@@ -214,9 +212,6 @@ export default function PrintPage({
           .no-print { display: none !important; }
           @page { size: A4 portrait; margin: 0; }
           .page { margin: 0 !important; box-shadow: none !important; width: 210mm; }
-          .page-header-repeat { display: table-header-group; }
-          .page-footer-repeat { display: table-footer-group; }
-          .page-body-rows { display: table-row-group; }
           .bottom { page-break-inside: avoid; }
           .totals-wrap { page-break-inside: avoid; }
         }
@@ -230,9 +225,9 @@ export default function PrintPage({
       <div className="page">
         {logoUrl && <img src={logoUrl} alt="" className="watermark" />}
 
-        <table className="page-table">
-          {/* HEADER — répété sur chaque page à l'impression */}
-          <thead className="page-header-repeat">
+        {/* table externe : thead/tfoot se répètent automatiquement à l'impression */}
+        <table className="doc-table">
+          <thead className="doc-thead">
             <tr><td>
               <div className="stripe" />
               <div className="header">
@@ -252,202 +247,169 @@ export default function PrintPage({
             </td></tr>
           </thead>
 
-          <tbody className="page-body-rows"><tr><td>
-          <div className="page-body">
-          {/* TITLE ROW */}
-          <div className="title-row">
-            <div>
-              <div className="bill-to-label">Adressé à</div>
-              <div className="bill-to-name">{accountName}</div>
-              {accountCountry && <div className="bill-to-detail">{accountCountry}</div>}
-            </div>
-            <div className="doc-info">
-              <div className="doc-label-text">{docLabel}</div>
-              <div className="doc-number">{number}</div>
-              <div><span className="doc-type-badge">{docLabel}</span></div>
-            </div>
-          </div>
-
-          {/* META BAR */}
-          <div className="meta-bar">
-            <div className="meta-cell">
-              <label>Date</label>
-              <span>{formatDate(createdAt, locale)}</span>
-            </div>
-            {validUntil && (
-              <div className="meta-cell">
-                <label>Valide jusqu&apos;au</label>
-                <span>{formatDate(validUntil, locale)}</span>
-              </div>
-            )}
-            {salespersonName && (
-              <div className="meta-cell">
-                <label>Vendeur</label>
-                <span>{salespersonName}</span>
-              </div>
-            )}
-            <div className="meta-cell">
-              <label>Devise</label>
-              <span>{currency}</span>
-            </div>
-          </div>
-
-          {/* TABLE */}
-          <div className="table-wrap">
-            {docType !== "bon-livraison" ? (
-              <table>
-                <thead>
-                  <tr>
-                    <th style={{ width: "44%" }}>Description</th>
-                    <th className="th-r" style={{ width: "12%" }}>Qté</th>
-                    <th className="th-r" style={{ width: "20%" }}>Prix unitaire</th>
-                    {tvaRate > 0 && <th className="th-r" style={{ width: "10%" }}>TVA</th>}
-                    <th className="th-r" style={{ width: tvaRate > 0 ? "14%" : "24%" }}>Montant</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.map(l => {
-                    const sub = l.quantity * l.unit_price * (1 - (l.discount ?? 0) / 100)
-                    const lineTva = l.tva_rate ?? tvaRate
-                    return (
-                      <tr key={l.id}>
-                        <td>
-                          <div className="td-desc">{l.description}</div>
-                          {l.discount > 0 && <div className="td-muted">Remise {l.discount}%</div>}
-                        </td>
-                        <td className="td-r">{fmt(l.quantity, 2)} U</td>
-                        <td className="td-r">{fmt(l.unit_price, 0)} {cur}</td>
-                        {tvaRate > 0 && <td className="td-r" style={{ fontSize: "9px", color: "#999" }}>{lineTva > 0 ? `${lineTva}%` : "—"}</td>}
-                        <td className="td-r" style={{ fontWeight: 700 }}>{fmt(sub, 0)} {cur}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            ) : (
-              <table>
-                <thead>
-                  <tr>
-                    <th style={{ width: "55%" }}>Description</th>
-                    <th className="th-r" style={{ width: "20%" }}>Quantité</th>
-                    <th style={{ width: "25%" }}>Observations</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.map(l => (
-                    <tr key={l.id}>
-                      <td><div className="td-desc">{l.description}</div></td>
-                      <td className="td-r">{fmt(l.quantity, 2)} U</td>
-                      <td></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-
-          {/* TOTALS */}
-          {docType !== "bon-livraison" && (
-            <div className="totals-wrap">
-              <table className="totals-table">
-                <tbody>
-                  <tr>
-                    <td>Montant hors taxes</td>
-                    <td style={{ textAlign: "right" }}>{fmt(totalHT, 0)} {cur}</td>
-                  </tr>
-                  {tvaAmt > 0 && (
-                    <tr>
-                      <td>TVA {tvaRate}%</td>
-                      <td style={{ textAlign: "right" }}>{fmt(tvaAmt, 0)} {cur}</td>
-                    </tr>
-                  )}
-                  <tr>
-                    <td className="tot-ttc">Total</td>
-                    <td className="tot-ttc" style={{ textAlign: "right" }}>{fmt(totalTTC, 0)} {cur}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {notes && <div className="notes-box">{notes}</div>}
-
-          {docType === "bon-livraison" && (
-            <div className="sig-area">
-              <div className="sig-box">Signature livreur<br /><br /><br /></div>
-              <div className="sig-box">Signature client<br /><br /><br /></div>
-            </div>
-          )}
-
-          {/* BOTTOM: BANK + CONDITIONS */}
-          <div className="bottom">
-            {/* BANK ACCOUNTS */}
-            {docType !== "bon-livraison" && (
-              <div className="bank-section">
-                <div className="bank-section-title">Coordonnées bancaires</div>
-                {Array.from(new Set(BANK_ACCOUNTS.map(a => a.currency))).map(cur => (
-                  <div className="bank-currency-group" key={cur}>
-                    <div className="bank-currency-label">{cur}</div>
-                    {BANK_ACCOUNTS.filter(a => a.currency === cur).map((acc, i) => (
-                      <div className="bank-row" key={i}>
-                        <span className="bank-inst">{acc.institution}</span>
-                        <span className="bank-num">{acc.account_number}</span>
-                        {(acc.swift || acc.iban) && (
-                          <span className="bank-meta" style={{ display: "inline", marginLeft: 8 }}>
-                            {acc.swift && <>SWIFT : {acc.swift}</>}
-                            {acc.swift && acc.iban && "  ·  "}
-                            {acc.iban && <>IBAN : {acc.iban}</>}
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ))}
-                {bankMeta.tva_key && (
-                  <div className="bank-meta">Clé TVA : {bankMeta.tva_key}</div>
-                )}
-              </div>
-            )}
-
-            {/* CONDITIONS */}
-            {(deliveryAddress || paymentTerms) && (
-              <div className="conditions-block">
-                <div className="conditions-title">Conditions</div>
-                {deliveryAddress && (
-                  <div className="cond-item"><span className="cond-label">Livraison : </span>{deliveryAddress}</div>
-                )}
-                {paymentTerms && (
-                  <div className="cond-item"><span className="cond-label">Paiement : </span>{paymentTerms}</div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-          </td></tr>
-          </tbody>
-
-          {/* FOOTER — répété en bas de chaque page à l'impression */}
-          <tfoot className="page-footer-repeat">
+          <tfoot className="doc-tfoot">
             <tr><td>
               <div className="footer-bar">
-                {phone && (
-                  <div className="footer-item"><span>📞</span><strong>{phone}</strong></div>
-                )}
+                {phone && <div className="footer-item"><span>📞</span><strong>{phone}</strong></div>}
                 {phone && email && <div className="footer-divider" />}
-                {email && (
-                  <div className="footer-item"><span>✉</span><strong>{email}</strong></div>
-                )}
+                {email && <div className="footer-item"><span>✉</span><strong>{email}</strong></div>}
                 {(phone || email) && website && <div className="footer-divider" />}
-                {website && (
-                  <div className="footer-item"><span>🌐</span><strong>{website}</strong></div>
-                )}
+                {website && <div className="footer-item"><span>🌐</span><strong>{website}</strong></div>}
                 {website && nif && <div className="footer-divider" />}
-                {nif && (
-                  <div className="footer-item"><span style={{ opacity: .65, fontSize: "8.5px" }}>NIF</span><strong>{nif}</strong></div>
-                )}
+                {nif && <div className="footer-item"><span style={{ opacity: .65, fontSize: "8.5px" }}>NIF</span><strong>{nif}</strong></div>}
               </div>
             </td></tr>
           </tfoot>
+
+          <tbody className="doc-tbody">
+            <tr><td>
+
+              {/* TITLE ROW */}
+              <div className="title-row">
+                <div>
+                  <div className="bill-to-label">Adressé à</div>
+                  <div className="bill-to-name">{accountName}</div>
+                  {accountCountry && <div className="bill-to-detail">{accountCountry}</div>}
+                </div>
+                <div className="doc-info">
+                  <div className="doc-label-text">{docLabel}</div>
+                  <div className="doc-number">{number}</div>
+                  <div><span className="doc-type-badge">{docLabel}</span></div>
+                </div>
+              </div>
+
+              {/* META BAR */}
+              <div className="meta-bar">
+                <div className="meta-cell"><label>Date</label><span>{formatDate(createdAt, locale)}</span></div>
+                {validUntil && <div className="meta-cell"><label>Valide jusqu&apos;au</label><span>{formatDate(validUntil, locale)}</span></div>}
+                {salespersonName && <div className="meta-cell"><label>Vendeur</label><span>{salespersonName}</span></div>}
+                <div className="meta-cell"><label>Devise</label><span>{currency}</span></div>
+              </div>
+
+              {/* PRODUCTS TABLE */}
+              <div className="table-wrap">
+                {docType !== "bon-livraison" ? (
+                  <table className="products-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: "44%" }}>Description</th>
+                        <th className="th-r" style={{ width: "12%" }}>Qté</th>
+                        <th className="th-r" style={{ width: "20%" }}>Prix unitaire</th>
+                        {tvaRate > 0 && <th className="th-r" style={{ width: "10%" }}>TVA</th>}
+                        <th className="th-r" style={{ width: tvaRate > 0 ? "14%" : "24%" }}>Montant</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lines.map(l => {
+                        const sub = l.quantity * l.unit_price * (1 - (l.discount ?? 0) / 100)
+                        const lineTva = l.tva_rate ?? tvaRate
+                        return (
+                          <tr key={l.id}>
+                            <td>
+                              <div className="td-desc">{l.description}</div>
+                              {l.discount > 0 && <div className="td-muted">Remise {l.discount}%</div>}
+                            </td>
+                            <td className="td-r">{fmt(l.quantity, 2)} U</td>
+                            <td className="td-r">{fmt(l.unit_price, 0)} {cur}</td>
+                            {tvaRate > 0 && <td className="td-r" style={{ fontSize: "9px", color: "#999" }}>{lineTva > 0 ? `${lineTva}%` : "—"}</td>}
+                            <td className="td-r" style={{ fontWeight: 700 }}>{fmt(sub, 0)} {cur}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                ) : (
+                  <table className="products-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: "55%" }}>Description</th>
+                        <th className="th-r" style={{ width: "20%" }}>Quantité</th>
+                        <th style={{ width: "25%" }}>Observations</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lines.map(l => (
+                        <tr key={l.id}>
+                          <td><div className="td-desc">{l.description}</div></td>
+                          <td className="td-r">{fmt(l.quantity, 2)} U</td>
+                          <td></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+
+              {/* TOTALS */}
+              {docType !== "bon-livraison" && (
+                <div className="totals-wrap">
+                  <table className="totals-table">
+                    <tbody>
+                      <tr>
+                        <td>Montant hors taxes</td>
+                        <td style={{ textAlign: "right" }}>{fmt(totalHT, 0)} {cur}</td>
+                      </tr>
+                      {tvaAmt > 0 && (
+                        <tr>
+                          <td>TVA {tvaRate}%</td>
+                          <td style={{ textAlign: "right" }}>{fmt(tvaAmt, 0)} {cur}</td>
+                        </tr>
+                      )}
+                      <tr>
+                        <td className="tot-ttc">Total</td>
+                        <td className="tot-ttc" style={{ textAlign: "right" }}>{fmt(totalTTC, 0)} {cur}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {notes && <div className="notes-box">{notes}</div>}
+
+              {docType === "bon-livraison" && (
+                <div className="sig-area">
+                  <div className="sig-box">Signature livreur<br /><br /><br /></div>
+                  <div className="sig-box">Signature client<br /><br /><br /></div>
+                </div>
+              )}
+
+              {/* BOTTOM: BANK + CONDITIONS */}
+              <div className="bottom">
+                {docType !== "bon-livraison" && (
+                  <div className="bank-section">
+                    <div className="bank-section-title">Coordonnées bancaires</div>
+                    {Array.from(new Set(BANK_ACCOUNTS.map(a => a.currency))).map(c => (
+                      <div className="bank-currency-group" key={c}>
+                        <div className="bank-currency-label">{c}</div>
+                        {BANK_ACCOUNTS.filter(a => a.currency === c).map((acc, i) => (
+                          <div className="bank-row" key={i}>
+                            <span className="bank-inst">{acc.institution}</span>
+                            <span className="bank-num">{acc.account_number}</span>
+                            {(acc.swift || acc.iban) && (
+                              <span className="bank-meta" style={{ display: "inline", marginLeft: 8 }}>
+                                {acc.swift && <>SWIFT : {acc.swift}</>}
+                                {acc.swift && acc.iban && "  ·  "}
+                                {acc.iban && <>IBAN : {acc.iban}</>}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                    {bankMeta.tva_key && <div className="bank-meta">Clé TVA : {bankMeta.tva_key}</div>}
+                  </div>
+                )}
+                {(deliveryAddress || paymentTerms) && (
+                  <div className="conditions-block">
+                    <div className="conditions-title">Conditions</div>
+                    {deliveryAddress && <div className="cond-item"><span className="cond-label">Livraison : </span>{deliveryAddress}</div>}
+                    {paymentTerms && <div className="cond-item"><span className="cond-label">Paiement : </span>{paymentTerms}</div>}
+                  </div>
+                )}
+              </div>
+
+            </td></tr>
+          </tbody>
         </table>
       </div>
     </>
