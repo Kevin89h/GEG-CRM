@@ -54,6 +54,13 @@ export default async function DevisDetailPage({ params }: { params: Promise<{ lo
     .single()
   if (warehouseData) firstWarehouse = warehouseData
 
+  const { data: allProducts } = await supabase
+    .from("products")
+    .select("id, name, reference, sale_price, unit:units(name)")
+    .eq("is_active", true)
+    .eq("can_be_sold", true)
+    .order("name")
+
   // Linked documents count
   const [{ count: invoiceCount, data: invoiceData }, { count: deliveryCount }] = await Promise.all([
     supabase.from("invoices").select("id", { count: "exact" }).eq("order_id", id),
@@ -75,6 +82,14 @@ export default async function DevisDetailPage({ params }: { params: Promise<{ lo
       })),
   }
 
+  const typedProducts = ((allProducts ?? []) as Record<string, unknown>[]).map(p => ({
+    id: p.id as string,
+    name: p.name as string,
+    reference: (p.reference as string | null) ?? null,
+    sale_price: (p.sale_price as number | null) ?? null,
+    unit: Array.isArray(p.unit) ? (p.unit[0] as { name: string } | null) ?? null : (p.unit as { name: string } | null),
+  }))
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return <DevisDetailClient order={typedOrder as any} locale={locale} docSettings={docSettings ?? {}} stockByProduct={stockByProduct} firstWarehouse={firstWarehouse} invoiceCount={invoiceCount ?? 0} firstInvoiceId={firstInvoiceId} deliveryCount={deliveryCount ?? 0} />
+  return <DevisDetailClient order={typedOrder as any} locale={locale} docSettings={docSettings ?? {}} stockByProduct={stockByProduct} firstWarehouse={firstWarehouse} invoiceCount={invoiceCount ?? 0} firstInvoiceId={firstInvoiceId} deliveryCount={deliveryCount ?? 0} allProducts={typedProducts} />
 }

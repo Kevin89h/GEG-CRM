@@ -39,8 +39,16 @@ interface Order {
   lines: Line[]
 }
 
+interface ProductOption {
+  id: string
+  name: string
+  reference: string | null
+  sale_price: number | null
+  unit: { name: string } | null
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-interface Props { order: Order; locale: string; docSettings?: Record<string, any>; stockByProduct: Record<string, number>; firstWarehouse: { id: string; name: string } | null; invoiceCount?: number; firstInvoiceId?: string | null; deliveryCount?: number }
+interface Props { order: Order; locale: string; docSettings?: Record<string, any>; stockByProduct: Record<string, number>; firstWarehouse: { id: string; name: string } | null; invoiceCount?: number; firstInvoiceId?: string | null; deliveryCount?: number; allProducts?: ProductOption[] }
 
 function getStepIndex(status: string) {
   if (status === "draft") return 0
@@ -49,13 +57,14 @@ function getStepIndex(status: string) {
   return -1 // cancelled
 }
 
-export default function DevisDetailClient({ order, locale, docSettings = {}, stockByProduct, firstWarehouse, invoiceCount = 0, firstInvoiceId = null, deliveryCount = 0 }: Props) {
+export default function DevisDetailClient({ order, locale, docSettings = {}, stockByProduct, firstWarehouse, invoiceCount = 0, firstInvoiceId = null, deliveryCount = 0, allProducts = [] }: Props) {
   const t = useTranslations("devis")
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [activeTab, setActiveTab] = useState<"lines" | "other" | "notes">("lines")
   const [tva, setTva] = useState<boolean>(order.tva ?? false)
   const [lines, setLines] = useState<Line[]>(order.lines)
+  const [productSearch, setProductSearch] = useState<Record<string, string>>({})
   const isDraft = order.status === "draft"
 
   const PAYMENT_TERMS_LABELS: Record<string, string> = {
@@ -139,6 +148,25 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
       sequence: seq,
     }]).select().single()
     if (data) setLines(prev => [...prev, { ...data, product: null, unit: null }])
+  }
+
+  async function selectProduct(lineId: string, productId: string) {
+    const p = allProducts.find(p => p.id === productId)
+    if (!p) return
+    setProductSearch(prev => ({ ...prev, [lineId]: "" }))
+    setLines(prev => prev.map(l => l.id === lineId ? {
+      ...l,
+      description: p.name,
+      unit_price: p.sale_price ?? l.unit_price,
+      product: { name: p.name, reference: p.reference },
+      unit: p.unit,
+    } : l))
+    const { db } = getCompanyClientBrowser()
+    await db.from("sales_order_lines").update({
+      product_id: productId,
+      description: p.name,
+      unit_price: p.sale_price ?? 0,
+    }).eq("id", lineId)
   }
 
   async function confirm() {
@@ -412,11 +440,42 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                   <tr key={l.id} className={l.tva_exempt ? "bg-gray-50/50" : ""}>
                     <td className="px-4 py-2">
                       {isDraft ? (
-                        <input
-                          className="w-full text-sm font-medium text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none py-0.5"
-                          defaultValue={l.description}
-                          onBlur={e => updateLine(l.id, "description", e.target.value)}
-                        />
+                        <div className="relative">
+                          <input
+                            className="w-full text-sm font-medium text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none py-0.5"
+                            value={productSearch[l.id] !== undefined ? productSearch[l.id] : l.description}
+                            onChange={e => setProductSearch(prev => ({ ...prev, [l.id]: e.target.value }))}
+                            onBlur={e => {
+                              if (!productSearch[l.id]) return
+                              updateLine(l.id, "description", e.target.value)
+                              setTimeout(() => setProductSearch(prev => { const n = { ...prev }; delete n[l.id]; return n }), 200)
+                            }}
+                            placeholder="Description ou produit..."
+                          />
+                          {productSearch[l.id] && productSearch[l.id].length > 0 && (() => {
+                            const q = productSearch[l.id].toLowerCase()
+                            const matches = allProducts.filter(p =>
+                              p.name.toLowerCase().includes(q) || (p.reference ?? "").toLowerCase().includes(q)
+                            ).slice(0, 8)
+                            return matches.length > 0 ? (
+                              <div className="absolute z-20 left-0 top-full mt-1 w-80 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                                {matches.map(p => (
+                                  <button
+                                    key={p.id}
+                                    onMouseDown={() => selectProduct(l.id, p.id)}
+                                    className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center justify-between gap-2"
+                                  >
+                                    <span className="font-medium text-gray-900 truncate">{p.name}</span>
+                                    <span className="text-gray-400 text-xs shrink-0">
+                                      {p.sale_price != null ? `${formatNumber(p.sale_price)}` : ""}
+                                      {p.reference ? ` · ${p.reference}` : ""}
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            ) : null
+                          })()}
+                        </div>
                       ) : (
                         <>
                           <p className="font-medium text-gray-900">{l.description}</p>
