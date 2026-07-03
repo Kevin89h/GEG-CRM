@@ -87,56 +87,44 @@ export default function NouvelAchatClient({ products, locale }: Props) {
 
     setSaving(true)
     setError(null)
-    const { supabase, db } = getCompanyClientBrowser()
+    const { supabase } = getCompanyClientBrowser()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setError(t("errorNotAuthenticated")); setSaving(false); return }
 
-    // Générer un numéro unique basé sur timestamp pour éviter les doublons
-    const { count } = await db
-      .from("purchase_orders")
-      .select("id", { count: "exact", head: true })
-    const num = `PO-${new Date().getFullYear()}-${String((count ?? 0) + 1).padStart(4, "0")}-${Date.now().toString().slice(-4)}`
+    const costsToCreate: { type: string; label: string; amount: number; currency: string }[] = []
+    if (freight > 0) costsToCreate.push({ type: "transport_maritime", label: t("labelSeaFreight"), amount: freight, currency: form.currency })
+    if (insurance > 0) costsToCreate.push({ type: "assurance", label: t("labelSeaInsurance"), amount: insurance, currency: form.currency })
 
-    const { data: order, error: err } = await db
-      .from("purchase_orders")
-      .insert([{
-        number: num,
-        supplier_name: form.supplier_name,
-        currency: form.currency,
-        incoterm: form.incoterm,
-        order_date: form.order_date,
-        expected_date: form.expected_date || null,
-        notes: form.notes || null,
+    const res = await fetch("/api/achats", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        order: {
+          supplier_name: form.supplier_name,
+          currency: form.currency,
+          incoterm: form.incoterm,
+          order_date: form.order_date,
+          expected_date: form.expected_date || null,
+          notes: form.notes || null,
+          freight_cost: freight,
+          insurance_cost: insurance,
+          global_discount_pct: discountPct,
+        },
+        lines: lines.map((l, i) => ({
+          product_id: l.product_id || null,
+          description: l.description,
+          quantity: parseFloat(l.quantity) || 1,
+          fob_unit_price: parseFloat(l.unit_price) || 0,
+          position: i,
+        })),
+        costs: costsToCreate,
         user_id: user.id,
-        freight_cost: freight,
-        insurance_cost: insurance,
-        global_discount_pct: discountPct,
-      }])
-      .select("id")
-      .single()
+      }),
+    })
+    const json = await res.json()
+    if (!res.ok) { setError(json.error ?? t("errorGeneric")); setSaving(false); return }
 
-    if (err || !order) { setError(err?.message ?? t("errorGeneric")); setSaving(false); return }
-
-    await db.from("purchase_order_lines").insert(
-      lines.map((l, i) => ({
-        order_id: order.id,
-        product_id: l.product_id || null,
-        description: l.description,
-        quantity: parseFloat(l.quantity) || 1,
-        fob_unit_price: parseFloat(l.unit_price) || 0,
-        position: i,
-      }))
-    )
-
-    // Créer automatiquement les purchase_costs pour fret et assurance
-    const costsToCreate = []
-    if (freight > 0) costsToCreate.push({ order_id: order.id, type: "transport_maritime", label: t("labelSeaFreight"), amount: freight, currency: form.currency })
-    if (insurance > 0) costsToCreate.push({ order_id: order.id, type: "assurance", label: t("labelSeaInsurance"), amount: insurance, currency: form.currency })
-    if (costsToCreate.length > 0) {
-      await db.from("purchase_costs").insert(costsToCreate)
-    }
-
-    router.push(`/${locale}/achats/${order.id}`)
+    router.push(`/${locale}/achats/${json.id}`)
   }
 
   return (

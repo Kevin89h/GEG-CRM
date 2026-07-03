@@ -131,51 +131,11 @@ export default function NouveauMouvementClient({ warehouses, products, stockLeve
       return
     }
 
-    // Pour ajustement: la quantité = nouvelle valeur absolue, on calcule le delta
-    if (type === "adjustment") {
-      if (!form.to_warehouse_id) return
-      setSaving(true)
-      setError(null)
+    const { supabase } = getCompanyClientBrowser()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setError(t("errorNotAuthenticated")); setSaving(false); return }
 
-      const { supabase, db } = getCompanyClientBrowser()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { setError(t("errorNotAuthenticated")); setSaving(false); return }
-
-      // Lire stock actuel
-      const { data: level } = await db.from("stock_levels")
-        .select("quantity")
-        .eq("product_id", form.product_id)
-        .eq("warehouse_id", form.to_warehouse_id)
-        .maybeSingle()
-
-      const currentQty = level?.quantity ?? 0
-      const delta = qty - currentQty
-
-      if (delta !== 0) {
-        const { error: moveErr } = await db.from("stock_moves").insert([{
-          type: "adjustment",
-          product_id: form.product_id,
-          quantity: Math.abs(delta),
-          notes: form.note || `Ajustement: ${currentQty} → ${qty}`,
-          to_warehouse_id: form.to_warehouse_id,
-          from_warehouse_id: null,
-          user_id: user.id,
-        }])
-        if (moveErr) { setError(moveErr.message); setSaving(false); return }
-
-        await db.from("stock_levels").upsert({
-          product_id: form.product_id,
-          warehouse_id: form.to_warehouse_id,
-          quantity: qty,
-        }, { onConflict: "product_id,warehouse_id" })
-      }
-
-      router.push(`/${locale}/stock`)
-      router.refresh()
-      return
-    }
-
-    if (qty <= 0) {
+    if (type !== "adjustment" && qty <= 0) {
       setError("La quantité doit être supérieure à 0")
       return
     }
@@ -183,23 +143,22 @@ export default function NouveauMouvementClient({ warehouses, products, stockLeve
     setSaving(true)
     setError(null)
 
-    const { supabase, db } = getCompanyClientBrowser()
-    const payload: Record<string, unknown> = {
-      type,
-      product_id: form.product_id,
-      quantity: qty,
-      notes: form.note || null,
-      from_warehouse_id: cfg.needsFrom ? form.from_warehouse_id : null,
-      to_warehouse_id: cfg.needsTo ? form.to_warehouse_id : null,
-    }
-
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setError(t("errorNotAuthenticated")); setSaving(false); return }
-    payload.user_id = user.id
-
-    const { error: err } = await db.from("stock_moves").insert([payload])
-    if (err) {
-      setError(err.message)
+    const res = await fetch("/api/stock/mouvement", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type,
+        product_id: form.product_id,
+        quantity: qty,
+        notes: form.note || null,
+        from_warehouse_id: cfg.needsFrom ? form.from_warehouse_id : null,
+        to_warehouse_id: cfg.needsTo ? form.to_warehouse_id : null,
+        user_id: user.id,
+      }),
+    })
+    const json = await res.json()
+    if (!res.ok) {
+      setError(json.error ?? "Erreur lors de l'enregistrement")
       setSaving(false)
       return
     }

@@ -4,6 +4,7 @@ import { useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { Save, Search, CheckCircle, AlertTriangle } from "lucide-react"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
+import { useParams } from "next/navigation"
 
 interface Product {
   id: string
@@ -31,6 +32,7 @@ interface Props {
 
 export default function InventaireClient({ products, warehouses, levels }: Props) {
   const router = useRouter()
+  const params = useParams()
 
   // Build initial map: productId -> warehouseId -> quantity
   const initialMap = useMemo(() => {
@@ -90,42 +92,44 @@ export default function InventaireClient({ products, warehouses, levels }: Props
     setSaving(true)
     setError(null)
 
-    const { supabase, db } = getCompanyClientBrowser()
+    const { supabase } = getCompanyClientBrowser()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setError("Non authentifié"); setSaving(false); return }
 
+    const adjustments: { product_id: string; warehouse_id: string; newQuantity: number; currentQuantity: number }[] = []
     for (const p of products) {
       for (const w of warehouses) {
         const newQty = parseFloat(values[p.id]?.[w.id] ?? "0") || 0
         const oldQty = initialMap[p.id]?.[w.id] ?? 0
-        if (newQty === oldQty) continue
-
-        const delta = newQty - oldQty
-
-        // Insert stock_move
-        await db.from("stock_moves").insert([{
-          type: "adjustment",
-          product_id: p.id,
-          quantity: Math.abs(delta),
-          notes: `Inventaire: ${oldQty} → ${newQty}`,
-          to_warehouse_id: w.id,
-          from_warehouse_id: null,
-          user_id: user.id,
-        }])
-
-        // Upsert stock_levels
-        await db.from("stock_levels").upsert({
-          product_id: p.id,
-          warehouse_id: w.id,
-          quantity: newQty,
-        }, { onConflict: "product_id,warehouse_id" })
+        if (newQty !== oldQty) {
+          adjustments.push({ product_id: p.id, warehouse_id: w.id, newQuantity: newQty, currentQuantity: oldQty })
+        }
       }
+    }
+
+    if (adjustments.length === 0) {
+      setSaving(false)
+      setSaved(true)
+      return
+    }
+
+    const res = await fetch("/api/inventaire/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ adjustments, user_id: user.id }),
+    })
+    const json = await res.json()
+    if (!res.ok) {
+      setError(json.error ?? "Erreur lors de la sauvegarde")
+      setSaving(false)
+      return
     }
 
     setSaving(false)
     setSaved(true)
     router.refresh()
-    setTimeout(() => router.push(`/${location.pathname.split("/")[1]}/stock`), 1200)
+    const locale = params.locale as string
+    setTimeout(() => router.push(`/${locale}/stock`), 1200)
   }
 
   return (

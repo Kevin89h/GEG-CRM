@@ -115,8 +115,9 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
 
   async function cancelOrder() {
     if (!confirm(t("confirmCancel"))) return
-    const { db } = getCompanyClientBrowser()
-    await db.from("purchase_orders").update({ status: "cancelled" }).eq("id", order.id)
+    const res = await fetch(`/api/achats/${order.id}/cancel`, { method: "POST" })
+    const json = await res.json()
+    if (!res.ok) { alert(json.error ?? "Erreur lors de l'annulation"); return }
     router.push(`/${locale}/achats`)
   }
 
@@ -149,24 +150,33 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
 
   async function addCost() {
     if (!newCost.amount) return
-    const { db } = getCompanyClientBrowser()
-    const { data } = await db.from("purchase_costs").insert([{
-      order_id: order.id,
-      type: newCost.type,
-      label: newCost.label,
-      amount: parseFloat(newCost.amount),
-      currency: newCost.currency,
-    }]).select("*").single()
-    if (data) {
-      setCosts(prev => [...prev, data as Cost])
+    const res = await fetch(`/api/achats/${order.id}/costs`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: newCost.type,
+        label: newCost.label,
+        amount: parseFloat(newCost.amount),
+        currency: newCost.currency,
+      }),
+    })
+    const json = await res.json()
+    if (res.ok) {
+      setCosts(prev => [...prev, json as Cost])
       setNewCost(f => ({ ...f, amount: "" }))
+    } else {
+      setStatusMsg(json.error ?? "Erreur ajout coût")
     }
   }
 
   async function removeCost(costId: string) {
-    const { db } = getCompanyClientBrowser()
-    await db.from("purchase_costs").delete().eq("id", costId)
-    setCosts(prev => prev.filter(c => c.id !== costId))
+    const res = await fetch(`/api/achats/costs/${costId}`, { method: "DELETE" })
+    if (res.ok) {
+      setCosts(prev => prev.filter(c => c.id !== costId))
+    } else {
+      const json = await res.json()
+      setStatusMsg(json.error ?? "Erreur suppression coût")
+    }
   }
 
   async function receive() {
@@ -175,7 +185,7 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
       return
     }
     setSaving(true)
-    const { supabase, db } = getCompanyClientBrowser()
+    const { supabase } = getCompanyClientBrowser()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setSaving(false); return }
 
@@ -198,22 +208,33 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
       }
     })
 
-    await db.from("stock_moves").insert(stockMoves)
+    const productUpdates = lines
+      .filter(l => l.product_id)
+      .map(l => {
+        const lineDiscount2 = orderFOBTotal > 0 ? discountTotal * (l.fob_total / orderFOBTotal) : 0
+        const lineFOBNet2 = l.fob_total - lineDiscount2
+        const allocated = orderFOBTotal > 0 ? totalExtra * (l.fob_total / orderFOBTotal) : 0
+        const landedUnit = l.quantity > 0 ? (lineFOBNet2 + allocated) / l.quantity : 0
+        const buyPriceGNF = showGNF && rateToGNF ? Math.round(landedUnit * rateToGNF) : landedUnit
+        return {
+          product_id: l.product_id!,
+          buy_price: buyPriceGNF,
+          buy_price_currency: showGNF ? "GNF" : order.currency,
+        }
+      })
 
-    for (const l of lines) {
-      if (!l.product_id) continue
-      const lineDiscount2 = orderFOBTotal > 0 ? discountTotal * (l.fob_total / orderFOBTotal) : 0
-      const lineFOBNet2 = l.fob_total - lineDiscount2
-      const allocated = orderFOBTotal > 0 ? totalExtra * (l.fob_total / orderFOBTotal) : 0
-      const landedUnit = l.quantity > 0 ? (lineFOBNet2 + allocated) / l.quantity : 0
-      const buyPriceGNF = showGNF && rateToGNF ? Math.round(landedUnit * rateToGNF) : landedUnit
-      await db.from("products").update({
-        buy_price: buyPriceGNF,
-        buy_price_currency: showGNF ? "GNF" : order.currency,
-      }).eq("id", l.product_id)
+    const res = await fetch(`/api/achats/${order.id}/receive`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ stockMoves, productUpdates }),
+    })
+    const json = await res.json()
+    if (!res.ok) {
+      setStatusMsg(json.error ?? "Erreur lors de la réception")
+      setSaving(false)
+      return
     }
 
-    await db.from("purchase_orders").update({ status: "received" }).eq("id", order.id)
     router.push(`/${locale}/achats`)
     router.refresh()
   }

@@ -378,49 +378,43 @@ export default function NouveauDevisClient({
     if (productLines.some(l => !l.description.trim())) { setError(t("chaqueLineProduitDescription")); return }
 
     setSaving(true); setError(null)
-    const { supabase, db } = getCompanyClientBrowser()
+    const { supabase } = getCompanyClientBrowser()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setError(t("nonAuthentifie")); setSaving(false); return }
 
-    // Générer un numéro unique basé sur le timestamp
-    const now = new Date()
-    const year = now.getFullYear()
-    const month = String(now.getMonth() + 1).padStart(2, "0")
-    const { count } = await db.from("sales_orders").select("*", { count: "exact", head: true })
-    const seq = String((count ?? 0) + 1).padStart(4, "0")
-    const number = `DEV-${year}-${month}-${seq}`
-
-    const payload: Record<string, unknown> = {
-      number,
-      account_id: form.account_id,
-      contact_id: form.contact_id || null,
-      salesperson_id: form.salesperson_id || null,
-      commission_rate: parseFloat(form.commission_rate) || null,
-      currency: form.currency,
-      valid_until: form.valid_until || null,
-      notes: form.notes || null,
-      payment_terms: form.payment_terms || null,
-      client_order_ref: form.client_order_ref || null,
-      date_order: form.date_order || null,
-      tva: form.tva,
-      user_id: user.id,
-    }
-
-    const { data: order, error: err } = await db.from("sales_orders").insert([payload]).select("id").single()
-    if (err || !order) { setError(err?.message ?? t("erreur")); setSaving(false); return }
-
-    const lineRows = lines.map((l, i) => {
-      return {
-        order_id: order.id, product_id: l.product_id || null, description: l.description,
-        quantity: parseFloat(l.quantity) || 1, unit_price: parseFloat(l.unit_price) || 0,
-        discount: parseFloat(l.discount) || 0, position: i, tva_exempt: l.tva_exempt,
-      }
+    const res = await fetch("/api/devis", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        order: {
+          account_id: form.account_id,
+          contact_id: form.contact_id || null,
+          salesperson_id: form.salesperson_id || null,
+          commission_rate: parseFloat(form.commission_rate) || null,
+          currency: form.currency,
+          valid_until: form.valid_until || null,
+          notes: form.notes || null,
+          payment_terms: form.payment_terms || null,
+          client_order_ref: form.client_order_ref || null,
+          date_order: form.date_order || null,
+          tva: form.tva,
+        },
+        lines: lines.map((l, i) => ({
+          product_id: l.product_id || null,
+          description: l.description,
+          quantity: parseFloat(l.quantity) || 1,
+          unit_price: parseFloat(l.unit_price) || 0,
+          discount: parseFloat(l.discount) || 0,
+          position: i,
+          tva_exempt: l.tva_exempt,
+        })),
+        user_id: user.id,
+      }),
     })
+    const json = await res.json()
+    if (!res.ok) { setError(json.error ?? t("erreur")); setSaving(false); return }
 
-    const { error: lineErr } = await db.from("sales_order_lines").insert(lineRows)
-    if (lineErr) { setError(lineErr.message); setSaving(false); return }
-
-    router.push(`/${locale}/ventes/devis/${order.id}`)
+    router.push(`/${locale}/ventes/devis/${json.id}`)
     router.refresh()
   }
 

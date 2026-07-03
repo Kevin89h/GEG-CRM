@@ -10,6 +10,7 @@ import { Modal } from "@/components/ui/Modal"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { formatDate } from "@/lib/utils"
 
+
 interface DNLine {
   id: string
   product_id: string | null
@@ -76,49 +77,21 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
 
     setSaving(true)
     setError(null)
-    const { supabase, db } = getCompanyClientBrowser()
+    const { supabase } = getCompanyClientBrowser()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setSaving(false); return }
 
-    // Sauvegarder les quantites ajustees sur le BL
-    for (const l of lines) {
-      await db.from("delivery_note_lines").update({ quantity: l.quantity, warehouse_id: l.warehouse_id }).eq("id", l.id)
+    const res = await fetch(`/api/bons-livraison/${dn.id}/confirm`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lines, userId: user.id }),
+    })
+    const json = await res.json()
+    if (!res.ok) {
+      setError(json.error ?? "Erreur lors de la confirmation")
+      setSaving(false)
+      return
     }
-
-    // Creer les mouvements de stock sortie et mettre a jour stock_levels
-    if (stockLines.length > 0) {
-      await db.from("stock_moves").insert(
-        stockLines.map(l => ({
-          type: "out",
-          product_id: l.product_id,
-          from_warehouse_id: l.warehouse_id,
-          quantity: l.quantity,
-          reference: dn.number,
-          notes: `Livraison ${dn.number}`,
-          user_id: user.id,
-        }))
-      )
-      // Mettre a jour stock_levels
-      for (const l of stockLines) {
-        const { data: level } = await db.from("stock_levels")
-          .select("quantity")
-          .eq("product_id", l.product_id!)
-          .eq("warehouse_id", l.warehouse_id!)
-          .maybeSingle()
-        const current = Number(level?.quantity ?? 0)
-        await db.from("stock_levels")
-          .upsert(
-            { product_id: l.product_id!, warehouse_id: l.warehouse_id!, quantity: Math.max(0, current - l.quantity) },
-            { onConflict: "product_id,warehouse_id" }
-          )
-      }
-    }
-
-    // Marquer le BL comme livré
-    await db.from("delivery_notes").update({
-      status: "delivered",
-      delivery_date: new Date().toISOString().split("T")[0],
-    }).eq("id", dn.id)
 
     setConfirmOpen(false)
     setSaving(false)
@@ -127,8 +100,12 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
 
   async function cancel() {
     if (!window.confirm("Annuler ce bon de livraison ?")) return
-    const { supabase, db } = getCompanyClientBrowser()
-    await db.from("delivery_notes").update({ status: "cancelled" }).eq("id", dn.id)
+    const res = await fetch(`/api/bons-livraison/${dn.id}/cancel`, { method: "POST" })
+    const json = await res.json()
+    if (!res.ok) {
+      alert(json.error ?? "Erreur lors de l'annulation")
+      return
+    }
     router.refresh()
   }
 

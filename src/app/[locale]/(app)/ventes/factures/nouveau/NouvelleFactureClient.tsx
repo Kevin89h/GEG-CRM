@@ -188,34 +188,13 @@ export default function NouvelleFactureClient({ locale, accounts, products, trea
   async function handleSave(status: "draft" | "sent") {
     if (!accountId) { setError(t("errorChooseClient")); return }
     setSaving(true); setError(null)
-    const { supabase, db } = getCompanyClientBrowser()
+    const { supabase } = getCompanyClientBrowser()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setError(t("errorNotAuthenticated")); setSaving(false); return }
-
-    const now = new Date()
-    const year = now.getFullYear()
-    const month = String(now.getMonth() + 1).padStart(2, "0")
-    const { count } = await db.from("invoices").select("*", { count: "exact", head: true })
-    const seq = String((count ?? 0) + 1).padStart(4, "0")
-    const number = `FAC-${year}-${month}-${seq}`
-
-    const { data: invoice, error: invErr } = await db.from("invoices").insert([{
-      number,
-      account_id: accountId,
-      currency,
-      status,
-      issue_date: issueDate,
-      due_date: dueDate || null,
-      notes: notes || null,
-      user_id: user.id,
-    }]).select("id").single()
-
-    if (invErr || !invoice) { setError(invErr?.message ?? t("errorGeneric")); setSaving(false); return }
 
     const lineRows = lines
       .filter(l => l.kind === "note" ? l.description.trim() : l.description.trim() || l.product_id)
       .map((l, i) => ({
-        invoice_id: invoice.id,
         product_id: l.product_id || null,
         description: l.description || "",
         quantity: l.kind === "note" ? 0 : parseFloat(l.quantity) || 1,
@@ -224,12 +203,26 @@ export default function NouvelleFactureClient({ locale, accounts, products, trea
         position: i,
       }))
 
-    if (lineRows.length > 0) {
-      const { error: lErr } = await db.from("invoice_lines").insert(lineRows)
-      if (lErr) { setError(lErr.message); setSaving(false); return }
-    }
+    const res = await fetch("/api/factures", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        invoice: {
+          account_id: accountId,
+          currency,
+          status,
+          issue_date: issueDate,
+          due_date: dueDate || null,
+          notes: notes || null,
+        },
+        lines: lineRows,
+        user_id: user.id,
+      }),
+    })
+    const json = await res.json()
+    if (!res.ok) { setError(json.error ?? t("errorGeneric")); setSaving(false); return }
 
-    router.push(`/${locale}/ventes/factures/${invoice.id}`)
+    router.push(`/${locale}/ventes/factures/${json.id}`)
   }
 
   return (

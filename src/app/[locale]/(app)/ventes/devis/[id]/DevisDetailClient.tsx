@@ -115,8 +115,11 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
   async function toggleTva() {
     const newVal = !tva
     setTva(newVal)
-    const { db } = getCompanyClientBrowser()
-    await db.from("sales_orders").update({ tva: newVal }).eq("id", order.id)
+    await fetch(`/api/devis/${order.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tva: newVal }),
+    })
   }
 
   async function toggleLineExempt(lineId: string) {
@@ -124,21 +127,30 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
     if (!line) return
     const newVal = !line.tva_exempt
     setLines(prev => prev.map(l => l.id === lineId ? { ...l, tva_exempt: newVal } : l))
-    const { db } = getCompanyClientBrowser()
-    await db.from("sales_order_lines").update({ tva_exempt: newVal }).eq("id", lineId)
+    await fetch(`/api/devis/${order.id}/lines/${lineId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tva_exempt: newVal }),
+    })
   }
 
   async function updateLine(lineId: string, field: "description" | "quantity" | "unit_price" | "discount", value: string) {
     const numVal = field !== "description" ? parseFloat(value) || 0 : 0
     setLines(prev => prev.map(l => l.id === lineId ? { ...l, [field]: field === "description" ? value : numVal } : l))
-    const { db } = getCompanyClientBrowser()
-    await db.from("sales_order_lines").update({ [field]: field === "description" ? value : numVal }).eq("id", lineId)
+    await fetch(`/api/devis/${order.id}/lines/${lineId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [field]: field === "description" ? value : numVal }),
+    })
   }
 
   async function deleteLine(lineId: string) {
     setLines(prev => prev.filter(l => l.id !== lineId))
-    const { db } = getCompanyClientBrowser()
-    await db.from("sales_order_lines").delete().eq("id", lineId)
+    const res = await fetch(`/api/devis/${order.id}/lines/${lineId}`, { method: "DELETE" })
+    if (!res.ok) {
+      const json = await res.json()
+      alert(`Erreur: ${json.error}`)
+    }
   }
 
   async function addLine() {
@@ -166,25 +178,35 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
       product: { name: p.name, reference: p.reference },
       unit: p.unit,
     } : l))
-    const { db } = getCompanyClientBrowser()
-    await db.from("sales_order_lines").update({
-      product_id: productId,
-      description: p.name,
-      unit_price: p.sale_price ?? 0,
-    }).eq("id", lineId)
+    await fetch(`/api/devis/${order.id}/lines/${lineId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ product_id: productId, description: p.name, unit_price: p.sale_price ?? 0 }),
+    })
   }
 
   async function updateOrderField(field: string, value: string) {
     setOrderFields(prev => ({ ...prev, [field]: value }))
-    const { db } = getCompanyClientBrowser()
-    await db.from("sales_orders").update({ [field]: value || null }).eq("id", order.id)
+    await fetch(`/api/devis/${order.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [field]: value || null }),
+    })
   }
 
   async function confirm() {
     setLoading(true)
-    const { db } = getCompanyClientBrowser()
-    await db.from("sales_orders").update({ status: "confirmed" }).eq("id", order.id)
-    // La sortie de stock se fait via le bon de livraison, pas ici
+    const res = await fetch(`/api/devis/${order.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "confirmed" }),
+    })
+    if (!res.ok) {
+      const json = await res.json()
+      alert(json.error ?? "Erreur lors de la confirmation")
+      setLoading(false)
+      return
+    }
     router.refresh()
     setLoading(false)
   }
@@ -192,73 +214,69 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
   async function cancel() {
     if (!window.confirm(t("confirmCancel"))) return
     setLoading(true)
-    const { db } = getCompanyClientBrowser()
-    await db.from("sales_orders").update({ status: "cancelled" }).eq("id", order.id)
+    const res = await fetch(`/api/devis/${order.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "cancelled" }),
+    })
+    if (!res.ok) {
+      const json = await res.json()
+      alert(json.error ?? "Erreur lors de l'annulation")
+      setLoading(false)
+      return
+    }
     router.refresh()
     setLoading(false)
   }
 
   async function resetToDraft() {
     setLoading(true)
-    const { db } = getCompanyClientBrowser()
-    await db.from("sales_orders").update({ status: "draft" }).eq("id", order.id)
+    const res = await fetch(`/api/devis/${order.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "draft" }),
+    })
+    if (!res.ok) {
+      const json = await res.json()
+      alert(json.error ?? "Erreur lors de la remise en brouillon")
+      setLoading(false)
+      return
+    }
     router.refresh()
     setLoading(false)
   }
 
   async function createInvoice() {
     setLoading(true)
-    const { supabase, db } = getCompanyClientBrowser()
+    const { supabase } = getCompanyClientBrowser()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setLoading(false); return }
 
-    const now = new Date()
-    const year = now.getFullYear()
-    const month = String(now.getMonth() + 1).padStart(2, "0")
-    const { count } = await db.from("invoices").select("*", { count: "exact", head: true })
-    const seq = String((count ?? 0) + 1).padStart(4, "0")
-    const number = `FAC-${year}-${month}-${seq}`
-
-    const today = new Date().toISOString().split("T")[0]
-    const due = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
-
-    const { data: invoice, error } = await db
-      .from("invoices")
-      .insert([{
-        number,
-        order_id: order.id,
+    const res = await fetch(`/api/devis/${order.id}/create-invoice`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
         account_id: order.account?.id ?? null,
         currency: order.currency,
-        status: "draft",
-        issue_date: today,
-        due_date: due,
-        user_id: user.id,
-      }])
-      .select("id")
-      .single()
-
-    if (error || !invoice) { setLoading(false); return }
-
-    if (order.lines.length > 0) {
-      const tvaActive = (order as unknown as { tva?: boolean }).tva === true
-      const lineRows = order.lines.map((l, i) => {
-        const exempt = (l as unknown as { tva_exempt?: boolean }).tva_exempt === true
-        return {
-          invoice_id: invoice.id,
-          product_id: (l as unknown as { product_id: string }).product_id ?? null,
+        tva,
+        lines: lines.map(l => ({
           description: l.description,
           quantity: l.quantity,
           unit_price: l.unit_price,
           discount: l.discount,
-          position: i,
-          tva_rate: tvaActive && !exempt ? 18 : 0,
-        }
-      })
-      await db.from("invoice_lines").insert(lineRows)
+          product_id: (l as unknown as { product_id?: string }).product_id ?? null,
+          tva_exempt: l.tva_exempt ?? false,
+        })),
+        user_id: user.id,
+      }),
+    })
+    const json = await res.json()
+    if (!res.ok) {
+      alert(json.error ?? "Erreur lors de la création de la facture")
+      setLoading(false)
+      return
     }
-
-    await db.from("sales_orders").update({ status: "invoiced" }).eq("id", order.id)
-    router.push(`/${locale}/ventes/factures/${invoice.id}`)
+    router.push(`/${locale}/ventes/factures/${json.invoiceId}`)
   }
 
   const isCancelled = order.status === "cancelled"
