@@ -24,8 +24,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     unit_price: body.unit_price ?? 0,
     discount: body.discount ?? 0,
     position: nextPosition,
-  }]).select().single()
+  }]).select("id, description, quantity, unit_price, discount, position, product_id, tva_exempt").single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  if (error) {
+    console.error("devis line insert error:", error)
+    return NextResponse.json({ error: error.message }, { status: 400 })
+  }
   return NextResponse.json(data)
 }

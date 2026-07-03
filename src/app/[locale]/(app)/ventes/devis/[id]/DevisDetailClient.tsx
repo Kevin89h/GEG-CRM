@@ -147,9 +147,12 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ description: "Nouvelle ligne", quantity: 1, unit_price: 0, discount: 0 }),
     })
-    if (!res.ok) return
     const data = await res.json()
-    setLines(prev => [...prev, { ...data, product: null, unit: null }])
+    if (!res.ok) {
+      alert(`Erreur: ${data.error ?? res.status}`)
+      return
+    }
+    setLines(prev => [...prev, { ...data, product: null, unit: null, tva_exempt: false }])
   }
 
   async function selectProduct(lineId: string, productId: string) {
