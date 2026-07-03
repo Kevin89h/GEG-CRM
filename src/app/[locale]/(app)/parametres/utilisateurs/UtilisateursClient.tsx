@@ -83,7 +83,7 @@ export default function UtilisateursClient({ users: initial }: Props) {
   const [inviteError, setInviteError] = useState("")
   const [inviteSuccess, setInviteSuccess] = useState("")
   // Create user form
-  const [createEmail, setCreateEmail] = useState("")
+  const [createUsername, setCreateUsername] = useState("")
   const [createPassword, setCreatePassword] = useState("")
   const [createName, setCreateName] = useState("")
   const [createPhone, setCreatePhone] = useState("")
@@ -194,20 +194,20 @@ export default function UtilisateursClient({ users: initial }: Props) {
 
   function resetModal() {
     setInviteEmail(""); setInviteRole("user"); setInviteError(""); setInviteSuccess("")
-    setCreateEmail(""); setCreatePassword(""); setCreateName(""); setCreatePhone("")
+    setCreateUsername(""); setCreatePassword(""); setCreateName(""); setCreatePhone("")
     setCreateJobTitle(""); setCreateRole("user"); setCreateError(""); setCreateSuccess("")
     setShowPassword(false)
   }
 
   async function handleCreate() {
-    if (!createEmail.trim() || !createPassword) return
+    if (!createUsername.trim() || !createPassword) return
     setCreating(true); setCreateError(""); setCreateSuccess("")
     try {
       const res = await fetch("/api/users/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: createEmail.trim(),
+          username: createUsername.trim(),
           password: createPassword,
           full_name: createName.trim() || null,
           phone: createPhone.trim() || null,
@@ -217,17 +217,17 @@ export default function UtilisateursClient({ users: initial }: Props) {
       })
       const body = await res.json()
       if (!res.ok) throw new Error(body.error ?? "Erreur")
-      setCreateSuccess(`Compte créé pour ${createEmail}`)
+      setCreateSuccess(`Compte créé pour @${createUsername.trim()}`)
       if (body.user) {
         setUsers(prev => [...prev, {
           id: body.user.id,
           email: body.user.email,
-          full_name: createName.trim() || null,
+          full_name: createName.trim() || createUsername.trim(),
           role: createRole,
           permissions: createRole === "admin" ? ADMIN_PERMISSIONS : DEFAULT_PERMISSIONS,
         }])
       }
-      setCreateEmail(""); setCreatePassword(""); setCreateName("")
+      setCreateUsername(""); setCreatePassword(""); setCreateName("")
       setCreatePhone(""); setCreateJobTitle("")
     } catch (err: unknown) {
       setCreateError(err instanceof Error ? err.message : "Erreur")
@@ -306,10 +306,10 @@ export default function UtilisateursClient({ users: initial }: Props) {
                 </p>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Email *</label>
-                    <input value={createEmail} onChange={e => setCreateEmail(e.target.value)} type="email"
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Pseudo (identifiant) *</label>
+                    <input value={createUsername} onChange={e => setCreateUsername(e.target.value)}
                       className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="email@exemple.com" />
+                      placeholder="ex: jean.dupont" />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">Nom complet</label>
@@ -363,7 +363,7 @@ export default function UtilisateursClient({ users: initial }: Props) {
                     Fermer
                   </button>
                   <button onClick={handleCreate}
-                    disabled={!createEmail.trim() || createPassword.length < 8 || creating}
+                    disabled={!createUsername.trim() || createPassword.length < 8 || creating}
                     className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-green-600 rounded-xl hover:bg-green-700 transition disabled:opacity-40 flex items-center justify-center gap-2">
                     {creating ? <><Loader2 className="w-4 h-4 animate-spin" /> Création…</> : <><UserPlus className="w-4 h-4" /> Créer le compte</>}
                   </button>
@@ -432,7 +432,11 @@ export default function UtilisateursClient({ users: initial }: Props) {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-gray-900">{user.full_name || "—"}</p>
-                <p className="text-xs text-gray-400">{user.email}</p>
+                <p className="text-xs text-gray-400">
+                  {user.email.endsWith("@geg.internal")
+                    ? `@${user.email.replace("@geg.internal", "")}`
+                    : user.email}
+                </p>
               </div>
               <Badge variant={roleColor[user.role] ?? "gray"}>{roleLabel[user.role] ?? user.role}</Badge>
               <button onClick={() => toggleExpand(user.id)}

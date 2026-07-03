@@ -36,14 +36,16 @@ export default function LoginPage() {
     setLoading(true)
     setError("")
     const supabase = createClient()
-    const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
+    // Support username login: if no "@", treat as pseudo and use internal email
+    const authEmail = email.includes("@") ? email : `${email.toLowerCase().replace(/[^a-z0-9._-]/g, "_")}@geg.internal`
+    const { error: authError } = await supabase.auth.signInWithPassword({ email: authEmail, password })
     if (authError) {
       setError(t("loginError"))
       setLoading(false)
       return
     }
     if (rememberMe) {
-      localStorage.setItem("crm_remembered_email", email)
+      localStorage.setItem("crm_remembered_email", email) // store the raw input (email or pseudo)
     } else {
       localStorage.removeItem("crm_remembered_email")
     }
@@ -77,16 +79,16 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1.5">
-                {t("email")}
+                Email ou pseudo
               </label>
               <input
-                type="email"
+                type="text"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 required
-                autoComplete="email"
+                autoComplete="username"
                 className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
-                placeholder="vous@geg.com"
+                placeholder="vous@geg.com ou pseudo"
               />
             </div>
 
