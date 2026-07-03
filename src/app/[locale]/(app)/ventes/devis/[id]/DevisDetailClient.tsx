@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
-import { CheckCircle, Receipt, X, Printer, ArrowLeft, RotateCcw, Truck } from "lucide-react"
+import { CheckCircle, Receipt, X, Printer, ArrowLeft, RotateCcw, Truck, Plus, Trash2 } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/Button"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
@@ -56,6 +56,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
   const [activeTab, setActiveTab] = useState<"lines" | "other" | "notes">("lines")
   const [tva, setTva] = useState<boolean>(order.tva ?? false)
   const [lines, setLines] = useState<Line[]>(order.lines)
+  const isDraft = order.status === "draft"
 
   const PAYMENT_TERMS_LABELS: Record<string, string> = {
     immediate: t("paymentImmediate"),
@@ -111,6 +112,33 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
     setLines(prev => prev.map(l => l.id === lineId ? { ...l, tva_exempt: newVal } : l))
     const { db } = getCompanyClientBrowser()
     await db.from("sales_order_lines").update({ tva_exempt: newVal }).eq("id", lineId)
+  }
+
+  async function updateLine(lineId: string, field: "description" | "quantity" | "unit_price" | "discount", value: string) {
+    const numVal = field !== "description" ? parseFloat(value) || 0 : 0
+    setLines(prev => prev.map(l => l.id === lineId ? { ...l, [field]: field === "description" ? value : numVal } : l))
+    const { db } = getCompanyClientBrowser()
+    await db.from("sales_order_lines").update({ [field]: field === "description" ? value : numVal }).eq("id", lineId)
+  }
+
+  async function deleteLine(lineId: string) {
+    setLines(prev => prev.filter(l => l.id !== lineId))
+    const { db } = getCompanyClientBrowser()
+    await db.from("sales_order_lines").delete().eq("id", lineId)
+  }
+
+  async function addLine() {
+    const { db } = getCompanyClientBrowser()
+    const seq = lines.length + 1
+    const { data } = await db.from("sales_order_lines").insert([{
+      sales_order_id: order.id,
+      description: "Nouvelle ligne",
+      quantity: 1,
+      unit_price: 0,
+      discount: 0,
+      sequence: seq,
+    }]).select().single()
+    if (data) setLines(prev => [...prev, { ...data, product: null, unit: null }])
   }
 
   async function confirm() {
@@ -372,23 +400,67 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                   <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colDescription")}</th>
                   <th className="text-right px-4 py-3 font-medium text-gray-600">{t("colQty")}</th>
                   <th className="text-right px-4 py-3 font-medium text-gray-600">{t("colUnitPrice")}</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">{t("colDiscount")}</th>
+                  <th className="text-right px-4 py-3 font-medium text-gray-600">{t("colDiscount")} %</th>
                   <th className="text-right px-4 py-3 font-medium text-gray-600">{t("colStock")}</th>
                   {tva && <th className="text-center px-4 py-3 font-medium text-gray-600 text-xs">Sans TVA</th>}
                   <th className="text-right px-4 py-3 font-medium text-gray-600">{t("colSubtotal")}</th>
+                  {isDraft && <th className="px-2 py-3" />}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {lines.map(l => (
                   <tr key={l.id} className={l.tva_exempt ? "bg-gray-50/50" : ""}>
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-gray-900">{l.description}</p>
-                      {l.product?.reference && <p className="text-xs text-gray-400 font-mono">{l.product.reference}</p>}
+                    <td className="px-4 py-2">
+                      {isDraft ? (
+                        <input
+                          className="w-full text-sm font-medium text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none py-0.5"
+                          defaultValue={l.description}
+                          onBlur={e => updateLine(l.id, "description", e.target.value)}
+                        />
+                      ) : (
+                        <>
+                          <p className="font-medium text-gray-900">{l.description}</p>
+                          {l.product?.reference && <p className="text-xs text-gray-400 font-mono">{l.product.reference}</p>}
+                        </>
+                      )}
                     </td>
-                    <td className="px-4 py-3 text-right text-gray-700">{formatNumber(l.quantity)}</td>
-                    <td className="px-4 py-3 text-right text-gray-700">{formatNumber(l.unit_price)}</td>
-                    <td className="px-4 py-3 text-right text-gray-500">{l.discount > 0 ? `${l.discount}%` : "—"}</td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-2 text-right">
+                      {isDraft ? (
+                        <input
+                          type="number" min="0" step="any"
+                          className="w-20 text-sm text-right text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none py-0.5"
+                          defaultValue={l.quantity}
+                          onBlur={e => updateLine(l.id, "quantity", e.target.value)}
+                        />
+                      ) : (
+                        <span className="text-gray-700">{formatNumber(l.quantity)}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      {isDraft ? (
+                        <input
+                          type="number" min="0" step="any"
+                          className="w-24 text-sm text-right text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none py-0.5"
+                          defaultValue={l.unit_price}
+                          onBlur={e => updateLine(l.id, "unit_price", e.target.value)}
+                        />
+                      ) : (
+                        <span className="text-gray-700">{formatNumber(l.unit_price)}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      {isDraft ? (
+                        <input
+                          type="number" min="0" max="100" step="any"
+                          className="w-16 text-sm text-right text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none py-0.5"
+                          defaultValue={l.discount}
+                          onBlur={e => updateLine(l.id, "discount", e.target.value)}
+                        />
+                      ) : (
+                        <span className="text-gray-500">{l.discount > 0 ? `${l.discount}%` : "—"}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-right">
                       {(() => {
                         const pid = (l as unknown as { product_id: string }).product_id
                         const status = getStockStatus(pid, l.quantity)
@@ -399,7 +471,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                       })()}
                     </td>
                     {tva && (
-                      <td className="px-4 py-3 text-center">
+                      <td className="px-4 py-2 text-center">
                         <button
                           onClick={() => toggleLineExempt(l.id)}
                           title={l.tva_exempt ? "Cliquer pour appliquer la TVA" : "Cliquer pour exempter de TVA"}
@@ -409,13 +481,34 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                         </button>
                       </td>
                     )}
-                    <td className="px-4 py-3 text-right font-semibold text-gray-900">
+                    <td className="px-4 py-2 text-right font-semibold text-gray-900">
                       {formatNumber(lineTotal(l))}
                     </td>
+                    {isDraft && (
+                      <td className="px-2 py-2">
+                        <button
+                          onClick={() => deleteLine(l.id)}
+                          className="text-gray-300 hover:text-red-500 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
             </table>
+            {isDraft && (
+              <div className="px-4 py-3 border-t border-gray-50">
+                <button
+                  onClick={addLine}
+                  className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  Ajouter une ligne
+                </button>
+              </div>
+            )}
 
             <div className="border-t border-gray-100 px-6 py-4 flex items-start justify-between gap-4">
               {/* Toggle TVA global */}
