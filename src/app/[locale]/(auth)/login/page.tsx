@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useTranslations } from "next-intl"
 import { useRouter, useParams } from "next/navigation"
 import Link from "next/link"
@@ -13,8 +13,14 @@ export default function LoginPage() {
   const { locale } = useParams<{ locale: string }>()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [rememberMe, setRememberMe] = useState(true)
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    const saved = localStorage.getItem("crm_remembered_email")
+    if (saved) setEmail(saved)
+  }, [])
 
   // Detect invite token in URL hash and redirect to accept-invite page
   useState(() => {
@@ -35,6 +41,11 @@ export default function LoginPage() {
       setError(t("loginError"))
       setLoading(false)
       return
+    }
+    if (rememberMe) {
+      localStorage.setItem("crm_remembered_email", email)
+    } else {
+      localStorage.removeItem("crm_remembered_email")
     }
     // Log connexion (fire-and-forget)
     fetch("/api/auth/log-login", { method: "POST" }).catch(() => {})
@@ -100,6 +111,19 @@ export default function LoginPage() {
                 className="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
                 placeholder="••••••••"
               />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                id="remember-me"
+                type="checkbox"
+                checked={rememberMe}
+                onChange={e => setRememberMe(e.target.checked)}
+                className="w-4 h-4 rounded border-white/20 bg-white/10 text-blue-500 focus:ring-blue-500 focus:ring-offset-0 cursor-pointer"
+              />
+              <label htmlFor="remember-me" className="text-sm text-slate-300 cursor-pointer select-none">
+                Se souvenir de moi
+              </label>
             </div>
 
             {error && (
