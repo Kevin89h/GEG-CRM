@@ -142,17 +142,14 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
   }
 
   async function addLine() {
-    const { db } = getCompanyClientBrowser()
-    const seq = lines.length + 1
-    const { data } = await db.from("sales_order_lines").insert([{
-      sales_order_id: order.id,
-      description: "Nouvelle ligne",
-      quantity: 1,
-      unit_price: 0,
-      discount: 0,
-      sequence: seq,
-    }]).select().single()
-    if (data) setLines(prev => [...prev, { ...data, product: null, unit: null }])
+    const res = await fetch(`/api/devis/${order.id}/lines`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ description: "Nouvelle ligne", quantity: 1, unit_price: 0, discount: 0 }),
+    })
+    if (!res.ok) return
+    const data = await res.json()
+    setLines(prev => [...prev, { ...data, product: null, unit: null }])
   }
 
   async function selectProduct(lineId: string, productId: string) {
