@@ -118,10 +118,10 @@ export default function PrintPage({
         .btn-primary { background: ${color}; color: white; }
         .btn-secondary { background: #e5e5e5; color: #333; }
 
-        .page { width: 210mm; min-height: 297mm; margin: 24px auto; background: white; box-shadow: 0 8px 40px rgba(0,0,0,.22); display: flex; flex-direction: column; position: relative; overflow: hidden; }
-        .page-body { flex: 1; display: flex; flex-direction: column; position: relative; z-index: 1; }
-        .footer-bar { position: relative; z-index: 1; }
-        .watermark { position: absolute; width: 380px; height: 380px; left: 50%; top: 50%; transform: translate(-50%, -50%); opacity: 0.05; pointer-events: none; z-index: 0; object-fit: contain; }
+        .page { width: 210mm; margin: 24px auto; background: white; box-shadow: 0 8px 40px rgba(0,0,0,.22); }
+        .page-table { width: 100%; border-collapse: collapse; }
+        .page-body { display: block; position: relative; z-index: 1; }
+        .watermark { position: fixed; width: 380px; height: 380px; left: 50%; top: 50%; transform: translate(-50%, -50%); opacity: 0.05; pointer-events: none; z-index: 0; object-fit: contain; }
 
         .stripe { height: 5px; background: linear-gradient(90deg, ${color} 0%, ${color}88 100%); flex-shrink: 0; }
 
@@ -213,7 +213,12 @@ export default function PrintPage({
           html, body { background: white; }
           .no-print { display: none !important; }
           @page { size: A4 portrait; margin: 0; }
-          .page { margin: 0 !important; box-shadow: none !important; width: 210mm; min-height: 297mm; }
+          .page { margin: 0 !important; box-shadow: none !important; width: 210mm; }
+          .page-header-repeat { display: table-header-group; }
+          .page-footer-repeat { display: table-footer-group; }
+          .page-body-rows { display: table-row-group; }
+          .bottom { page-break-inside: avoid; }
+          .totals-wrap { page-break-inside: avoid; }
         }
       `}</style>
 
@@ -224,25 +229,31 @@ export default function PrintPage({
 
       <div className="page">
         {logoUrl && <img src={logoUrl} alt="" className="watermark" />}
-        <div className="stripe" />
 
-        <div className="page-body">
-          {/* HEADER */}
-          <div className="header">
-            <div>
-              {logoUrl
-                ? <img src={logoUrl} alt={companyName} className="logo" />
-                : <div className="logo-initials">{companyName.split(" ").map((w: string) => w[0]).join("").slice(0, 3)}</div>
-              }
-              <div className="co-name">{companyName}</div>
-              <div className="co-detail">
-                {addr1}{addr2 ? `, ${addr2}` : ""}<br />
-                {city}
+        <table className="page-table">
+          {/* HEADER — répété sur chaque page à l'impression */}
+          <thead className="page-header-repeat">
+            <tr><td>
+              <div className="stripe" />
+              <div className="header">
+                <div>
+                  {logoUrl
+                    ? <img src={logoUrl} alt={companyName} className="logo" />
+                    : <div className="logo-initials">{companyName.split(" ").map((w: string) => w[0]).join("").slice(0, 3)}</div>
+                  }
+                  <div className="co-name">{companyName}</div>
+                  <div className="co-detail">
+                    {addr1}{addr2 ? `, ${addr2}` : ""}<br />
+                    {city}
+                  </div>
+                </div>
+                <div className="tagline">{tagline}</div>
               </div>
-            </div>
-            <div className="tagline">{tagline}</div>
-          </div>
+            </td></tr>
+          </thead>
 
+          <tbody className="page-body-rows"><tr><td>
+          <div className="page-body">
           {/* TITLE ROW */}
           <div className="title-row">
             <div>
@@ -412,25 +423,32 @@ export default function PrintPage({
             )}
           </div>
         </div>
+          </td></tr>
+          </tbody>
 
-        {/* FOOTER — collé en bas */}
-        <div className="footer-bar">
-          {phone && (
-            <div className="footer-item"><span>📞</span><strong>{phone}</strong></div>
-          )}
-          {phone && email && <div className="footer-divider" />}
-          {email && (
-            <div className="footer-item"><span>✉</span><strong>{email}</strong></div>
-          )}
-          {(phone || email) && website && <div className="footer-divider" />}
-          {website && (
-            <div className="footer-item"><span>🌐</span><strong>{website}</strong></div>
-          )}
-          {website && nif && <div className="footer-divider" />}
-          {nif && (
-            <div className="footer-item"><span style={{ opacity: .65, fontSize: "8.5px" }}>NIF</span><strong>{nif}</strong></div>
-          )}
-        </div>
+          {/* FOOTER — répété en bas de chaque page à l'impression */}
+          <tfoot className="page-footer-repeat">
+            <tr><td>
+              <div className="footer-bar">
+                {phone && (
+                  <div className="footer-item"><span>📞</span><strong>{phone}</strong></div>
+                )}
+                {phone && email && <div className="footer-divider" />}
+                {email && (
+                  <div className="footer-item"><span>✉</span><strong>{email}</strong></div>
+                )}
+                {(phone || email) && website && <div className="footer-divider" />}
+                {website && (
+                  <div className="footer-item"><span>🌐</span><strong>{website}</strong></div>
+                )}
+                {website && nif && <div className="footer-divider" />}
+                {nif && (
+                  <div className="footer-item"><span style={{ opacity: .65, fontSize: "8.5px" }}>NIF</span><strong>{nif}</strong></div>
+                )}
+              </div>
+            </td></tr>
+          </tfoot>
+        </table>
       </div>
     </>
   )
