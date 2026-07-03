@@ -79,7 +79,7 @@ export default function PrintPage({
 
   const color = docSettings?.brand_color ?? "#1e3a5f"
   const colorLight = color + "14"
-  const tvaRate = docSettings?.tva_rate ?? 0
+  const tvaRate = lines.some(l => (l.tva_rate ?? 0) > 0) ? 18 : 0
   const companyName = docSettings?.company_name ?? "Global Energy Group SAS"
   const tagline = docSettings?.tagline ?? "Beyond Limits."
   const addr1 = docSettings?.address_line1 ?? "Imm. Marbella"
@@ -100,7 +100,10 @@ export default function PrintPage({
     : "DEVIS"
 
   const totalHT = lines.reduce((s, l) => s + l.quantity * l.unit_price * (1 - (l.discount ?? 0) / 100), 0)
-  const tvaAmt = totalHT * tvaRate / 100
+  const tvaAmt = lines.reduce((s, l) => {
+    const sub = l.quantity * l.unit_price * (1 - (l.discount ?? 0) / 100)
+    return s + sub * (l.tva_rate ?? tvaRate) / 100
+  }, 0)
   const totalTTC = totalHT + tvaAmt
   const cur = currency === "GNF" ? "FG" : currency
 

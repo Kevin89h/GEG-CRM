@@ -17,7 +17,7 @@ export default async function DevisPdfPage({ params }: { params: Promise<{ local
 
   const { data: order, error: orderErr } = await db
     .from("sales_orders")
-    .select("id, number, currency, valid_until, notes, created_at, account_id, salesperson_id")
+    .select("id, number, status, currency, valid_until, notes, created_at, account_id, salesperson_id, tva, payment_terms")
     .eq("id", id)
     .single()
 
@@ -27,7 +27,7 @@ export default async function DevisPdfPage({ params }: { params: Promise<{ local
   const [{ data: account }, { data: salesperson }, { data: rawLines }, { data: bankAccounts }] = await Promise.all([
     order.account_id ? db.from("accounts").select("id, name, country").eq("id", order.account_id).single() : Promise.resolve({ data: null }),
     order.salesperson_id ? db.from("employees").select("full_name").eq("id", order.salesperson_id).single() : Promise.resolve({ data: null }),
-    db.from("sales_order_lines").select("id, description, quantity, unit_price, discount, position, product_id").eq("order_id", id).order("position"),
+    db.from("sales_order_lines").select("id, description, quantity, unit_price, discount, position, product_id, tva_exempt").eq("order_id", id).order("position"),
     db.from("treasury_accounts").select("institution, account_number, swift, iban, currency").eq("type", "bank").eq("is_active", true).order("name"),
   ])
 
@@ -37,12 +37,14 @@ export default async function DevisPdfPage({ params }: { params: Promise<{ local
     : { data: [] }
   const productMap = Object.fromEntries((products ?? []).map((p: Record<string, unknown>) => [p.id, p]))
 
+  const orderTva = Boolean((order as Record<string, unknown>).tva)
   const lines = ((rawLines ?? []) as Record<string, unknown>[]).map(l => ({
     id: String(l.id ?? ""),
     description: String(l.description ?? ""),
     quantity: Number(l.quantity) || 0,
     unit_price: Number(l.unit_price) || 0,
     discount: Number(l.discount) || 0,
+    tva_rate: orderTva && !l.tva_exempt ? 18 : 0,
     product: l.product_id ? (productMap[l.product_id as string] as { name: string; reference: string | null } | null) ?? null : null,
   }))
 
@@ -55,7 +57,7 @@ export default async function DevisPdfPage({ params }: { params: Promise<{ local
       validUntil={order.valid_until ?? null}
       notes={order.notes ?? null}
       deliveryAddress={null}
-      paymentTerms={(order as Record<string, unknown>).payment_terms as string ?? null}
+      paymentTerms={(order as Record<string, unknown>).payment_terms as string | null ?? null}
       accountName={(account as Record<string, string> | null)?.name ?? "—"}
       accountCountry={(account as Record<string, string> | null)?.country ?? null}
       salespersonName={(salesperson as Record<string, string> | null)?.full_name ?? null}
