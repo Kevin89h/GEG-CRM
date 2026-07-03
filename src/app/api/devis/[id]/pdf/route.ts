@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createCompanyClient, getCompanySchema } from "@/lib/company"
 import { createClient } from "@/lib/supabase/server"
+import { renderDevisPdf } from "./renderDevisPdf"
 
 export const maxDuration = 60
+export const runtime = "nodejs"
 
 export async function GET(
   req: NextRequest,
@@ -11,114 +13,69 @@ export async function GET(
   const { id } = await params
 
   const { db } = await createCompanyClient()
-  const { data: order } = await db.from("sales_orders").select("number, status").eq("id", id).single()
-  const docLabel = (order as Record<string, unknown>)?.status === "confirmed" ? "BC" : "DEVIS"
-  const filename = order ? `${docLabel} - ${order.number}.pdf` : `devis-${id}.pdf`
-
-  // Fetch doc settings for the PDF footer
   const publicSupa = await createClient()
   const schema = await getCompanySchema()
+
   const { data: company } = await publicSupa.from("companies").select("id").eq("schema_name", schema).single()
-  const { data: ds } = company
-    ? await publicSupa.from("document_settings").select("phone, email, website, nif, brand_color").eq("company_id", company.id).maybeSingle()
+  const { data: docSettings } = company
+    ? await publicSupa.from("document_settings").select("*").eq("company_id", company.id).maybeSingle()
     : { data: null }
 
-  const phone = (ds as Record<string, string> | null)?.phone ?? "+224 613 04 40 20"
-  const website = (ds as Record<string, string> | null)?.website ?? "www.globalenergygroup.com"
-  const nif = (ds as Record<string, string> | null)?.nif ?? "446243099"
-  const color = (ds as Record<string, string> | null)?.brand_color ?? "#1e3a5f"
+  const { data: order } = await db
+    .from("sales_orders")
+    .select("id, number, status, currency, valid_until, notes, created_at, account_id, salesperson_id, tva, payment_terms")
+    .eq("id", id)
+    .single()
 
-  const footerTemplate = `<div style="width:100%;background:${color};padding:9px 24px;display:flex;justify-content:center;align-items:center;gap:0;flex-wrap:wrap;font-family:Arial,Helvetica,sans-serif;font-size:9px;box-sizing:border-box;-webkit-print-color-adjust:exact;color-adjust:exact;">
-    ${phone ? `<div style="display:flex;align-items:center;gap:5px;color:rgba(255,255,255,.9);padding:0 14px;">📞 <strong style="color:white">${phone}</strong></div>` : ""}
-    ${phone && website ? `<div style="width:1px;height:16px;background:rgba(255,255,255,.25);flex-shrink:0;"></div>` : ""}
-    ${website ? `<div style="display:flex;align-items:center;gap:5px;color:rgba(255,255,255,.9);padding:0 14px;">🌐 <strong style="color:white">${website}</strong></div>` : ""}
-    ${website && nif ? `<div style="width:1px;height:16px;background:rgba(255,255,255,.25);flex-shrink:0;"></div>` : ""}
-    ${nif ? `<div style="display:flex;align-items:center;gap:5px;color:rgba(255,255,255,.9);padding:0 14px;"><span style="opacity:.65;font-size:8px">NIF</span> <strong style="color:white">${nif}</strong></div>` : ""}
-  </div>`
+  if (!order) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
-  const host = req.headers.get("host") ?? "localhost:3000"
-  const protocol = host.includes("localhost") ? "http" : "https"
-  const locale = req.nextUrl.searchParams.get("locale") ?? "fr"
-  const url = `${protocol}://${host}/${locale}/ventes/devis/${id}/pdf`
+  const [{ data: account }, { data: salesperson }, { data: rawLines }, { data: bankAccounts }] = await Promise.all([
+    order.account_id ? db.from("accounts").select("id, name, country").eq("id", order.account_id).single() : Promise.resolve({ data: null }),
+    order.salesperson_id ? db.from("employees").select("full_name").eq("id", order.salesperson_id).single() : Promise.resolve({ data: null }),
+    db.from("sales_order_lines").select("id, description, quantity, unit_price, discount, position, product_id, tva_exempt").eq("order_id", id).order("position"),
+    db.from("treasury_accounts").select("institution, account_number, swift, iban, currency").eq("type", "bank").eq("is_active", true).order("name"),
+  ])
 
-  let browser
-  try {
-    const puppeteer = (await import("puppeteer-core")).default
+  const orderTva = Boolean((order as Record<string, unknown>).tva)
+  const lines = ((rawLines ?? []) as Record<string, unknown>[]).map(l => ({
+    id: String(l.id ?? ""),
+    description: String(l.description ?? ""),
+    quantity: Number(l.quantity) || 0,
+    unit_price: Number(l.unit_price) || 0,
+    discount: Number(l.discount) || 0,
+    tva_rate: orderTva && !l.tva_exempt ? 18 : 0,
+  }))
 
-    if (process.env.NODE_ENV === "production") {
-      const chromium = (await import("@sparticuz/chromium-min")).default
-      browser = await puppeteer.launch({
-        args: chromium.args,
-        executablePath: await chromium.executablePath(
-          "https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar"
-        ),
-        headless: true,
-      })
-    } else {
-      const executablePath =
-        process.platform === "darwin"
-          ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-          : process.platform === "win32"
-          ? "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
-          : "/usr/bin/google-chrome"
-      browser = await puppeteer.launch({
-        executablePath,
-        headless: true,
-        args: ["--no-sandbox", "--disable-setuid-sandbox"],
-      })
-    }
+  const status = (order as Record<string, unknown>).status as string ?? "draft"
+  const docLabel = status === "confirmed" ? "BC" : "DEVIS"
+  const filename = `${docLabel} - ${order.number}.pdf`
 
-    const page = await browser.newPage()
+  const pdfBytes = await renderDevisPdf({
+    number: order.number,
+    status,
+    currency: order.currency,
+    createdAt: order.created_at,
+    validUntil: (order as Record<string, unknown>).valid_until as string | null ?? null,
+    notes: (order as Record<string, unknown>).notes as string | null ?? null,
+    paymentTerms: (order as Record<string, unknown>).payment_terms as string | null ?? null,
+    accountName: (account as Record<string, string> | null)?.name ?? "—",
+    accountCountry: (account as Record<string, string> | null)?.country ?? null,
+    salespersonName: (salesperson as Record<string, string> | null)?.full_name ?? null,
+    lines,
+    bankAccounts: (bankAccounts ?? []).map((a: Record<string, unknown>) => ({
+      institution: String(a.institution ?? ""),
+      account_number: String(a.account_number ?? ""),
+      swift: a.swift ? String(a.swift) : null,
+      iban: a.iban ? String(a.iban) : null,
+      currency: String(a.currency ?? ""),
+    })),
+    docSettings: docSettings as Record<string, unknown> | null,
+  })
 
-    const cookieHeader = req.headers.get("cookie") ?? ""
-    if (cookieHeader) {
-      const domain = host.split(":")[0]
-      const cookies = cookieHeader.split(";").flatMap(c => {
-        const eqIdx = c.indexOf("=")
-        if (eqIdx === -1) return []
-        const name = c.slice(0, eqIdx).trim()
-        const value = c.slice(eqIdx + 1).trim()
-        return [{ name, value, domain }]
-      })
-      if (cookies.length) await page.setCookie(...cookies)
-    }
-
-    await page.emulateMediaType("print")
-    await page.goto(url, { waitUntil: "networkidle0", timeout: 30000 })
-
-    // Hide chat widget, nav overlays, and the HTML footer bar (replaced by PDF native footer)
-    // Add padding-bottom so last content never hides behind the footer margin
-    await page.addStyleTag({ content: `
-      [data-no-pdf], .no-print,
-      nav, header:not(.doc-header),
-      .crisp-client, #crisp-chatbox,
-      .intercom-launcher, [class*="intercom"],
-      #fc_widget, [id*="freshchat"],
-      #hubspot-messages-iframe-container,
-      .footer-bar { display: none !important; }
-      .page { padding-bottom: 8px !important; }
-    ` })
-
-    const pdf = await page.pdf({
-      format: "A4",
-      printBackground: true,
-      displayHeaderFooter: true,
-      headerTemplate: "<span></span>",
-      footerTemplate,
-      margin: { top: "0", right: "0", bottom: "38px", left: "0" },
-    })
-
-    await browser.close()
-
-    return new NextResponse(Buffer.from(pdf), {
-      headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${filename}"`,
-      },
-    })
-  } catch (err) {
-    if (browser) await browser.close().catch(() => {})
-    console.error("PDF generation error:", err)
-    return NextResponse.json({ error: "Erreur génération PDF" }, { status: 500 })
-  }
+  return new NextResponse(pdfBytes as unknown as BodyInit, {
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+    },
+  })
 }
