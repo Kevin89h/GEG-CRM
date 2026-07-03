@@ -18,7 +18,6 @@ export async function POST(req: NextRequest) {
       website: body.website ?? null,
       notes: body.notes ?? null,
       salesperson_id: body.salesperson_id ?? null,
-      is_active: body.is_active ?? true,
     }])
     .select("*, contacts(count), deals(count)")
     .single()
