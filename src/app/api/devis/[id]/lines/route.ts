@@ -10,7 +10,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { data: existing } = await db
     .from("sales_order_lines")
     .select("position")
-    .eq("sales_order_id", id)
+    .eq("order_id", id)
     .order("position", { ascending: false })
     .limit(1)
     .maybeSingle()
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const nextPosition = ((existing?.position as number) ?? 0) + 1
 
   const { data, error } = await db.from("sales_order_lines").insert([{
-    sales_order_id: id,
+    order_id: id,
     description: body.description ?? "Nouvelle ligne",
     quantity: body.quantity ?? 1,
     unit_price: body.unit_price ?? 0,
