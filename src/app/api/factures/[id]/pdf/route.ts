@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createCompanyClient } from "@/lib/company"
+import { createCompanyClient, getCompanySchema } from "@/lib/company"
+import { createClient } from "@/lib/supabase/server"
 
 export const maxDuration = 60
 
@@ -12,6 +13,27 @@ export async function GET(
   const { db } = await createCompanyClient()
   const { data: invoice } = await db.from("invoices").select("number").eq("id", id).single()
   const filename = invoice ? `Facture ${invoice.number}.pdf` : `facture-${id}.pdf`
+
+  // Fetch doc settings for the PDF footer
+  const publicSupa = await createClient()
+  const schema = await getCompanySchema()
+  const { data: company } = await publicSupa.from("companies").select("id").eq("schema_name", schema).single()
+  const { data: ds } = company
+    ? await publicSupa.from("document_settings").select("phone, email, website, nif, brand_color").eq("company_id", company.id).maybeSingle()
+    : { data: null }
+
+  const phone = (ds as Record<string, string> | null)?.phone ?? "+224 613 04 40 20"
+  const website = (ds as Record<string, string> | null)?.website ?? "www.globalenergygroup.com"
+  const nif = (ds as Record<string, string> | null)?.nif ?? "446243099"
+  const color = (ds as Record<string, string> | null)?.brand_color ?? "#1e3a5f"
+
+  const footerTemplate = `<div style="width:100%;background:${color};padding:10px 24px;display:flex;justify-content:center;align-items:center;gap:0;flex-wrap:wrap;font-family:Arial,Helvetica,sans-serif;font-size:9px;box-sizing:border-box;-webkit-print-color-adjust:exact;color-adjust:exact;">
+    ${phone ? `<div style="display:flex;align-items:center;gap:5px;color:rgba(255,255,255,.9);padding:0 14px;">📞 <strong style="color:white">${phone}</strong></div>` : ""}
+    ${phone && website ? `<div style="width:1px;height:16px;background:rgba(255,255,255,.25);flex-shrink:0;"></div>` : ""}
+    ${website ? `<div style="display:flex;align-items:center;gap:5px;color:rgba(255,255,255,.9);padding:0 14px;">🌐 <strong style="color:white">${website}</strong></div>` : ""}
+    ${website && nif ? `<div style="width:1px;height:16px;background:rgba(255,255,255,.25);flex-shrink:0;"></div>` : ""}
+    ${nif ? `<div style="display:flex;align-items:center;gap:5px;color:rgba(255,255,255,.9);padding:0 14px;"><span style="opacity:.65;font-size:8px">NIF</span> <strong style="color:white">${nif}</strong></div>` : ""}
+  </div>`
 
   const host = req.headers.get("host") ?? "localhost:3000"
   const protocol = host.includes("localhost") ? "http" : "https"
@@ -63,21 +85,24 @@ export async function GET(
     await page.emulateMediaType("print")
     await page.goto(url, { waitUntil: "networkidle0", timeout: 30000 })
 
-    // Hide chat widget, nav, and any UI overlay not part of the document
+    // Hide chat widget, nav overlays, and HTML footer bar (replaced by PDF native footer)
     await page.addStyleTag({ content: `
       [data-no-pdf], .no-print,
       nav, header:not(.doc-header),
       .crisp-client, #crisp-chatbox,
       .intercom-launcher, [class*="intercom"],
       #fc_widget, [id*="freshchat"],
-      #hubspot-messages-iframe-container { display: none !important; }
+      #hubspot-messages-iframe-container,
+      .footer-bar { display: none !important; }
     ` })
 
     const pdf = await page.pdf({
       format: "A4",
       printBackground: true,
-      margin: { top: "0", right: "0", bottom: "0", left: "0" },
-      scale: 0.95,
+      displayHeaderFooter: true,
+      headerTemplate: "<span></span>",
+      footerTemplate,
+      margin: { top: "0", right: "0", bottom: "36px", left: "0" },
     })
 
     await browser.close()
