@@ -1,6 +1,6 @@
 import React from "react"
 import {
-  Document, Page, View, Text, StyleSheet, Font, renderToBuffer,
+  Document, Page, View, Text, Image, StyleSheet, Font, renderToBuffer,
 } from "@react-pdf/renderer"
 
 // Use built-in fonts — no external fetch needed on Vercel
@@ -73,6 +73,7 @@ export async function renderDevisPdf(props: Props): Promise<Buffer> {
   const email = (ds?.email as string) ?? null
   const website = (ds?.website as string) ?? "www.globalenergygroup.com"
   const nif = (ds?.nif as string) ?? "446243099"
+  const logoUrl = (ds?.logo_url as string) ?? null
 
   const docLabel = status === "confirmed" ? "BON DE COMMANDE" : "DEVIS"
   const cur = currency === "GNF" ? "FG" : currency
@@ -89,6 +90,7 @@ export async function renderDevisPdf(props: Props): Promise<Buffer> {
     // Header
     stripe: { height: 4, backgroundColor: color },
     header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", padding: "14 20 12 20", borderBottomWidth: 1, borderBottomColor: "#eee" },
+    logo: { height: 44, marginBottom: 6, objectFit: "contain" as const },
     coName: { fontSize: 11, fontFamily: "Helvetica", fontWeight: "bold", color: "#111", marginBottom: 2 },
     coDetail: { fontSize: 8, color: "#777", lineHeight: 1.6 },
     tagline: { fontSize: 18, fontFamily: "Helvetica", fontWeight: "bold", color, letterSpacing: -0.5 },
@@ -158,7 +160,11 @@ export async function renderDevisPdf(props: Props): Promise<Buffer> {
         {/* Header */}
         <View style={s.header}>
           <View>
-            <Text style={s.coName}>{companyName}</Text>
+            {logoUrl
+              ? <Image src={logoUrl} style={s.logo} />
+              : <Text style={s.coName}>{companyName}</Text>
+            }
+            {logoUrl && <Text style={s.coName}>{companyName}</Text>}
             <Text style={s.coDetail}>{addr1}{"\n"}{city}</Text>
           </View>
           <Text style={s.tagline}>{tagline}</Text>
