@@ -54,10 +54,12 @@ export default async function AppLayout({ children, params }: Props) {
         </div>
       </main>
 
-      <ChatWidget
-        currentUserId={user.id}
-        currentUserName={profile?.full_name || profile?.email || user.email || ""}
-      />
+      <div className="no-print" data-no-pdf>
+        <ChatWidget
+          currentUserId={user.id}
+          currentUserName={profile?.full_name || profile?.email || user.email || ""}
+        />
+      </div>
     </div>
   )
 }

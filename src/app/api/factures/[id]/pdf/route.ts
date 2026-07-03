@@ -60,7 +60,18 @@ export async function GET(
       if (cookies.length) await page.setCookie(...cookies)
     }
 
+    await page.emulateMediaType("print")
     await page.goto(url, { waitUntil: "networkidle0", timeout: 30000 })
+
+    // Hide chat widget, nav, and any UI overlay not part of the document
+    await page.addStyleTag({ content: `
+      [data-no-pdf], .no-print,
+      nav, header:not(.doc-header),
+      .crisp-client, #crisp-chatbox,
+      .intercom-launcher, [class*="intercom"],
+      #fc_widget, [id*="freshchat"],
+      #hubspot-messages-iframe-container { display: none !important; }
+    ` })
 
     const pdf = await page.pdf({
       format: "A4",
