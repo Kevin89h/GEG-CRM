@@ -96,6 +96,7 @@ export default async function FacturePdfPage({ params }: { params: Promise<{ loc
 
   return (
     <FacturePrintPage
+      id={id}
       number={invoice.number}
       status={invoice.status}
       currency={invoice.currency}

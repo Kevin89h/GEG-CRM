@@ -60,6 +60,7 @@ export default async function DevisPdfPage({ params }: { params: Promise<{ local
 
   return (
     <PrintPage
+      id={id}
       number={order.number}
       status={(order as Record<string, unknown>).status as string ?? "draft"}
       currency={order.currency}

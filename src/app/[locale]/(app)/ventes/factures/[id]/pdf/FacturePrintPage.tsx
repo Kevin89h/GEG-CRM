@@ -54,6 +54,7 @@ interface BankAccount {
 }
 
 interface Props {
+  id: string
   number: string
   status: string
   currency: string
@@ -74,7 +75,7 @@ interface Props {
 }
 
 export default function FacturePrintPage({
-  number, status, currency, issueDate, dueDate, notes, sourceRef,
+  id, number, status, currency, issueDate, dueDate, notes, sourceRef,
   accountName, accountCity, accountCountry, accountPhone,
   lines, payments, locale, docSettings, bankAccounts = [],
 }: Props) {
@@ -310,7 +311,7 @@ export default function FacturePrintPage({
 
       <div className="no-print">
         <button className="btn btn-secondary" onClick={() => window.close()}>✕ Fermer</button>
-        <button className="btn btn-primary" onClick={() => window.print()}>⬇ Télécharger PDF</button>
+        <a className="btn btn-primary" href={`/api/factures/${id}/pdf`} download={`Facture ${number}.pdf`}>⬇ Télécharger PDF</a>
       </div>
 
       <div className="page">
