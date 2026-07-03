@@ -81,6 +81,7 @@ export async function GET(
       format: "A4",
       printBackground: true,
       margin: { top: "0", right: "0", bottom: "0", left: "0" },
+      scale: 0.95,
     })
 
     await browser.close()
