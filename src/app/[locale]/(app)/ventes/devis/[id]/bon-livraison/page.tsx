@@ -30,6 +30,7 @@ export default async function BonLivraisonPage({ params }: { params: Promise<{ l
 
   return (
     <PrintPage
+      id={id}
       number={order.number}
       status={order.status}
       currency={order.currency}
