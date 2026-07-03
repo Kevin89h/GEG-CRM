@@ -2,8 +2,16 @@ import { createCompanyClient } from "@/lib/company"
 import { createClient } from "@/lib/supabase/server"
 import { getCompanySchema } from "@/lib/company"
 import { notFound } from "next/navigation"
+import type { Metadata } from "next"
 import QRCode from "qrcode"
 import FacturePrintPage from "./FacturePrintPage"
+
+export async function generateMetadata({ params }: { params: Promise<{ locale: string; id: string }> }): Promise<Metadata> {
+  const { id } = await params
+  const { db } = await createCompanyClient()
+  const { data: invoice } = await db.from("invoices").select("number").eq("id", id).single()
+  return { title: invoice ? `Facture ${invoice.number}` : "Facture" }
+}
 
 export default async function FacturePdfPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params

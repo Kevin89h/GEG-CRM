@@ -2,7 +2,17 @@ import { createCompanyClient } from "@/lib/company"
 import { createClient } from "@/lib/supabase/server"
 import { getCompanySchema } from "@/lib/company"
 import { notFound } from "next/navigation"
+import type { Metadata } from "next"
 import PrintPage from "./PrintPage"
+
+export async function generateMetadata({ params }: { params: Promise<{ locale: string; id: string }> }): Promise<Metadata> {
+  const { id } = await params
+  const { db } = await createCompanyClient()
+  const { data: order } = await db.from("sales_orders").select("number, status").eq("id", id).single()
+  if (!order) return { title: "Devis" }
+  const prefix = (order as Record<string,unknown>).status === "confirmed" ? "BC" : "DEVIS"
+  return { title: `${prefix} - ${order.number}` }
+}
 
 // v2
 export default async function DevisPdfPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
