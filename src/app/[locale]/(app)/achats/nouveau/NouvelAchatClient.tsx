@@ -14,11 +14,15 @@ interface Product { id: string; name: string; reference: string | null; buy_pric
 interface Props { products: Product[]; locale: string }
 
 interface Line {
+  id: number
   product_id: string
   description: string
   quantity: string
   unit_price: string
 }
+
+let _lid = 0
+const nextId = () => ++_lid
 
 export default function NouvelAchatClient({ products, locale }: Props) {
   const t = useTranslations("achats")
@@ -37,7 +41,7 @@ export default function NouvelAchatClient({ products, locale }: Props) {
     global_discount_pct: "",
   })
   const [lines, setLines] = useState<Line[]>([
-    { product_id: "", description: "", quantity: "1", unit_price: "0" },
+    { id: nextId(), product_id: "", description: "", quantity: "1", unit_price: "0" },
   ])
 
   const INCOTERMS = [
@@ -56,9 +60,9 @@ export default function NouvelAchatClient({ products, locale }: Props) {
     DDP: t("incotermInfoDDP"),
   }
 
-  function setLine(i: number, k: keyof Line, v: string) {
-    setLines(ls => ls.map((l, idx) => {
-      if (idx !== i) return l
+  function setLine(id: number, k: keyof Line, v: string) {
+    setLines(ls => ls.map(l => {
+      if (l.id !== id) return l
       const updated = { ...l, [k]: v }
       if (k === "product_id") {
         const p = products.find(p => p.id === v)
@@ -187,10 +191,10 @@ export default function NouvelAchatClient({ products, locale }: Props) {
               <div className="col-span-2 text-right">{t("colQuantity")}</div>
               <div className="col-span-2 text-right">{t("colUnitPrice")} ({form.incoterm})</div>
             </div>
-            {lines.map((l, i) => (
-              <div key={i} className="grid grid-cols-12 gap-2 items-center">
+            {lines.map(l => (
+              <div key={l.id} className="grid grid-cols-12 gap-2 items-center">
                 <div className="col-span-4">
-                  <select value={l.product_id} onChange={e => setLine(i, "product_id", e.target.value)}
+                  <select value={l.product_id} onChange={e => setLine(l.id, "product_id", e.target.value)}
                     className="w-full px-2 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
                     <option value="">{t("optionFree")}</option>
                     {products.map(p => (
@@ -201,33 +205,39 @@ export default function NouvelAchatClient({ products, locale }: Props) {
                   </select>
                 </div>
                 <div className="col-span-4">
-                  <input value={l.description} onChange={e => setLine(i, "description", e.target.value)}
+                  <input value={l.description} onChange={e => setLine(l.id, "description", e.target.value)}
                     placeholder={t("placeholderDescription")}
                     className="w-full px-2 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div className="col-span-2">
                   <input type="number" min="0" step="any" value={l.quantity}
-                    onChange={e => setLine(i, "quantity", e.target.value)}
+                    onChange={e => setLine(l.id, "quantity", e.target.value)}
                     className="w-full px-2 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-right" />
                 </div>
                 <div className="col-span-1">
                   <input type="number" min="0" step="any" value={l.unit_price}
-                    onChange={e => setLine(i, "unit_price", e.target.value)}
+                    onChange={e => setLine(l.id, "unit_price", e.target.value)}
                     className="w-full px-2 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-right" />
                 </div>
                 <div className="col-span-1 flex justify-end">
-                  {lines.length > 1 && (
-                    <button onClick={() => setLines(ls => ls.filter((_, idx) => idx !== i))}
-                      className="text-gray-300 hover:text-red-400 transition-colors">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
+                  <button
+                    onClick={() => {
+                      if (lines.length === 1) {
+                        setLines([{ id: nextId(), product_id: "", description: "", quantity: "1", unit_price: "0" }])
+                      } else {
+                        setLines(ls => ls.filter(x => x.id !== l.id))
+                      }
+                    }}
+                    className="text-gray-300 hover:text-red-400 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             ))}
           </div>
           <button
-            onClick={() => setLines(ls => [...ls, { product_id: "", description: "", quantity: "1", unit_price: "0" }])}
+            onClick={() => setLines(ls => [...ls, { id: nextId(), product_id: "", description: "", quantity: "1", unit_price: "0" }])}
             className="mt-4 flex items-center gap-2 text-sm text-blue-600 hover:text-blue-500 font-medium">
             <Plus className="w-4 h-4" /> {t("addProduct")}
           </button>
