@@ -54,6 +54,9 @@ interface Order {
 interface Warehouse { id: string; name: string; city: string | null }
 interface ExchangeRate { from_currency: string; to_currency: string; rate: number; effective_date: string }
 
+interface ReceptionLine { id: string; description: string; quantity: number; unit_price: number; warehouse_id: string | null }
+interface Reception { id: string; number: string; received_at: string; purchase_reception_lines: ReceptionLine[] }
+
 interface Props {
   order: Order
   lines: LandedLine[]
@@ -61,6 +64,7 @@ interface Props {
   warehouses: Warehouse[]
   exchangeRates: ExchangeRate[]
   locale: string
+  receptions?: Reception[]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   docSettings?: Record<string, any>
 }
@@ -79,9 +83,9 @@ function getRate(rates: ExchangeRate[], from: string, to: string): number | null
   return match?.rate ?? null
 }
 
-type Tab = "produits" | "autres"
+type Tab = "produits" | "receptions" | "autres"
 
-export default function AchatDetailClient({ order, lines: initialLines, costs: initialCosts, warehouses, exchangeRates, locale, docSettings = {} }: Props) {
+export default function AchatDetailClient({ order, lines: initialLines, costs: initialCosts, warehouses, exchangeRates, locale, receptions = [], docSettings = {} }: Props) {
   const t = useTranslations("achats")
   const router = useRouter()
   const [lines, setLines] = useState(initialLines)
@@ -132,7 +136,13 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
   }
 
   function goToNewInvoice() {
-    router.push(`/${locale}/achats`)
+    const params = new URLSearchParams({
+      order_id: order.id,
+      supplier: order.supplier_name,
+      currency: order.currency,
+      reference: order.number,
+    })
+    router.push(`/${locale}/comptabilite/factures-fournisseurs/nouveau?${params.toString()}`)
   }
 
   const totalFOB = lines.reduce((s, l) => s + l.fob_total, 0)
@@ -223,10 +233,25 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
         }
       })
 
+    const receptionLines = lines.map(l => {
+      const lineDiscount3 = orderFOBTotal > 0 ? discountTotal * (l.fob_total / orderFOBTotal) : 0
+      const lineFOBNet3 = l.fob_total - lineDiscount3
+      const allocated3 = orderFOBTotal > 0 ? totalExtra * (l.fob_total / orderFOBTotal) : 0
+      const landedUnit3 = l.quantity > 0 ? (lineFOBNet3 + allocated3) / l.quantity : 0
+      return {
+        order_line_id: l.line_id,
+        product_id: l.product_id,
+        description: l.description,
+        quantity: l.quantity,
+        unit_price: landedUnit3,
+        warehouse_id: l.warehouse_id,
+      }
+    })
+
     const res = await fetch(`/api/achats/${order.id}/receive`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ stockMoves, productUpdates }),
+      body: JSON.stringify({ stockMoves, productUpdates, receptionLines }),
     })
     const json = await res.json()
     if (!res.ok) {
@@ -235,7 +260,7 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
       return
     }
 
-    router.push(`/${locale}/achats`)
+    router.push(`/${locale}/achats/${order.id}`)
     router.refresh()
   }
 
@@ -412,6 +437,7 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
               <div className="flex gap-0">
                 {[
                   { key: "produits" as Tab, label: t("tabProducts") },
+                  { key: "receptions" as Tab, label: `Réceptions${receptions.length > 0 ? ` (${receptions.length})` : ""}` },
                   { key: "autres" as Tab, label: t("tabOtherInfo") },
                 ].map(tb => (
                   <button
@@ -542,6 +568,67 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
                     )}
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Tab: Réceptions */}
+            {tab === "receptions" && (
+              <div className="bg-white border border-t-0 border-gray-200 rounded-b-lg p-5 mb-4">
+                {receptions.length === 0 ? (
+                  <p className="text-sm text-gray-400 text-center py-8">Aucun bon de réception — réceptionnez la commande pour en créer un.</p>
+                ) : (
+                  <div className="space-y-4">
+                    {receptions.map(rec => (
+                      <div key={rec.id} className="border border-gray-200 rounded-lg overflow-hidden">
+                        <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-200">
+                          <div className="flex items-center gap-3">
+                            <Package className="w-4 h-4 text-emerald-600" />
+                            <span className="font-semibold text-gray-800 text-sm">{rec.number}</span>
+                            <span className="text-xs text-gray-400">{formatDate(rec.received_at, locale)}</span>
+                          </div>
+                          <button
+                            onClick={() => {
+                              const params = new URLSearchParams({
+                                order_id: order.id,
+                                reception_id: rec.id,
+                                supplier: order.supplier_name,
+                                currency: order.currency,
+                                reference: rec.number,
+                              })
+                              router.push(`/${locale}/comptabilite/factures-fournisseurs/nouveau?${params.toString()}`)
+                            }}
+                            className="px-3 py-1.5 text-xs font-semibold rounded bg-[#017e84] text-white hover:opacity-90 transition flex items-center gap-1.5"
+                          >
+                            <FileText className="w-3.5 h-3.5" /> Créer facture fournisseur
+                          </button>
+                        </div>
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="text-gray-400 border-b border-gray-100 bg-white">
+                              <th className="text-left px-4 py-2">Produit</th>
+                              <th className="text-right px-4 py-2">Qté reçue</th>
+                              <th className="text-right px-4 py-2">Prix revient/u</th>
+                              <th className="text-left px-4 py-2">Entrepôt</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-50">
+                            {rec.purchase_reception_lines.map(l => {
+                              const wh = warehouses.find(w => w.id === l.warehouse_id)
+                              return (
+                                <tr key={l.id} className="hover:bg-gray-50/50">
+                                  <td className="px-4 py-2.5 font-medium text-gray-800">{l.description}</td>
+                                  <td className="px-4 py-2.5 text-right text-gray-700 tabular-nums">{l.quantity.toLocaleString("fr")}</td>
+                                  <td className="px-4 py-2.5 text-right text-blue-700 font-semibold tabular-nums">{formatCurrency(l.unit_price, cur)}</td>
+                                  <td className="px-4 py-2.5 text-gray-500">{wh ? (wh.city ? `${wh.name} — ${wh.city}` : wh.name) : "—"}</td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 

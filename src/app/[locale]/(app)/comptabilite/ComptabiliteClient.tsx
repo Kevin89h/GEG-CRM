@@ -243,7 +243,7 @@ function BankCard({ account, locale, onTransact, onConfig }: {
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-3 text-sm">
+        <div className="grid grid-cols-3 gap-2 text-sm">
           <div>
             <p className="text-xs text-amber-600 font-medium mb-0.5">Solde</p>
             <p className="font-bold text-gray-900">
@@ -251,7 +251,13 @@ function BankCard({ account, locale, onTransact, onConfig }: {
             </p>
           </div>
           <div>
-            <p className="text-xs text-amber-600 font-medium mb-0.5">Paiements</p>
+            <p className="text-xs text-emerald-600 font-medium mb-0.5">Entrées</p>
+            <p className="font-bold text-gray-900">
+              {formatCurrency(account.total_in, account.currency as "GNF" | "USD" | "EUR")}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-red-500 font-medium mb-0.5">Sorties</p>
             <p className="font-bold text-gray-900">
               {formatCurrency(account.total_out, account.currency as "GNF" | "USD" | "EUR")}
             </p>

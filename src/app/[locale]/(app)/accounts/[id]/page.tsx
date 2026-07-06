@@ -28,6 +28,15 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
       .order("issue_date", { ascending: false }),
   ])
 
+  const invoiceIds = (invoices ?? []).map((i: Record<string, unknown>) => i.id as string)
+  const { data: payments } = invoiceIds.length > 0
+    ? await supabase
+        .from("payments")
+        .select("id, amount, currency, paid_at, notes, invoice:invoices(number)")
+        .in("invoice_id", invoiceIds)
+        .order("paid_at", { ascending: false })
+    : { data: [] }
+
   if (!account) notFound()
 
   // Compute order totals from lines
@@ -61,6 +70,18 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
   const acct = account as Record<string, unknown>
   const sp = Array.isArray(acct.salesperson) ? acct.salesperson[0] : acct.salesperson
 
+  const paymentsData = (payments ?? []).map((p: Record<string, unknown>) => {
+    const inv = Array.isArray(p.invoice) ? p.invoice[0] : p.invoice
+    return {
+      id: p.id as string,
+      amount: Number(p.amount) || 0,
+      currency: p.currency as string,
+      paid_at: p.paid_at as string,
+      notes: p.notes as string | null,
+      invoice_number: (inv as Record<string, string> | null)?.number ?? null,
+    }
+  })
+
   return (
     <AccountDetailClient
       account={{
@@ -76,6 +97,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
       }}
       orders={ordersWithTotal}
       invoices={invoicesData}
+      payments={paymentsData}
       locale={locale}
     />
   )

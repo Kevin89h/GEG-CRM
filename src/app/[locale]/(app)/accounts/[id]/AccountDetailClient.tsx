@@ -2,7 +2,11 @@
 
 import { useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Receipt, ShoppingCart, Landmark, Clock, TrendingUp, ExternalLink, Trash2, AlertTriangle } from "lucide-react"
+import {
+  ArrowLeft, Receipt, ShoppingCart, Landmark, Clock,
+  TrendingUp, ExternalLink, Trash2, AlertTriangle, CheckCircle2,
+  FileText, CreditCard, AlertCircle,
+} from "lucide-react"
 import { Badge } from "@/components/ui/Badge"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
@@ -30,6 +34,15 @@ interface Invoice {
   balance: number
 }
 
+interface Payment {
+  id: string
+  amount: number
+  currency: string
+  paid_at: string
+  notes: string | null
+  invoice_number: string | null
+}
+
 interface Account {
   id: string
   name: string
@@ -46,10 +59,12 @@ interface Props {
   account: Account
   orders: SalesOrder[]
   invoices: Invoice[]
+  payments: Payment[]
   locale: string
 }
 
 type Period = "30" | "90" | "365" | "all" | "custom"
+type Tab = "historique" | "factures" | "devis"
 
 const orderStatusColor: Record<string, "gray" | "blue" | "yellow" | "green" | "red"> = {
   draft: "gray", confirmed: "blue", invoiced: "yellow", cancelled: "red",
@@ -73,7 +88,7 @@ function groupByCurrency<T extends { currency: string; total: number }>(items: T
 
 function fmtMulti(byCur: Record<string, number>): string {
   const entries = Object.entries(byCur).filter(([, v]) => v > 0)
-  if (entries.length === 0) return "0"
+  if (entries.length === 0) return "—"
   return entries.map(([cur, val]) => formatCurrency(val, cur as "GNF" | "USD" | "EUR")).join(" · ")
 }
 
@@ -85,13 +100,19 @@ function periodStart(period: Period, customFrom: string): Date | null {
   return d
 }
 
-export default function AccountDetailClient({ account, orders, invoices, locale }: Props) {
+function daysOverdue(dueDateStr: string | null): number {
+  if (!dueDateStr) return 0
+  const diff = Date.now() - new Date(dueDateStr).getTime()
+  return Math.max(0, Math.floor(diff / 86400000))
+}
+
+export default function AccountDetailClient({ account, orders, invoices, payments, locale }: Props) {
   const router = useRouter()
-  const { supabase, db } = getCompanyClientBrowser()
+  const { db } = getCompanyClientBrowser()
   const [period, setPeriod] = useState<Period>("all")
   const [customFrom, setCustomFrom] = useState("")
   const [customTo, setCustomTo] = useState("")
-  const [tab, setTab] = useState<"devis" | "factures">("factures")
+  const [tab, setTab] = useState<Tab>("historique")
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState("")
@@ -129,10 +150,14 @@ export default function AccountDetailClient({ account, orders, invoices, locale 
     () => invoices.filter(i => inPeriod(i.issue_date)).filter(i => i.status !== "cancelled"),
     [invoices, period, customFrom, customTo]
   )
+  const filteredPayments = useMemo(
+    () => payments.filter(p => inPeriod(p.paid_at)),
+    [payments, period, customFrom, customTo]
+  )
 
   const totalOrdered = groupByCurrency(filteredOrders)
   const totalInvoiced = groupByCurrency(filteredInvoices)
-  const totalPaid = filteredInvoices.reduce<Record<string, number>>((acc, i) => {
+  const totalPaidMap = filteredInvoices.reduce<Record<string, number>>((acc, i) => {
     acc[i.currency] = (acc[i.currency] ?? 0) + i.total_paid
     return acc
   }, {})
@@ -141,17 +166,42 @@ export default function AccountDetailClient({ account, orders, invoices, locale 
     return acc
   }, {})
 
+  // Global solde (all time, not filtered by period)
+  const globalDue = invoices.reduce<Record<string, number>>((acc, i) => {
+    if (i.status !== "paid" && i.status !== "cancelled") {
+      acc[i.currency] = (acc[i.currency] ?? 0) + i.balance
+    }
+    return acc
+  }, {})
+  const globalDueEntries = Object.entries(globalDue).filter(([, v]) => v > 0)
+  const hasDebt = globalDueEntries.length > 0
+
+  // Unified timeline
+  const timeline = useMemo(() => {
+    type Event =
+      | { type: "invoice"; date: string; item: Invoice }
+      | { type: "order"; date: string; item: SalesOrder }
+      | { type: "payment"; date: string; item: Payment }
+
+    const events: Event[] = [
+      ...filteredInvoices.map(i => ({ type: "invoice" as const, date: i.issue_date, item: i })),
+      ...filteredOrders.map(o => ({ type: "order" as const, date: o.created_at, item: o })),
+      ...filteredPayments.map(p => ({ type: "payment" as const, date: p.paid_at, item: p })),
+    ]
+    return events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  }, [filteredInvoices, filteredOrders, filteredPayments])
+
   const PERIODS: { key: Period; label: string }[] = [
     { key: "30", label: "30 jours" },
     { key: "90", label: "3 mois" },
     { key: "365", label: "12 mois" },
     { key: "all", label: "Tout" },
-    { key: "custom", label: "Période custom" },
+    { key: "custom", label: "Personnalisé" },
   ]
 
   return (
     <div className="max-w-5xl mx-auto">
-      {/* Delete confirmation modal */}
+      {/* Delete modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
@@ -168,27 +218,19 @@ export default function AccountDetailClient({ account, orders, invoices, locale 
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-4 flex gap-2">
                 <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
                 <p className="text-xs text-amber-700">
-                  Ce compte a des {hasOpenInvoices ? "factures non soldées" : ""}{hasOpenInvoices && hasActiveOrders ? " et des " : ""}{hasActiveOrders ? "commandes actives" : ""}. La suppression est irréversible.
+                  Ce compte a des {hasOpenInvoices ? "factures non soldées" : ""}{hasOpenInvoices && hasActiveOrders ? " et des " : ""}{hasActiveOrders ? "commandes actives" : ""}.
                 </p>
               </div>
             )}
-            <p className="text-sm text-gray-600 mb-5">
-              Cette action supprimera définitivement le compte et ses contacts. Les factures et commandes liées seront conservées.
-            </p>
+            <p className="text-sm text-gray-600 mb-5">Les factures et commandes liées seront conservées.</p>
             {deleteError && <p className="text-xs text-red-600 mb-3">{deleteError}</p>}
             <div className="flex gap-3">
-              <button
-                onClick={() => { setShowDeleteModal(false); setDeleteError("") }}
-                className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition"
-                disabled={deleting}
-              >
+              <button onClick={() => { setShowDeleteModal(false); setDeleteError("") }}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition" disabled={deleting}>
                 Annuler
               </button>
-              <button
-                onClick={handleDelete}
-                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-600 rounded-xl hover:bg-red-700 transition disabled:opacity-50"
-                disabled={deleting}
-              >
+              <button onClick={handleDelete}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-600 rounded-xl hover:bg-red-700 transition disabled:opacity-50" disabled={deleting}>
                 {deleting ? "Suppression..." : "Supprimer définitivement"}
               </button>
             </div>
@@ -197,18 +239,13 @@ export default function AccountDetailClient({ account, orders, invoices, locale 
       )}
 
       {/* Header */}
-      <div className="flex items-start justify-between mb-6">
+      <div className="flex items-start justify-between mb-4">
         <div className="flex items-start gap-4 flex-1">
           <button onClick={() => router.back()} className="mt-1 text-gray-400 hover:text-gray-600 transition">
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
             <h1 className="text-2xl font-bold text-gray-900">{account.name}</h1>
-            {hasOpenInvoices && (
-              <p className="text-xs text-amber-600 mt-0.5 flex items-center gap-1">
-                <AlertTriangle className="w-3 h-3" /> Factures ou commandes actives
-              </p>
-            )}
             <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
               <span>{account.type === "government" ? "Gouvernement" : account.type === "enterprise" ? "Entreprise" : "PME"}</span>
               {account.industry && <span>· {account.industry}</span>}
@@ -220,31 +257,58 @@ export default function AccountDetailClient({ account, orders, invoices, locale 
               )}
             </div>
             {(account.phone || account.email) && (
-              <p className="text-xs text-gray-400 mt-0.5">
-                {[account.phone, account.email].filter(Boolean).join(" · ")}
-              </p>
+              <p className="text-xs text-gray-400 mt-0.5">{[account.phone, account.email].filter(Boolean).join(" · ")}</p>
             )}
           </div>
         </div>
-        <button
-          onClick={() => setShowDeleteModal(true)}
-          className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 border border-red-200 rounded-xl hover:bg-red-50 transition"
-        >
-          <Trash2 className="w-4 h-4" />
-          Supprimer
+        <button onClick={() => setShowDeleteModal(true)}
+          className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 border border-red-200 rounded-xl hover:bg-red-50 transition">
+          <Trash2 className="w-4 h-4" /> Supprimer
         </button>
       </div>
 
+      {/* Solde en temps réel — bannière */}
+      {hasDebt ? (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 mb-5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+              <AlertCircle className="w-5 h-5 text-red-600" />
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-red-700 uppercase tracking-wide">Solde impayé</p>
+              <p className="text-2xl font-bold text-red-700 leading-tight">
+                {globalDueEntries.map(([cur, val]) => formatCurrency(val, cur as "GNF" | "USD" | "EUR")).join(" · ")}
+              </p>
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-red-500">
+              {invoices.filter(i => i.status !== "paid" && i.status !== "cancelled").length} facture(s) en attente
+            </p>
+            {invoices.some(i => i.due_date && daysOverdue(i.due_date) > 0 && i.status !== "paid" && i.status !== "cancelled") && (
+              <p className="text-xs font-semibold text-red-700 mt-0.5">⚠ En retard</p>
+            )}
+          </div>
+        </div>
+      ) : invoices.length > 0 ? (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 mb-5 flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+            <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+          </div>
+          <div>
+            <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">Compte soldé</p>
+            <p className="text-sm text-emerald-600">Aucune facture impayée</p>
+          </div>
+        </div>
+      ) : null}
+
       {/* Period filter */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-6">
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 mb-5">
         <div className="flex items-center gap-3 flex-wrap">
           <span className="text-xs font-medium text-gray-500 flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> Période :</span>
           {PERIODS.map(p => (
-            <button
-              key={p.key}
-              onClick={() => setPeriod(p.key)}
-              className={`px-3 py-1.5 text-xs rounded-lg font-medium transition ${period === p.key ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-            >
+            <button key={p.key} onClick={() => setPeriod(p.key)}
+              className={`px-3 py-1.5 text-xs rounded-lg font-medium transition ${period === p.key ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
               {p.label}
             </button>
           ))}
@@ -261,12 +325,12 @@ export default function AccountDetailClient({ account, orders, invoices, locale 
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
         {[
-          { label: "Total commandé", value: fmtMulti(totalOrdered), icon: ShoppingCart, color: "text-blue-600", bg: "bg-blue-50", sub: `${filteredOrders.length} commande${filteredOrders.length !== 1 ? "s" : ""}` },
-          { label: "Total facturé", value: fmtMulti(totalInvoiced), icon: Receipt, color: "text-purple-600", bg: "bg-purple-50", sub: `${filteredInvoices.length} facture${filteredInvoices.length !== 1 ? "s" : ""}` },
-          { label: "Total encaissé", value: fmtMulti(totalPaid), icon: Landmark, color: "text-emerald-600", bg: "bg-emerald-50", sub: "Paiements reçus" },
-          { label: "Solde dû", value: fmtMulti(totalDue), icon: Clock, color: Object.values(totalDue).some(v => v > 0) ? "text-red-600" : "text-gray-400", bg: Object.values(totalDue).some(v => v > 0) ? "bg-red-50" : "bg-gray-50", sub: "En attente d'encaissement" },
+          { label: "Commandé", value: fmtMulti(totalOrdered), icon: ShoppingCart, color: "text-blue-600", bg: "bg-blue-50", sub: `${filteredOrders.length} commande(s)` },
+          { label: "Facturé", value: fmtMulti(totalInvoiced), icon: Receipt, color: "text-purple-600", bg: "bg-purple-50", sub: `${filteredInvoices.length} facture(s)` },
+          { label: "Encaissé", value: fmtMulti(totalPaidMap), icon: Landmark, color: "text-emerald-600", bg: "bg-emerald-50", sub: `${filteredPayments.length} paiement(s)` },
+          { label: "Solde dû", value: fmtMulti(totalDue), icon: Clock, color: Object.values(totalDue).some(v => v > 0) ? "text-red-600" : "text-gray-400", bg: Object.values(totalDue).some(v => v > 0) ? "bg-red-50" : "bg-gray-50", sub: "Sur la période" },
         ].map(({ label, value, icon: Icon, color, bg, sub }) => (
           <div key={label} className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
             <div className="flex items-center justify-between mb-2">
@@ -283,19 +347,123 @@ export default function AccountDetailClient({ account, orders, invoices, locale 
 
       {/* Tabs */}
       <div className="flex gap-1 mb-4 bg-gray-100 rounded-xl p-1 w-fit">
-        <button
-          onClick={() => setTab("factures")}
-          className={`px-4 py-2 text-sm font-medium rounded-lg transition ${tab === "factures" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}
-        >
-          Factures ({filteredInvoices.length})
-        </button>
-        <button
-          onClick={() => setTab("devis")}
-          className={`px-4 py-2 text-sm font-medium rounded-lg transition ${tab === "devis" ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}
-        >
-          Devis / Commandes ({filteredOrders.length})
-        </button>
+        {([
+          { key: "historique", label: `Historique (${timeline.length})` },
+          { key: "factures", label: `Factures (${filteredInvoices.length})` },
+          { key: "devis", label: `Devis / BC (${filteredOrders.length})` },
+        ] as { key: Tab; label: string }[]).map(t => (
+          <button key={t.key} onClick={() => setTab(t.key)}
+            className={`px-4 py-2 text-sm font-medium rounded-lg transition ${tab === t.key ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"}`}>
+            {t.label}
+          </button>
+        ))}
       </div>
+
+      {/* Timeline */}
+      {tab === "historique" && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          {timeline.length === 0 ? (
+            <p className="text-center text-gray-400 text-sm py-12">Aucun événement sur cette période</p>
+          ) : (
+            <div className="divide-y divide-gray-50">
+              {timeline.map((event, idx) => {
+                if (event.type === "invoice") {
+                  const inv = event.item
+                  const overdue = inv.due_date && daysOverdue(inv.due_date) > 0 && inv.status !== "paid" && inv.status !== "cancelled"
+                  return (
+                    <div key={`inv-${inv.id}-${idx}`} className="flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50/60 transition">
+                      <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center flex-shrink-0">
+                        <Receipt className="w-4 h-4 text-purple-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-gray-900 font-mono">{inv.number}</span>
+                          <Badge variant={invoiceStatusColor[inv.status] ?? "gray"}>{invoiceStatusLabel[inv.status] ?? inv.status}</Badge>
+                          {overdue && (
+                            <span className="text-xs font-medium text-red-600 bg-red-50 px-2 py-0.5 rounded-full">
+                              {daysOverdue(inv.due_date)} j de retard
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          Facture · {formatDate(inv.issue_date, "fr")}
+                          {inv.due_date && ` · Échéance ${formatDate(inv.due_date, "fr")}`}
+                        </p>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-sm font-bold text-gray-900">{formatCurrency(inv.total, inv.currency as "GNF" | "USD" | "EUR")}</p>
+                        {inv.balance > 0 && (
+                          <p className="text-xs text-red-600 font-medium">
+                            Reste : {formatCurrency(inv.balance, inv.currency as "GNF" | "USD" | "EUR")}
+                          </p>
+                        )}
+                        {inv.balance <= 0 && inv.status === "paid" && (
+                          <p className="text-xs text-emerald-600">✓ Soldé</p>
+                        )}
+                      </div>
+                      <Link href={`/${locale}/ventes/factures/${inv.id}`} className="text-gray-300 hover:text-blue-500 ml-1">
+                        <ExternalLink className="w-4 h-4" />
+                      </Link>
+                    </div>
+                  )
+                }
+
+                if (event.type === "payment") {
+                  const pay = event.item
+                  return (
+                    <div key={`pay-${pay.id}-${idx}`} className="flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50/60 transition bg-emerald-50/30">
+                      <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                        <CreditCard className="w-4 h-4 text-emerald-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-semibold text-emerald-800">Paiement reçu</span>
+                          {pay.invoice_number && (
+                            <span className="text-xs text-gray-400 font-mono">→ {pay.invoice_number}</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {formatDate(pay.paid_at.slice(0, 10), "fr")}
+                          {pay.notes && ` · ${pay.notes}`}
+                        </p>
+                      </div>
+                      <p className="text-sm font-bold text-emerald-700 flex-shrink-0">
+                        + {formatCurrency(pay.amount, pay.currency as "GNF" | "USD" | "EUR")}
+                      </p>
+                    </div>
+                  )
+                }
+
+                // order
+                const ord = event.item as SalesOrder
+                return (
+                  <div key={`ord-${ord.id}-${idx}`} className="flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50/60 transition">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                      <FileText className="w-4 h-4 text-blue-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold text-gray-900 font-mono">{ord.number || "—"}</span>
+                        <Badge variant={orderStatusColor[ord.status] ?? "gray"}>{orderStatusLabel[ord.status] ?? ord.status}</Badge>
+                      </div>
+                      <p className="text-xs text-gray-400 mt-0.5">
+                        {ord.status === "confirmed" ? "Bon de commande" : "Devis"} · {formatDate(ord.created_at, "fr")}
+                        {ord.salesperson && ` · ${ord.salesperson.full_name}`}
+                      </p>
+                    </div>
+                    <p className="text-sm font-bold text-gray-900 flex-shrink-0">
+                      {formatCurrency(ord.total, ord.currency as "GNF" | "USD" | "EUR")}
+                    </p>
+                    <Link href={`/${locale}/ventes/devis/${ord.id}`} className="text-gray-300 hover:text-blue-500 ml-1">
+                      <ExternalLink className="w-4 h-4" />
+                    </Link>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Invoices table */}
       {tab === "factures" && (
@@ -312,37 +480,47 @@ export default function AccountDetailClient({ account, orders, invoices, locale 
                   <th className="text-left px-4 py-3 font-medium text-gray-600">Statut</th>
                   <th className="text-right px-4 py-3 font-medium text-gray-600">Total</th>
                   <th className="text-right px-4 py-3 font-medium text-gray-600">Encaissé</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600 text-red-600">Solde dû</th>
+                  <th className="text-right px-4 py-3 font-medium text-red-600">Solde dû</th>
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {filteredInvoices.map(inv => (
-                  <tr key={inv.id} className="hover:bg-blue-50/30 transition-colors">
-                    <td className="px-4 py-3 font-mono font-medium text-gray-900">{inv.number}</td>
-                    <td className="px-4 py-3 text-gray-600">{formatDate(inv.issue_date, "fr")}</td>
-                    <td className="px-4 py-3 text-gray-600">{inv.due_date ? formatDate(inv.due_date, "fr") : "—"}</td>
-                    <td className="px-4 py-3">
-                      <Badge variant={invoiceStatusColor[inv.status] ?? "gray"}>{invoiceStatusLabel[inv.status] ?? inv.status}</Badge>
-                    </td>
-                    <td className="px-4 py-3 text-right font-semibold text-gray-900">{formatCurrency(inv.total, inv.currency as "GNF" | "USD" | "EUR")}</td>
-                    <td className="px-4 py-3 text-right text-emerald-700">{formatCurrency(inv.total_paid, inv.currency as "GNF" | "USD" | "EUR")}</td>
-                    <td className={`px-4 py-3 text-right font-bold ${inv.balance > 0 ? "text-red-600" : "text-gray-300"}`}>
-                      {inv.balance > 0 ? formatCurrency(inv.balance, inv.currency as "GNF" | "USD" | "EUR") : "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <Link href={`/${locale}/ventes/factures/${inv.id}`} className="text-gray-300 hover:text-blue-500">
-                        <ExternalLink className="w-4 h-4" />
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
+                {filteredInvoices.map(inv => {
+                  const overdue = inv.due_date && daysOverdue(inv.due_date) > 0 && inv.status !== "paid" && inv.status !== "cancelled"
+                  return (
+                    <tr key={inv.id} className={`hover:bg-blue-50/30 transition-colors ${overdue ? "bg-red-50/20" : ""}`}>
+                      <td className="px-4 py-3 font-mono font-medium text-gray-900">{inv.number}</td>
+                      <td className="px-4 py-3 text-gray-600">{formatDate(inv.issue_date, "fr")}</td>
+                      <td className="px-4 py-3 text-gray-600">
+                        {inv.due_date ? (
+                          <span className={overdue ? "text-red-600 font-medium" : ""}>
+                            {formatDate(inv.due_date, "fr")}
+                            {overdue && <span className="ml-1 text-xs">({daysOverdue(inv.due_date)}j)</span>}
+                          </span>
+                        ) : "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge variant={invoiceStatusColor[inv.status] ?? "gray"}>{invoiceStatusLabel[inv.status] ?? inv.status}</Badge>
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-gray-900">{formatCurrency(inv.total, inv.currency as "GNF" | "USD" | "EUR")}</td>
+                      <td className="px-4 py-3 text-right text-emerald-700">{formatCurrency(inv.total_paid, inv.currency as "GNF" | "USD" | "EUR")}</td>
+                      <td className={`px-4 py-3 text-right font-bold ${inv.balance > 0 ? "text-red-600" : "text-gray-300"}`}>
+                        {inv.balance > 0 ? formatCurrency(inv.balance, inv.currency as "GNF" | "USD" | "EUR") : "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Link href={`/${locale}/ventes/factures/${inv.id}`} className="text-gray-300 hover:text-blue-500">
+                          <ExternalLink className="w-4 h-4" />
+                        </Link>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
               <tfoot>
                 <tr className="bg-gray-50 border-t border-gray-200">
                   <td colSpan={4} className="px-4 py-3 text-xs font-medium text-gray-500">Total période</td>
                   <td className="px-4 py-3 text-right font-bold text-gray-900 text-xs">{fmtMulti(totalInvoiced)}</td>
-                  <td className="px-4 py-3 text-right font-bold text-emerald-700 text-xs">{fmtMulti(totalPaid)}</td>
+                  <td className="px-4 py-3 text-right font-bold text-emerald-700 text-xs">{fmtMulti(totalPaidMap)}</td>
                   <td className="px-4 py-3 text-right font-bold text-red-600 text-xs">{fmtMulti(totalDue)}</td>
                   <td></td>
                 </tr>

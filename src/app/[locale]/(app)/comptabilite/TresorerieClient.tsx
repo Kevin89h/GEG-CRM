@@ -247,8 +247,14 @@ export default function TresorerieClient({ accounts: initial, transactions: init
                 <p className="text-white/60 text-xs mt-1">{a.currency}</p>
               </div>
               <div className="bg-white border-x border-b border-gray-100 px-5 py-3 flex justify-between text-xs">
-                <span className="text-emerald-600 font-medium">↓ {formatCurrency(a.total_in, a.currency as "GNF" | "USD" | "EUR")}</span>
-                <span className="text-red-500 font-medium">↑ {formatCurrency(a.total_out, a.currency as "GNF" | "USD" | "EUR")}</span>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-gray-400 uppercase tracking-wide" style={{ fontSize: "10px" }}>Entrées</span>
+                  <span className="text-emerald-600 font-semibold">↓ {formatCurrency(a.total_in, a.currency as "GNF" | "USD" | "EUR")}</span>
+                </div>
+                <div className="flex flex-col gap-0.5 text-right">
+                  <span className="text-gray-400 uppercase tracking-wide" style={{ fontSize: "10px" }}>Sorties</span>
+                  <span className="text-red-500 font-semibold">↑ {formatCurrency(a.total_out, a.currency as "GNF" | "USD" | "EUR")}</span>
+                </div>
               </div>
             </button>
           )

@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createCompanyClient, getCompanySchema } from "@/lib/company"
 import { createClient } from "@/lib/supabase/server"
+import QRCode from "qrcode"
+import { renderFacturePdf } from "./renderFacturePdf"
 
 export const maxDuration = 60
+export const runtime = "nodejs"
 
 export async function GET(
   req: NextRequest,
@@ -11,113 +14,99 @@ export async function GET(
   const { id } = await params
 
   const { db } = await createCompanyClient()
-  const { data: invoice } = await db.from("invoices").select("number").eq("id", id).single()
-  const filename = invoice ? `Facture ${invoice.number}.pdf` : `facture-${id}.pdf`
-
-  // Fetch doc settings for the PDF footer
   const publicSupa = await createClient()
   const schema = await getCompanySchema()
+
   const { data: company } = await publicSupa.from("companies").select("id").eq("schema_name", schema).single()
-  const { data: ds } = company
-    ? await publicSupa.from("document_settings").select("phone, email, website, nif, brand_color").eq("company_id", company.id).maybeSingle()
+  const { data: docSettings } = company
+    ? await publicSupa.from("document_settings").select("*").eq("company_id", company.id).maybeSingle()
     : { data: null }
 
-  const phone = (ds as Record<string, string> | null)?.phone ?? "+224 613 04 40 20"
-  const website = (ds as Record<string, string> | null)?.website ?? "www.globalenergygroup.com"
-  const nif = (ds as Record<string, string> | null)?.nif ?? "446243099"
-  const color = (ds as Record<string, string> | null)?.brand_color ?? "#1e3a5f"
+  const { data: invoice } = await db
+    .from("invoices")
+    .select(`
+      id, number, status, currency, issue_date, due_date, notes, order_id,
+      account:accounts(id, name, city, country, phone),
+      lines:invoice_lines(id, description, quantity, unit_price, discount, position, tva_rate)
+    `)
+    .eq("id", id)
+    .single()
 
-  const footerTemplate = `<div style="width:100%;background:${color};padding:9px 24px;display:flex;justify-content:center;align-items:center;gap:0;flex-wrap:wrap;font-family:Arial,Helvetica,sans-serif;font-size:9px;box-sizing:border-box;-webkit-print-color-adjust:exact;color-adjust:exact;">
-    ${phone ? `<div style="display:flex;align-items:center;gap:5px;color:rgba(255,255,255,.9);padding:0 14px;">📞 <strong style="color:white">${phone}</strong></div>` : ""}
-    ${phone && website ? `<div style="width:1px;height:16px;background:rgba(255,255,255,.25);flex-shrink:0;"></div>` : ""}
-    ${website ? `<div style="display:flex;align-items:center;gap:5px;color:rgba(255,255,255,.9);padding:0 14px;">🌐 <strong style="color:white">${website}</strong></div>` : ""}
-    ${website && nif ? `<div style="width:1px;height:16px;background:rgba(255,255,255,.25);flex-shrink:0;"></div>` : ""}
-    ${nif ? `<div style="display:flex;align-items:center;gap:5px;color:rgba(255,255,255,.9);padding:0 14px;"><span style="opacity:.65;font-size:8px">NIF</span> <strong style="color:white">${nif}</strong></div>` : ""}
-  </div>`
+  if (!invoice) return NextResponse.json({ error: "Not found" }, { status: 404 })
 
-  const host = req.headers.get("host") ?? "localhost:3000"
-  const protocol = host.includes("localhost") ? "http" : "https"
-  const locale = req.nextUrl.searchParams.get("locale") ?? "fr"
-  const url = `${protocol}://${host}/${locale}/ventes/factures/${id}/pdf`
+  const [{ data: payments }, { data: bankAccounts }] = await Promise.all([
+    db.from("payments").select("amount, paid_at").eq("invoice_id", id).order("paid_at"),
+    db.from("treasury_accounts").select("institution, account_number, swift, iban, currency").eq("type", "bank").eq("is_active", true).order("name"),
+  ])
 
-  let browser
-  try {
-    const puppeteer = (await import("puppeteer-core")).default
+  const account = Array.isArray(invoice.account) ? invoice.account[0] : invoice.account
+  const acc = account as Record<string, string | null> | null
 
-    if (process.env.NODE_ENV === "production") {
-      const chromium = (await import("@sparticuz/chromium-min")).default
-      browser = await puppeteer.launch({
-        args: chromium.args,
-        executablePath: await chromium.executablePath(
-          "https://github.com/Sparticuz/chromium/releases/download/v131.0.1/chromium-v131.0.1-pack.tar"
-        ),
-        headless: true,
-      })
-    } else {
-      const executablePath =
-        process.platform === "darwin"
-          ? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-          : process.platform === "win32"
-          ? "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
-          : "/usr/bin/google-chrome"
-      browser = await puppeteer.launch({
-        executablePath,
-        headless: true,
-        args: ["--no-sandbox", "--disable-setuid-sandbox"],
-      })
-    }
+  const lines = ((invoice.lines ?? []) as Record<string, unknown>[])
+    .sort((a, b) => (a.position as number) - (b.position as number))
+    .map(l => ({
+      id: String(l.id ?? ""),
+      description: String(l.description ?? ""),
+      quantity: Number(l.quantity) || 0,
+      unit_price: Number(l.unit_price) || 0,
+      discount: Number(l.discount) || 0,
+      tva_rate: l.tva_rate != null ? Number(l.tva_rate) : null,
+    }))
 
-    const page = await browser.newPage()
+  const paymentList = (payments ?? []).map(p => ({
+    amount: Number(p.amount) || 0,
+    paid_at: String(p.paid_at ?? ""),
+  }))
 
-    const cookieHeader = req.headers.get("cookie") ?? ""
-    if (cookieHeader) {
-      const domain = host.split(":")[0]
-      const cookies = cookieHeader.split(";").flatMap(c => {
-        const eqIdx = c.indexOf("=")
-        if (eqIdx === -1) return []
-        const name = c.slice(0, eqIdx).trim()
-        const value = c.slice(eqIdx + 1).trim()
-        return [{ name, value, domain }]
-      })
-      if (cookies.length) await page.setCookie(...cookies)
-    }
+  const totalHT = lines.reduce((s, l) => s + l.quantity * l.unit_price * (1 - (l.discount ?? 0) / 100), 0)
+  const totalPaid = paymentList.reduce((s, p) => s + p.amount, 0)
+  const balance = totalHT - totalPaid
 
-    await page.emulateMediaType("print")
-    await page.goto(url, { waitUntil: "networkidle0", timeout: 30000 })
+  const qrContent = [
+    `FACTURE:${invoice.number}`,
+    `CLIENT:${acc?.name ?? ""}`,
+    `DATE:${invoice.issue_date ?? ""}`,
+    `ECHEANCE:${invoice.due_date ?? ""}`,
+    `MONTANT:${Math.round(totalHT)} ${invoice.currency}`,
+    balance > 0 ? `SOLDE:${Math.round(balance)} ${invoice.currency}` : `SOLDE:REGLE`,
+  ].join("\n")
 
-    // Hide chat widget, nav overlays, and HTML footer bar (replaced by PDF native footer)
-    // Add padding-bottom so last content never hides behind the footer margin
-    await page.addStyleTag({ content: `
-      [data-no-pdf], .no-print,
-      nav, header:not(.doc-header),
-      .crisp-client, #crisp-chatbox,
-      .intercom-launcher, [class*="intercom"],
-      #fc_widget, [id*="freshchat"],
-      #hubspot-messages-iframe-container,
-      .footer-bar { display: none !important; }
-      .page { padding-bottom: 8px !important; }
-    ` })
+  const qrDataUrl = await QRCode.toDataURL(qrContent, {
+    margin: 1,
+    width: 120,
+    color: { dark: "#1e3a5f", light: "#ffffff" },
+  })
 
-    const pdf = await page.pdf({
-      format: "A4",
-      printBackground: true,
-      displayHeaderFooter: true,
-      headerTemplate: "<span></span>",
-      footerTemplate,
-      margin: { top: "0", right: "0", bottom: "38px", left: "0" },
-    })
+  const filename = `Facture ${invoice.number}.pdf`
 
-    await browser.close()
+  const pdfBytes = await renderFacturePdf({
+    number: invoice.number,
+    status: invoice.status,
+    currency: invoice.currency,
+    issueDate: invoice.issue_date,
+    dueDate: (invoice as Record<string, unknown>).due_date as string | null ?? null,
+    notes: (invoice as Record<string, unknown>).notes as string | null ?? null,
+    accountName: acc?.name ?? "—",
+    accountCity: acc?.city ?? null,
+    accountCountry: acc?.country ?? null,
+    accountPhone: acc?.phone ?? null,
+    lines,
+    payments: paymentList,
+    qrDataUrl,
+    bankAccounts: (bankAccounts ?? []).map((a: Record<string, unknown>) => ({
+      institution: String(a.institution ?? ""),
+      account_number: String(a.account_number ?? ""),
+      swift: a.swift ? String(a.swift) : null,
+      iban: a.iban ? String(a.iban) : null,
+      currency: String(a.currency ?? ""),
+    })),
+    docSettings: docSettings as Record<string, unknown> | null,
+  })
 
-    return new NextResponse(Buffer.from(pdf), {
-      headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${filename}"`,
-      },
-    })
-  } catch (err) {
-    if (browser) await browser.close().catch(() => {})
-    console.error("PDF generation error:", err)
-    return NextResponse.json({ error: "Erreur génération PDF" }, { status: 500 })
-  }
+  return new NextResponse(pdfBytes as unknown as BodyInit, {
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+    },
+  })
 }

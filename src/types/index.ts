@@ -82,6 +82,15 @@ export type DealStage = "lead" | "qualified" | "proposal" | "negotiation" | "won
 export type ActivityType = "call" | "meeting" | "email" | "note"
 export type UserRole = "admin" | "manager" | "sales_rep"
 
+export interface ModulePermission {
+  view: boolean
+  create: boolean
+  edit: boolean
+  delete: boolean
+}
+
+export type UserPermissions = Record<string, ModulePermission>
+
 export interface Account {
   id: string
   name: string
@@ -150,6 +159,8 @@ export interface Profile {
   avatar_url: string | null
   phone: string | null
   job_title: string | null
+  permissions: UserPermissions | null
+  company_access: string[] | null
 }
 
 export type AccountWithContacts = Account & { contacts: Contact[] }

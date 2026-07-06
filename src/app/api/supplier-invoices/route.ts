@@ -9,6 +9,7 @@ export async function POST(req: Request) {
       total_ht, tax_amount, total_ttc, status,
       lines,
       pay_immediately, treasury_account_id, payment_method,
+      purchase_order_id, reception_id,
     } = body
 
     if (!supplier_name?.trim()) {
@@ -38,6 +39,8 @@ export async function POST(req: Request) {
         tax_amount,
         total_ttc,
         status,
+        purchase_order_id: purchase_order_id || null,
+        reception_id: reception_id || null,
       }])
       .select("id")
       .single()

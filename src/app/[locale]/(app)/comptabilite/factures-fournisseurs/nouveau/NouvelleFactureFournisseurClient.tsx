@@ -2,11 +2,12 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Plus, Trash2, ArrowLeft } from "lucide-react"
+import { Plus, Trash2, ArrowLeft, FileText } from "lucide-react"
 import Link from "next/link"
 
 interface TreasuryAccount { id: string; name: string; type: string; currency: string }
-interface Props { locale: string; treasuryAccounts: TreasuryAccount[] }
+interface Prefill { order_id: string; reception_id: string | null; supplier: string; currency: string; reference: string }
+interface Props { locale: string; treasuryAccounts: TreasuryAccount[]; prefill?: Prefill | null }
 
 interface Line {
   id: number
@@ -22,16 +23,16 @@ const newLine = (): Line => ({ id: uid(), description: "", quantity: "1", unit_p
 
 type Currency = "GNF" | "USD" | "EUR"
 
-export default function NouvelleFactureFournisseurClient({ locale, treasuryAccounts }: Props) {
+export default function NouvelleFactureFournisseurClient({ locale, treasuryAccounts, prefill }: Props) {
   const router = useRouter()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState({
-    supplier_name: "",
-    currency: "GNF" as Currency,
+    supplier_name: prefill?.supplier ?? "",
+    currency: (prefill?.currency ?? "GNF") as Currency,
     invoice_date: new Date().toISOString().split("T")[0],
     due_date: "",
-    reference: "",
+    reference: prefill?.reference ?? "",
     notes: "",
     treasury_account_id: "",
     pay_immediately: false,
@@ -83,6 +84,8 @@ export default function NouvelleFactureFournisseurClient({ locale, treasuryAccou
         tax_amount: taxAmount,
         total_ttc: totalTTC,
         status: form.pay_immediately ? "paid" : "pending",
+        purchase_order_id: prefill?.order_id ?? null,
+        reception_id: prefill?.reception_id ?? null,
         lines: lines.map(l => ({
           description: l.description,
           quantity: parseFloat(l.quantity) || 1,
@@ -107,6 +110,13 @@ export default function NouvelleFactureFournisseurClient({ locale, treasuryAccou
         <ArrowLeft className="w-4 h-4" /> Retour aux factures fournisseurs
       </Link>
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Nouvelle facture fournisseur</h1>
+
+      {prefill && (
+        <div className="flex items-center gap-2 px-4 py-3 bg-emerald-50 border border-emerald-200 rounded-lg text-sm text-emerald-800 mb-2">
+          <FileText className="w-4 h-4 flex-shrink-0" />
+          <span>Créée depuis le bon de commande <strong>{prefill.reference}</strong> — fournisseur et devise pré-remplis.</span>
+        </div>
+      )}
 
       <div className="space-y-6">
 

@@ -93,6 +93,11 @@ export default function Sidebar({ locale, profile, companies, currentSchema }: P
       {/* Nav */}
       <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
         {navItems.map(({ key, icon: Icon, path }) => {
+          // Admins see everything; others need explicit view permission
+          if (profile?.role !== "admin") {
+            const perm = profile?.permissions?.[key]
+            if (perm && !perm.view) return null
+          }
           const href = `/${locale}/${path}`
           const active = pathname.startsWith(href)
           return (
