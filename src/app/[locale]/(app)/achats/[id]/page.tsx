@@ -28,18 +28,25 @@ export default async function AchatDetailPage({ params }: { params: Promise<{ lo
   return (
     <AchatDetailClient
       order={order}
-      lines={(landedLines ?? []).map((l: Record<string, unknown>) => ({
-        line_id: l.line_id as string,
-        product_id: l.product_id as string | null,
-        description: l.description as string,
-        quantity: Number(l.quantity),
-        fob_unit_price: Number(l.fob_unit_price),
-        fob_total: Number(l.fob_total),
-        allocated_costs: Number(l.allocated_costs),
-        landed_total: Number(l.landed_total),
-        landed_unit_price: Number(l.landed_unit_price),
-        warehouse_id: l.warehouse_id as string | null,
-      }))}
+      lines={Array.from(
+        new Map(
+          (landedLines ?? []).map((l: Record<string, unknown>) => [
+            l.line_id as string,
+            {
+              line_id: l.line_id as string,
+              product_id: l.product_id as string | null,
+              description: l.description as string,
+              quantity: Number(l.quantity),
+              fob_unit_price: Number(l.fob_unit_price),
+              fob_total: Number(l.fob_total),
+              allocated_costs: Number(l.allocated_costs),
+              landed_total: Number(l.landed_total),
+              landed_unit_price: Number(l.landed_unit_price),
+              warehouse_id: l.warehouse_id as string | null,
+            },
+          ])
+        ).values()
+      )}
       costs={(costs ?? []) as { id: string; type: string; label: string; amount: number; currency: string }[]}
       warehouses={warehouses ?? []}
       exchangeRates={(rates ?? []) as { from_currency: string; to_currency: string; rate: number; effective_date: string }[]}
