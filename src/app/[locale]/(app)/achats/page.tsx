@@ -6,7 +6,7 @@ export default async function AchatsPage() {
 
   const { data: orders } = await db
     .from("purchase_orders")
-    .select("id, number, supplier_name, status, currency, order_date, expected_date, user_id, lines:purchase_order_lines(quantity, unit_price, discount)")
+    .select("id, number, supplier_name, status, currency, order_date, expected_date, user_id, lines:purchase_order_lines(quantity, fob_unit_price)")
     .order("created_at", { ascending: false })
 
   type RawOrder = {
@@ -18,12 +18,12 @@ export default async function AchatsPage() {
     order_date: string | null
     expected_date: string | null
     user_id: string | null
-    lines: { quantity: number; unit_price: number; discount: number }[]
+    lines: { quantity: number; fob_unit_price: number }[]
   }
 
   const list = ((orders ?? []) as unknown as RawOrder[]).map(o => {
     const total = (o.lines ?? []).reduce(
-      (s, l) => s + l.quantity * l.unit_price * (1 - (l.discount ?? 0) / 100),
+      (s, l) => s + l.quantity * l.fob_unit_price,
       0
     )
     return {
