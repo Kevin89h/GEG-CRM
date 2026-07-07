@@ -6,7 +6,8 @@ import { Plus, Trash2, ArrowLeft, FileText } from "lucide-react"
 import Link from "next/link"
 
 interface TreasuryAccount { id: string; name: string; type: string; currency: string }
-interface Prefill { order_id: string; reception_id: string | null; supplier: string; currency: string; reference: string }
+interface PrefillLine { description: string; quantity: string; unit_price: string; tax_rate: string }
+interface Prefill { order_id: string; reception_id: string | null; supplier: string; currency: string; reference: string; lines?: PrefillLine[] }
 interface Props { locale: string; treasuryAccounts: TreasuryAccount[]; prefill?: Prefill | null }
 
 interface Line {
@@ -38,7 +39,11 @@ export default function NouvelleFactureFournisseurClient({ locale, treasuryAccou
     pay_immediately: false,
     payment_method: "virement",
   })
-  const [lines, setLines] = useState<Line[]>([newLine()])
+  const [lines, setLines] = useState<Line[]>(
+    prefill?.lines && prefill.lines.length > 0
+      ? prefill.lines.map(l => ({ id: uid(), description: l.description, quantity: l.quantity, unit_price: l.unit_price, tax_rate: l.tax_rate }))
+      : [newLine()]
+  )
 
   function setF<K extends keyof typeof form>(k: K, v: typeof form[K]) {
     setForm(f => ({ ...f, [k]: v }))

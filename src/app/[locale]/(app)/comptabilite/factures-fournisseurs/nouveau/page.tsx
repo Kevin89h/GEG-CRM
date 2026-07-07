@@ -18,13 +18,28 @@ export default async function NouvelleFactureFournisseurPage({ params, searchPar
     .order("name")
 
   // Pré-remplissage depuis un bon de commande
-  const prefill = sp.order_id ? {
-    order_id: sp.order_id,
-    reception_id: sp.reception_id ?? null,
-    supplier: sp.supplier ?? "",
-    currency: sp.currency ?? "GNF",
-    reference: sp.reference ?? "",
-  } : null
+  let prefill = null
+  if (sp.order_id) {
+    const { data: poLines } = await db
+      .from("purchase_order_lines")
+      .select("description, quantity, fob_unit_price, position")
+      .eq("order_id", sp.order_id)
+      .order("position")
+
+    prefill = {
+      order_id: sp.order_id,
+      reception_id: sp.reception_id ?? null,
+      supplier: sp.supplier ?? "",
+      currency: sp.currency ?? "GNF",
+      reference: sp.reference ?? "",
+      lines: (poLines ?? []).map(l => ({
+        description: l.description,
+        quantity: String(l.quantity),
+        unit_price: String(l.fob_unit_price),
+        tax_rate: "0",
+      })),
+    }
+  }
 
   return (
     <NouvelleFactureFournisseurClient
