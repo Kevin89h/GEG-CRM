@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
+import { createClient as createAdminSupabase } from "@supabase/supabase-js"
 import { createCompanyClient } from "@/lib/company"
 import { createClient } from "@/lib/supabase/server"
+import { getCompanySchema } from "@/lib/company"
 
 interface StockMove {
   type: "in"
@@ -39,13 +41,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { data: { user } } = await supabase.auth.getUser()
 
   const { db } = await createCompanyClient()
+  const schema = await getCompanySchema()
+  const adminDb = createAdminSupabase(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  ).schema(schema)
 
-  // 1. Créer le bon de réception
+  // 1. Créer le bon de réception (admin pour bypasser RLS)
   const { data: order } = await db.from("purchase_orders").select("number").eq("id", id).single()
-  const { count } = await db.from("purchase_receptions").select("id", { count: "exact", head: true })
+  const { count } = await adminDb.from("purchase_receptions").select("id", { count: "exact", head: true })
   const receptionNumber = `BR/${new Date().getFullYear()}/${String((count ?? 0) + 1).padStart(5, "0")}`
 
-  const { data: reception, error: recErr } = await db.from("purchase_receptions").insert([{
+  const { data: reception, error: recErr } = await adminDb.from("purchase_receptions").insert([{
     order_id: id,
     number: receptionNumber,
     received_at: new Date().toISOString(),
@@ -58,7 +65,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   // 2. Lignes du bon de réception
   if (receptionLines && receptionLines.length > 0) {
-    await db.from("purchase_reception_lines").insert(
+    await adminDb.from("purchase_reception_lines").insert(
       receptionLines.map(l => ({
         reception_id: reception.id,
         order_line_id: l.order_line_id,
