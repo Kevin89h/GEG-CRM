@@ -47,8 +47,12 @@ export default async function FactureDetailPage({ params }: { params: Promise<{ 
   const total_ht = linesData.reduce((s, l) => {
     return s + (Number(l.quantity) || 0) * (Number(l.unit_price) || 0) * (1 - (Number(l.discount) || 0) / 100)
   }, 0)
+  const total_ttc = linesData.reduce((s, l) => {
+    const lineHT = (Number(l.quantity) || 0) * (Number(l.unit_price) || 0) * (1 - (Number(l.discount) || 0) / 100)
+    return s + lineHT * (1 + (Number(l.tax_rate) || 0) / 100)
+  }, 0)
   const total_paid = (payments ?? []).reduce((s, p) => s + Number(p.amount), 0)
-  const balance = total_ht - total_paid
+  const balance = total_ttc - total_paid
 
   const invoice = {
     id: inv.id,
@@ -59,6 +63,7 @@ export default async function FactureDetailPage({ params }: { params: Promise<{ 
     due_date: inv.due_date ?? null,
     notes: inv.notes ?? null,
     total_ht,
+    total_ttc,
     total_paid,
     balance,
     account: account ?? null,

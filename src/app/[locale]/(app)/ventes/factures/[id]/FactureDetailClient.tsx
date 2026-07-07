@@ -46,6 +46,7 @@ interface Invoice {
   due_date: string | null
   notes: string | null
   total_ht: number
+  total_ttc: number
   total_paid: number
   balance: number
   account: { name: string; country: string | null } | null
@@ -253,7 +254,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
     if (!res.ok || !json.payment) { setError(json.error ?? t("serverError")); setSaving(false); return }
 
     const newTotalPaid = invoice.total_paid + amount
-    const newBalance = invoice.total_ht - newTotalPaid
+    const newBalance = invoice.total_ttc - newTotalPaid
     const newStatus = newBalance <= 0 ? "paid" : newTotalPaid > 0 ? "partial" : "sent"
 
     setInvoice(prev => ({
@@ -268,8 +269,8 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
     setSaving(false)
   }
 
-  const progressPct = invoice.total_ht > 0
-    ? Math.min(100, (invoice.total_paid / invoice.total_ht) * 100)
+  const progressPct = invoice.total_ttc > 0
+    ? Math.min(100, (invoice.total_paid / invoice.total_ttc) * 100)
     : 0
 
   // Stepper Odoo-style
@@ -390,8 +391,8 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
           </div>
           <div className="grid grid-cols-3 gap-2 text-center">
             <div>
-              <p className="text-xs text-gray-400 mb-0.5">{t("totalHt")}</p>
-              <p className="font-bold text-gray-900">{formatCurrency(invoice.total_ht, invoice.currency as "USD" | "GNF" | "EUR")}</p>
+              <p className="text-xs text-gray-400 mb-0.5">Total TTC</p>
+              <p className="font-bold text-gray-900">{formatCurrency(invoice.total_ttc, invoice.currency as "USD" | "GNF" | "EUR")}</p>
             </div>
             <div>
               <p className="text-xs text-gray-400 mb-0.5">{t("collected")}</p>
