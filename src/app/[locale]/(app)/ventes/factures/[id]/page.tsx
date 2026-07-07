@@ -49,7 +49,7 @@ export default async function FactureDetailPage({ params }: { params: Promise<{ 
   }, 0)
   const total_ttc = linesData.reduce((s, l) => {
     const lineHT = (Number(l.quantity) || 0) * (Number(l.unit_price) || 0) * (1 - (Number(l.discount) || 0) / 100)
-    return s + lineHT * (1 + (Number(l.tax_rate) || 0) / 100)
+    return s + lineHT * (1 + (Number(l.tva_rate) || 0) / 100)
   }, 0)
   const total_paid = (payments ?? []).reduce((s, p) => s + Number(p.amount), 0)
   const balance = total_ttc - total_paid
