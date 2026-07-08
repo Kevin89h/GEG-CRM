@@ -6,10 +6,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { lines, userId, accountId } = await req.json()
   const { db } = await createCompanyClient()
 
+  const { count } = await db.from("delivery_notes").select("id", { count: "exact", head: true })
+  const year = new Date().getFullYear()
+  const blNumber = `BL/${year}/${String((count ?? 0) + 1).padStart(5, "0")}`
+
   const { data: dn, error: dnError } = await db
     .from("delivery_notes")
     .insert([{
-      number: "",
+      number: blNumber,
       invoice_id: id,
       account_id: accountId ?? null,
       status: "draft",
