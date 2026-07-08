@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
-import { CheckCircle, Receipt, X, Printer, ArrowLeft, RotateCcw, Truck, Plus, Trash2 } from "lucide-react"
+import { CheckCircle, Receipt, X, Printer, ArrowLeft, RotateCcw, Truck, Plus, Trash2, Copy } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/Button"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
@@ -111,6 +111,14 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
   const totalTaxable = lines.filter(l => !l.tva_exempt).reduce((s, l) => s + lineTotal(l), 0)
   const tvaAmount = tva ? totalTaxable * 0.18 : 0
   const totalTTC = total + tvaAmount
+
+  async function duplicate() {
+    setLoading(true)
+    const res = await fetch(`/api/devis/${order.id}/duplicate`, { method: "POST" })
+    const json = await res.json()
+    setLoading(false)
+    if (json.id) router.push(`/${locale}/ventes/devis/${json.id}`)
+  }
 
   async function toggleTva() {
     const newVal = !tva
@@ -344,6 +352,11 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
               <Receipt className="w-4 h-4" /> {t("deliverySlip")}
             </a>
           )}
+
+          {/* Dupliquer : toujours disponible */}
+          <Button variant="secondary" onClick={duplicate} disabled={loading}>
+            <Copy className="w-4 h-4" /> Dupliquer
+          </Button>
 
           {/* Remettre en brouillon : depuis confirmed, invoiced, cancelled */}
           {["confirmed", "invoiced", "cancelled"].includes(order.status) && (
