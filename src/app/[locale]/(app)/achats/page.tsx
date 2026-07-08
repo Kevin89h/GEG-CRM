@@ -7,6 +7,7 @@ export default async function AchatsPage() {
   const { data: orders } = await db
     .from("purchase_orders")
     .select("id, number, supplier_name, status, currency, order_date, expected_date, user_id, lines:purchase_order_lines(quantity, fob_unit_price)")
+    .neq("status", "cancelled")
     .order("created_at", { ascending: false })
 
   type RawOrder = {
