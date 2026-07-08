@@ -11,6 +11,7 @@ export default async function DevisListPage() {
   ] = await Promise.all([
     db.from("sales_order_totals")
       .select("id, number, status, currency, account_id, created_at, total_ht, salesperson_id")
+      .neq("status", "cancelled")
       .order("created_at", { ascending: false }),
     db.from("accounts").select("id, name"),
     db.from("employees").select("id, full_name"),
