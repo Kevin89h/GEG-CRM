@@ -71,6 +71,20 @@ export default function FactureFournisseurDetailClient({
     setForm(prev => ({ ...prev, [k]: v }))
   }
 
+  async function deletePayment(paymentId: string, amount: number, currency: string) {
+    if (!window.confirm(`Annuler ce paiement de ${Number(amount).toLocaleString("fr")} ${currency} ?`)) return
+    const res = await fetch(`/api/supplier-invoices/${invoice.id}/payments/${paymentId}`, { method: "DELETE" })
+    const json = await res.json()
+    if (!res.ok) { alert(json.error ?? "Erreur"); return }
+    setPayments(prev => prev.filter(p => p.id !== paymentId))
+    setInvoice(prev => ({
+      ...prev,
+      total_paid: json.totalPaid,
+      balance: json.balance,
+      status: json.newStatus,
+    }))
+  }
+
   async function submitPayment() {
     const amount = parseFloat(form.amount)
     if (!amount || amount <= 0) { setError("Montant invalide"); return }
@@ -197,6 +211,7 @@ export default function FactureFournisseurDetailClient({
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-400 uppercase">Mode</th>
                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-400 uppercase">Référence</th>
                 <th className="px-4 py-2 text-right text-xs font-medium text-gray-400 uppercase">Montant</th>
+                <th className="w-8" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -206,6 +221,15 @@ export default function FactureFournisseurDetailClient({
                   <td className="px-4 py-3 text-gray-600">{METHOD_LABEL[p.method] ?? p.method}</td>
                   <td className="px-4 py-3 text-gray-500">{p.reference ?? "—"}</td>
                   <td className="px-4 py-3 text-right font-medium text-emerald-700">{Number(p.amount).toLocaleString("fr")} {p.currency}</td>
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      onClick={() => deletePayment(p.id, p.amount, p.currency)}
+                      className="text-red-400 hover:text-red-600 transition-colors p-1 rounded hover:bg-red-50"
+                      title="Annuler ce paiement"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </td>
                 </tr>
               ))}
             </tbody>
