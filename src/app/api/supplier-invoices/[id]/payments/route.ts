@@ -1,4 +1,5 @@
-import { createCompanyClient } from "@/lib/company"
+import { createCompanyClient, getCompanySchema } from "@/lib/company"
+import { createClient as createAdminClient } from "@supabase/supabase-js"
 import { NextResponse } from "next/server"
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -11,16 +12,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const { db } = await createCompanyClient()
 
-    // Récupérer la facture pour connaître le total
     const { data: invoice } = await db
       .from("supplier_invoices")
-      .select("total_ttc, status")
+      .select("total_ttc, status, number")
       .eq("id", id)
       .single()
 
     if (!invoice) return NextResponse.json({ error: "Facture introuvable" }, { status: 404 })
 
-    // Insérer le paiement
     const { data: payment, error: payErr } = await db
       .from("supplier_payments")
       .insert([{
@@ -38,7 +37,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     if (payErr || !payment) return NextResponse.json({ error: payErr?.message ?? "Erreur" }, { status: 500 })
 
-    // Recalculer le total payé et mettre à jour le statut
     const { data: allPayments } = await db
       .from("supplier_payments")
       .select("amount")
@@ -46,21 +44,28 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const totalPaid = (allPayments ?? []).reduce((s, p) => s + Number(p.amount), 0)
     const balance = Number(invoice.total_ttc) - totalPaid
-
     const newStatus = balance <= 0 ? "paid" : totalPaid > 0 ? "partial" : "pending"
     await db.from("supplier_invoices").update({ status: newStatus }).eq("id", id)
 
-    // Créer une transaction trésorerie (débit) si un compte est sélectionné
     if (treasury_account_id) {
-      await db.from("treasury_transactions").insert([{
+      const schema = await getCompanySchema()
+      const adminRaw = createAdminClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      )
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const adminDb = (adminRaw as any).schema(schema) as typeof adminRaw
+      const { error: txErr } = await adminDb.from("treasury_transactions").insert([{
         account_id: treasury_account_id,
         type: "debit",
         amount,
         currency,
-        description: `Paiement facture fournisseur — ref: ${reference || id}`,
-        transaction_date: new Date(paid_at).toISOString(),
+        description: `Paiement facture fournisseur — ${invoice.number ?? id}${reference ? ` (${reference})` : ""}`,
+        date: new Date(paid_at).toISOString(),
         reference: reference || null,
+        category: "supplier_payment",
       }])
+      if (txErr) console.error("Treasury insert error:", txErr.message)
     }
 
     return NextResponse.json({ payment, newStatus, balance })

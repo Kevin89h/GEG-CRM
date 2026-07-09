@@ -72,7 +72,10 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
   const [deliveryNotes, setDeliveryNotes] = useState(initialDNs)
   const [modalOpen, setModalOpen] = useState(false)
   const [confirmModalOpen, setConfirmModalOpen] = useState(false)
+  const [creditNoteModalOpen, setCreditNoteModalOpen] = useState(false)
+  const [creditNoteReason, setCreditNoteReason] = useState("")
   const [creatingBL, setCreatingBL] = useState(false)
+  const [creatingCreditNote, setCreatingCreditNote] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [paymentForm, setPaymentForm] = useState({
@@ -269,6 +272,38 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
     setSaving(false)
   }
 
+  async function createCreditNote() {
+    setCreatingCreditNote(true)
+    setError(null)
+    const res = await fetch(`/api/invoices/${invoice.id}/credit-note`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason: creditNoteReason || null }),
+    })
+    const json = await res.json()
+    setCreatingCreditNote(false)
+    if (!res.ok) { setError(json.error ?? "Erreur"); return }
+    setCreditNoteModalOpen(false)
+    router.push(`/${locale}/ventes/factures/${json.id}`)
+  }
+
+  async function deletePayment(paymentId: string, amount: number) {
+    if (!window.confirm(`Annuler ce paiement de ${formatCurrency(amount, invoice.currency as "USD" | "GNF" | "EUR")} ?`)) return
+    const res = await fetch(`/api/invoices/${invoice.id}/payments/${paymentId}`, { method: "DELETE" })
+    const json = await res.json()
+    if (!res.ok) { alert(json.error ?? "Erreur"); return }
+    const newTotalPaid = json.totalPaid
+    const newBalance = invoice.total_ttc - newTotalPaid
+    setInvoice(prev => ({
+      ...prev,
+      total_paid: newTotalPaid,
+      balance: newBalance,
+      status: json.newStatus,
+      payments: prev.payments.filter(p => p.id !== paymentId),
+    }))
+    setPaymentForm(f => ({ ...f, amount: String(Math.max(newBalance, 0).toFixed(2)) }))
+  }
+
   const progressPct = invoice.total_ttc > 0
     ? Math.min(100, (invoice.total_paid / invoice.total_ttc) * 100)
     : 0
@@ -317,6 +352,11 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
           {!isPaid && !isCancelled && invoice.status !== "draft" && (
             <Button onClick={() => setModalOpen(true)}>
               <Plus className="w-4 h-4" /> {t("registerPayment")}
+            </Button>
+          )}
+          {["sent", "partial", "paid"].includes(invoice.status) && (
+            <Button variant="secondary" onClick={() => setCreditNoteModalOpen(true)}>
+              Créer un avoir
             </Button>
           )}
           {isPaid && (
@@ -560,6 +600,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
                 <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colMethod")}</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600 hidden sm:table-cell">{t("colReference")}</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">{t("colAmount")}</th>
+                <th className="w-8" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -570,6 +611,15 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
                   <td className="px-4 py-3 text-gray-500 font-mono text-xs hidden sm:table-cell">{p.reference ?? "—"}</td>
                   <td className="px-4 py-3 text-right font-semibold text-emerald-700">
                     +{formatCurrency(p.amount, p.currency as "USD" | "GNF" | "EUR")}
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <button
+                      onClick={() => deletePayment(p.id, p.amount)}
+                      className="text-red-400 hover:text-red-600 transition-colors p-1 rounded hover:bg-red-50"
+                      title="Annuler ce paiement"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -747,6 +797,30 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
               {saving ? t("saving") : t("createPayment")}
             </Button>
             <Button variant="secondary" onClick={() => setModalOpen(false)}>{t("ignore")}</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal note de crédit */}
+      <Modal open={creditNoteModalOpen} onClose={() => { setCreditNoteModalOpen(false); setCreditNoteReason("") }} title="Créer un avoir">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            Un avoir sera créé avec les mêmes lignes que la facture <strong>{invoice.number}</strong> en quantités négatives.
+          </p>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Motif (optionnel)</label>
+            <Input
+              value={creditNoteReason}
+              onChange={e => setCreditNoteReason(e.target.value)}
+              placeholder="Ex. : retour marchandise, erreur de facturation…"
+            />
+          </div>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="secondary" onClick={() => { setCreditNoteModalOpen(false); setCreditNoteReason("") }}>Annuler</Button>
+            <Button onClick={createCreditNote} disabled={creatingCreditNote}>
+              {creatingCreditNote ? "Création…" : "Créer l'avoir"}
+            </Button>
           </div>
         </div>
       </Modal>
