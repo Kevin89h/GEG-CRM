@@ -292,6 +292,10 @@ function TransactionsDrawer({ accountId, accounts, onClose, onNewTx, refreshKey 
   const account = accounts.find(a => a.id === accountId)
   const [filtered, setFiltered] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const [editTx, setEditTx] = useState<Transaction | null>(null)
+  const [editForm, setEditForm] = useState({ description: "", amount: "", date: "", reference: "", category: "" })
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     setLoading(true)
@@ -303,6 +307,47 @@ function TransactionsDrawer({ accountId, accounts, onClose, onNewTx, refreshKey 
       })
       .finally(() => setLoading(false))
   }, [accountId, refreshKey])
+
+  function openEdit(t: Transaction) {
+    setEditTx(t)
+    setEditForm({
+      description: t.description,
+      amount: String(t.amount),
+      date: t.date.split("T")[0],
+      reference: t.reference ?? "",
+      category: t.category ?? "",
+    })
+    setOpenMenuId(null)
+  }
+
+  async function saveEdit() {
+    if (!editTx) return
+    setSaving(true)
+    const res = await fetch(`/api/tresorerie/transactions/${editTx.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        description: editForm.description,
+        amount: parseFloat(editForm.amount),
+        date: new Date(editForm.date).toISOString(),
+        reference: editForm.reference || null,
+        category: editForm.category || null,
+      }),
+    })
+    const json = await res.json()
+    setSaving(false)
+    if (!res.ok) { alert(json.error ?? "Erreur"); return }
+    setFiltered(prev => prev.map(t => t.id === editTx.id ? { ...t, ...json } : t))
+    setEditTx(null)
+  }
+
+  async function deleteTx(t: Transaction) {
+    if (!window.confirm(`Supprimer "${t.description}" ?`)) return
+    setOpenMenuId(null)
+    const res = await fetch(`/api/tresorerie/transactions/${t.id}`, { method: "DELETE" })
+    if (!res.ok) { const j = await res.json(); alert(j.error ?? "Erreur"); return }
+    setFiltered(prev => prev.filter(tx => tx.id !== t.id))
+  }
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
@@ -363,6 +408,7 @@ function TransactionsDrawer({ accountId, accounts, onClose, onNewTx, refreshKey 
                   <th className="text-left px-5 py-2.5 text-xs font-medium text-gray-500">Date</th>
                   <th className="text-left px-5 py-2.5 text-xs font-medium text-gray-500">Description</th>
                   <th className="text-right px-5 py-2.5 text-xs font-medium text-gray-500">Montant</th>
+                  <th className="w-8" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -378,6 +424,30 @@ function TransactionsDrawer({ accountId, accounts, onClose, onNewTx, refreshKey 
                       <td className={`px-5 py-3 text-right font-semibold text-sm whitespace-nowrap ${isCredit ? "text-emerald-700" : "text-red-600"}`}>
                         {isCredit ? "+" : "−"}{formatCurrency(t.amount, t.currency as "GNF"|"USD"|"EUR")}
                       </td>
+                      <td className="px-2 py-3 relative">
+                        <button
+                          onClick={() => setOpenMenuId(openMenuId === t.id ? null : t.id)}
+                          className="p-1 rounded hover:bg-gray-100 text-gray-300 hover:text-gray-600 transition-colors"
+                        >
+                          <MoreVertical className="w-4 h-4" />
+                        </button>
+                        {openMenuId === t.id && (
+                          <div className="absolute right-2 top-8 z-50 bg-white border border-gray-200 rounded-xl shadow-lg py-1 w-40">
+                            <button
+                              onClick={() => openEdit(t)}
+                              className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                            >
+                              <span className="text-gray-400">✏️</span> Modifier
+                            </button>
+                            <button
+                              onClick={() => deleteTx(t)}
+                              className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
+                            >
+                              <Trash2 className="w-4 h-4" /> Supprimer
+                            </button>
+                          </div>
+                        )}
+                      </td>
                     </tr>
                   )
                 })}
@@ -386,6 +456,54 @@ function TransactionsDrawer({ accountId, accounts, onClose, onNewTx, refreshKey 
           )}
         </div>
       </div>
+
+      {/* Modal modifier */}
+      {editTx && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-semibold text-gray-900">Modifier le mouvement</h2>
+              <button onClick={() => setEditTx(null)} className="text-gray-400 hover:text-gray-700"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <input value={editForm.description} onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Montant</label>
+                  <input type="number" min="0" step="any" value={editForm.amount} onChange={e => setEditForm(f => ({ ...f, amount: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                  <input type="date" value={editForm.date} onChange={e => setEditForm(f => ({ ...f, date: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Référence</label>
+                <input value={editForm.reference} onChange={e => setEditForm(f => ({ ...f, reference: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Catégorie</label>
+                <input value={editForm.category} onChange={e => setEditForm(f => ({ ...f, category: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={() => setEditTx(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">Annuler</button>
+              <button onClick={saveEdit} disabled={saving || !editForm.description || !editForm.amount}
+                className="px-5 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors">
+                {saving ? "Enregistrement…" : "Enregistrer"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
