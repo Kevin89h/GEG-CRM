@@ -20,11 +20,19 @@ export default async function NouvelleFactureFournisseurPage({ params, searchPar
   // Pré-remplissage depuis un bon de commande
   let prefill = null
   if (sp.order_id) {
-    const { data: poLines } = await db
-      .from("purchase_order_lines")
-      .select("description, quantity, fob_unit_price, position")
-      .eq("order_id", sp.order_id)
-      .order("position")
+    const [{ data: poLines }, { data: po }] = await Promise.all([
+      db.from("purchase_order_lines")
+        .select("description, quantity, fob_unit_price, position")
+        .eq("order_id", sp.order_id)
+        .order("position"),
+      db.from("purchase_orders")
+        .select("global_discount_pct")
+        .eq("id", sp.order_id)
+        .single(),
+    ])
+
+    const discountPct = Number(po?.global_discount_pct ?? 0)
+    const discountFactor = 1 - discountPct / 100
 
     prefill = {
       order_id: sp.order_id,
@@ -35,7 +43,7 @@ export default async function NouvelleFactureFournisseurPage({ params, searchPar
       lines: (poLines ?? []).map(l => ({
         description: l.description,
         quantity: String(l.quantity),
-        unit_price: String(l.fob_unit_price),
+        unit_price: String(Math.round(Number(l.fob_unit_price) * discountFactor)),
         tax_rate: "0",
       })),
     }

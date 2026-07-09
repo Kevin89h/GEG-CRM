@@ -405,10 +405,10 @@ function TransactionsDrawer({ accountId, accounts, onClose, onNewTx, refreshKey 
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-gray-50 border-b border-gray-100">
                 <tr>
-                  <th className="text-left px-5 py-2.5 text-xs font-medium text-gray-500">Date</th>
-                  <th className="text-left px-5 py-2.5 text-xs font-medium text-gray-500">Description</th>
-                  <th className="text-right px-5 py-2.5 text-xs font-medium text-gray-500">Montant</th>
-                  <th className="w-8" />
+                  <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Date</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Description</th>
+                  <th className="text-right px-4 py-2.5 text-xs font-medium text-gray-500">Montant</th>
+                  <th className="text-right px-4 py-2.5 text-xs font-medium text-gray-500">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -416,37 +416,27 @@ function TransactionsDrawer({ accountId, accounts, onClose, onNewTx, refreshKey 
                   const isCredit = t.type === "credit" || t.type === "transfer_in"
                   return (
                     <tr key={t.id} className="hover:bg-gray-50/50">
-                      <td className="px-5 py-3 text-xs text-gray-400 whitespace-nowrap">{formatDate(t.date, "fr")}</td>
-                      <td className="px-5 py-3">
+                      <td className="px-4 py-3 text-xs text-gray-400 whitespace-nowrap">{formatDate(t.date, "fr")}</td>
+                      <td className="px-4 py-3">
                         <p className="font-medium text-gray-800 text-sm">{t.description}</p>
                         {t.reference && <p className="text-xs text-gray-400 font-mono">{t.reference}</p>}
                       </td>
-                      <td className={`px-5 py-3 text-right font-semibold text-sm whitespace-nowrap ${isCredit ? "text-emerald-700" : "text-red-600"}`}>
+                      <td className={`px-4 py-3 text-right font-semibold text-sm whitespace-nowrap ${isCredit ? "text-emerald-700" : "text-red-600"}`}>
                         {isCredit ? "+" : "−"}{formatCurrency(t.amount, t.currency as "GNF"|"USD"|"EUR")}
                       </td>
-                      <td className="px-2 py-3 relative">
+                      <td className="px-4 py-3 text-right whitespace-nowrap">
                         <button
-                          onClick={() => setOpenMenuId(openMenuId === t.id ? null : t.id)}
-                          className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800 transition-colors"
+                          onClick={() => openEdit(t)}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-blue-100 text-blue-700 text-xs font-medium hover:bg-blue-200 transition-colors mr-1"
                         >
-                          <MoreVertical className="w-3.5 h-3.5" />
+                          ✏️ Modifier
                         </button>
-                        {openMenuId === t.id && (
-                          <div className="absolute right-2 top-8 z-50 bg-white border border-gray-200 rounded-xl shadow-lg py-1 w-40">
-                            <button
-                              onClick={() => openEdit(t)}
-                              className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
-                            >
-                              <span className="text-gray-400">✏️</span> Modifier
-                            </button>
-                            <button
-                              onClick={() => deleteTx(t)}
-                              className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
-                            >
-                              <Trash2 className="w-4 h-4" /> Supprimer
-                            </button>
-                          </div>
-                        )}
+                        <button
+                          onClick={() => deleteTx(t)}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-red-100 text-red-700 text-xs font-medium hover:bg-red-200 transition-colors"
+                        >
+                          <Trash2 className="w-3 h-3" /> Supprimer
+                        </button>
                       </td>
                     </tr>
                   )
