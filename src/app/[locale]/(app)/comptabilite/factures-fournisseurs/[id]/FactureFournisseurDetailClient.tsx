@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import Link from "next/link"
-import { ArrowLeft, Plus, X, ChevronDown, Ban, Trash2, Printer } from "lucide-react"
+import { ArrowLeft, Plus, X, ChevronDown, Ban, Trash2, Printer, FileMinus } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 import { useRouter } from "next/navigation"
 
@@ -136,6 +136,15 @@ export default function FactureFournisseurDetailClient({
     }
   }
 
+  async function createCreditNote() {
+    if (!window.confirm("Créer un avoir fournisseur pour cette facture ?")) return
+    setMenuOpen(false)
+    const res = await fetch(`/api/supplier-invoices/${invoice.id}/credit-note`, { method: "POST" })
+    const json = await res.json()
+    if (!res.ok) { alert(json.error ?? "Erreur"); return }
+    router.push(`/${locale}/comptabilite/factures-fournisseurs/${json.id}`)
+  }
+
   async function deleteInvoice() {
     if (!window.confirm("Supprimer définitivement cette facture ? Cette action est irréversible.")) return
     const res = await fetch(`/api/supplier-invoices/${invoice.id}`, { method: "DELETE" })
@@ -186,6 +195,12 @@ export default function FactureFournisseurDetailClient({
                   className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
                 >
                   <Printer className="w-4 h-4 text-gray-400" /> Imprimer
+                </button>
+                <button
+                  onClick={createCreditNote}
+                  className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <FileMinus className="w-4 h-4 text-gray-400" /> Créer un avoir
                 </button>
                 {!isCancelled && (
                   <button
