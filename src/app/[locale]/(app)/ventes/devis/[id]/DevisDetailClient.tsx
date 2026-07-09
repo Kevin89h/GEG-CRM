@@ -70,6 +70,18 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
     valid_until: order.valid_until ?? "",
     client_order_ref: order.client_order_ref ?? "",
   })
+  const [notes, setNotes] = useState(order.notes ?? "")
+  const [notesSaving, setNotesSaving] = useState(false)
+
+  async function saveNotes(value: string) {
+    setNotesSaving(true)
+    await fetch(`/api/devis/${order.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notes: value || null }),
+    })
+    setNotesSaving(false)
+  }
   const isDraft = order.status === "draft"
 
   const PAYMENT_TERMS_LABELS: Record<string, string> = {
@@ -696,13 +708,16 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
         {activeTab === "notes" && (
           <div className="p-6">
             <textarea
-              defaultValue={order.notes ?? ""}
-              onBlur={e => updateOrderField("notes", e.target.value)}
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              onBlur={e => saveNotes(e.target.value)}
               rows={6}
               placeholder={t("noNotes")}
               className="w-full text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
             />
-            <p className="text-xs text-gray-400 mt-1">Les notes sont sauvegardées automatiquement à la perte du focus.</p>
+            <p className="text-xs text-gray-400 mt-1">
+              {notesSaving ? "Sauvegarde..." : "Les notes sont sauvegardées automatiquement à la perte du focus."}
+            </p>
           </div>
         )}
       </div>
