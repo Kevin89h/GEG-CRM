@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, ArrowUpRight, ArrowDownLeft, ArrowLeftRight, Banknote, Smartphone, Building2 } from "lucide-react"
+import { Plus, ArrowUpRight, ArrowDownLeft, Banknote, Smartphone, Building2, MoreHorizontal, Pencil, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
@@ -64,6 +64,10 @@ export default function TresorerieClient({ accounts: initial, transactions: init
   const [accountModal, setAccountModal] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const [editTx, setEditTx] = useState<Transaction | null>(null)
+  const [editForm, setEditForm] = useState({ description: "", amount: "", date: "", reference: "", category: "" })
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
 
   const [txForm, setTxForm] = useState({
     account_id: accounts[0]?.id ?? "",
@@ -156,6 +160,52 @@ export default function TresorerieClient({ accounts: initial, transactions: init
     }))
     setTxModal(false)
     setSaving(false)
+  }
+
+  function openEdit(t: Transaction) {
+    setEditTx(t)
+    setEditForm({
+      description: t.description,
+      amount: String(t.amount),
+      date: t.date.split("T")[0],
+      reference: t.reference ?? "",
+      category: t.category ?? "",
+    })
+    setOpenMenuId(null)
+  }
+
+  async function saveEdit() {
+    if (!editTx) return
+    setSaving(true)
+    const res = await fetch(`/api/tresorerie/transactions/${editTx.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        description: editForm.description,
+        amount: parseFloat(editForm.amount),
+        date: new Date(editForm.date).toISOString(),
+        reference: editForm.reference || null,
+        category: editForm.category || null,
+      }),
+    })
+    const json = await res.json()
+    setSaving(false)
+    if (!res.ok) { setError(json.error ?? "Erreur"); return }
+    setTransactions(prev => prev.map(t => t.id === editTx.id ? json : t))
+    setEditTx(null)
+  }
+
+  async function deleteTransaction(t: Transaction) {
+    if (!window.confirm(`Supprimer ce mouvement de ${t.description} ?`)) return
+    setOpenMenuId(null)
+    const res = await fetch(`/api/tresorerie/transactions/${t.id}`, { method: "DELETE" })
+    if (!res.ok) { const j = await res.json(); alert(j.error ?? "Erreur"); return }
+    setTransactions(prev => prev.filter(tx => tx.id !== t.id))
+    const isCredit = t.type === "credit" || t.type === "transfer_in"
+    setAccounts(prev => prev.map(a => {
+      if (a.id === t.account_id) return { ...a, balance: a.balance + (isCredit ? -t.amount : t.amount) }
+      return a
+    }))
   }
 
   async function saveAccount() {
@@ -297,6 +347,7 @@ export default function TresorerieClient({ accounts: initial, transactions: init
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Compte</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Catégorie</th>
                 <th className="text-right px-4 py-3 font-medium text-gray-600">Montant</th>
+                <th className="w-10" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -323,6 +374,30 @@ export default function TresorerieClient({ accounts: initial, transactions: init
                     <td className="px-4 py-3 text-gray-500 text-xs">{t.category ?? "—"}</td>
                     <td className={`px-4 py-3 text-right font-semibold ${isCredit ? "text-emerald-700" : "text-red-600"}`}>
                       {isCredit ? "+" : "−"}{formatCurrency(t.amount, t.currency as "GNF" | "USD" | "EUR")}
+                    </td>
+                    <td className="px-2 py-3 text-right relative">
+                      <button
+                        onClick={() => setOpenMenuId(openMenuId === t.id ? null : t.id)}
+                        className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
+                      >
+                        <MoreHorizontal className="w-4 h-4" />
+                      </button>
+                      {openMenuId === t.id && (
+                        <div className="absolute right-2 top-8 z-30 bg-white border border-gray-200 rounded-xl shadow-lg py-1 w-40">
+                          <button
+                            onClick={() => openEdit(t)}
+                            className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                          >
+                            <Pencil className="w-4 h-4 text-gray-400" /> Modifier
+                          </button>
+                          <button
+                            onClick={() => deleteTransaction(t)}
+                            className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
+                          >
+                            <Trash2 className="w-4 h-4" /> Supprimer
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 )
@@ -419,6 +494,49 @@ export default function TresorerieClient({ accounts: initial, transactions: init
           </div>
         </div>
       </Modal>
+
+      {/* Modal modifier transaction */}
+      {editTx && (
+        <Modal open={!!editTx} onClose={() => setEditTx(null)} title="Modifier le mouvement">
+          <div className="space-y-4">
+            <Input
+              label="Description"
+              value={editForm.description}
+              onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <Input
+                label="Montant"
+                type="number" min="0" step="any"
+                value={editForm.amount}
+                onChange={e => setEditForm(f => ({ ...f, amount: e.target.value }))}
+              />
+              <Input
+                label="Date"
+                type="date"
+                value={editForm.date}
+                onChange={e => setEditForm(f => ({ ...f, date: e.target.value }))}
+              />
+            </div>
+            <Input
+              label="Référence"
+              value={editForm.reference}
+              onChange={e => setEditForm(f => ({ ...f, reference: e.target.value }))}
+            />
+            <Input
+              label="Catégorie"
+              value={editForm.category}
+              onChange={e => setEditForm(f => ({ ...f, category: e.target.value }))}
+            />
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="secondary" onClick={() => setEditTx(null)}>Annuler</Button>
+              <Button onClick={saveEdit} disabled={saving || !editForm.description || !editForm.amount}>
+                {saving ? "Enregistrement…" : "Enregistrer"}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {/* Modal nouveau compte */}
       <Modal open={accountModal} onClose={() => { setAccountModal(false); setError(null) }} title="Nouveau compte de trésorerie">
