@@ -49,6 +49,7 @@ interface Props {
   createdAt: string
   validUntil: string | null
   notes: string | null
+  additionalInfo: string | null
   paymentTerms: string | null
   accountName: string
   accountCountry: string | null
@@ -60,7 +61,7 @@ interface Props {
 
 export async function renderDevisPdf(props: Props): Promise<Buffer> {
   const {
-    number, status, currency, createdAt, validUntil, notes, paymentTerms,
+    number, status, currency, createdAt, validUntil, notes, additionalInfo, paymentTerms,
     accountName, accountCountry, salespersonName, lines, bankAccounts, docSettings: ds,
   } = props
 
@@ -256,10 +257,11 @@ export async function renderDevisPdf(props: Props): Promise<Buffer> {
           </View>
         </View>
 
-        {/* Notes */}
-        {notes && (
+        {/* Informations supplémentaires */}
+        {additionalInfo && (
           <View style={s.notesBox}>
-            <Text style={s.notesText}>{notes}</Text>
+            <Text style={{ fontSize: 7.5, fontWeight: 700, color: "#666", textTransform: "uppercase", marginBottom: 3 }}>Informations supplémentaires</Text>
+            <Text style={s.notesText}>{additionalInfo}</Text>
           </View>
         )}
 

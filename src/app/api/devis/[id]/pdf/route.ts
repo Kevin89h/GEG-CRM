@@ -23,7 +23,7 @@ export async function GET(
 
   const { data: order } = await db
     .from("sales_orders")
-    .select("id, number, status, currency, valid_until, notes, created_at, account_id, salesperson_id, tva, payment_terms")
+    .select("id, number, status, currency, valid_until, notes, additional_info, created_at, account_id, salesperson_id, tva, payment_terms")
     .eq("id", id)
     .single()
 
@@ -57,6 +57,7 @@ export async function GET(
     createdAt: order.created_at,
     validUntil: (order as Record<string, unknown>).valid_until as string | null ?? null,
     notes: (order as Record<string, unknown>).notes as string | null ?? null,
+    additionalInfo: (order as Record<string, unknown>).additional_info as string | null ?? null,
     paymentTerms: (order as Record<string, unknown>).payment_terms as string | null ?? null,
     accountName: (account as Record<string, string> | null)?.name ?? "—",
     accountCountry: (account as Record<string, string> | null)?.country ?? null,

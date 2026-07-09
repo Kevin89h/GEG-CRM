@@ -28,6 +28,7 @@ interface Order {
   currency: string
   valid_until: string | null
   notes: string | null
+  additional_info: string | null
   created_at: string
   date_order?: string | null
   payment_terms?: string | null
@@ -72,6 +73,8 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
   })
   const [notes, setNotes] = useState(order.notes ?? "")
   const [notesSaving, setNotesSaving] = useState(false)
+  const [additionalInfo, setAdditionalInfo] = useState(order.additional_info ?? "")
+  const [additionalInfoSaving, setAdditionalInfoSaving] = useState(false)
 
   async function saveNotes(value: string) {
     setNotesSaving(true)
@@ -81,6 +84,16 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
       body: JSON.stringify({ notes: value || null }),
     })
     setNotesSaving(false)
+  }
+
+  async function saveAdditionalInfo(value: string) {
+    setAdditionalInfoSaving(true)
+    await fetch(`/api/devis/${order.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ additional_info: value || null }),
+    })
+    setAdditionalInfoSaving(false)
   }
   const isDraft = order.status === "draft"
 
@@ -700,8 +713,21 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
         )}
 
         {activeTab === "other" && (
-          <div className="p-6 text-sm text-gray-500">
-            {t("noAdditionalInfo")}
+          <div className="p-6">
+            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+              Informations supplémentaires
+            </label>
+            <textarea
+              value={additionalInfo}
+              onChange={e => setAdditionalInfo(e.target.value)}
+              onBlur={e => saveAdditionalInfo(e.target.value)}
+              rows={6}
+              placeholder="Conditions générales, termes de livraison, remarques..."
+              className="w-full text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              {additionalInfoSaving ? "Sauvegarde..." : "Ce texte apparaîtra dans le PDF du devis."}
+            </p>
           </div>
         )}
 
@@ -733,7 +759,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
           recipientName={order.account?.name ?? "—"}
           recipientCountry={order.account?.country ?? undefined}
           lines={order.lines}
-          notes={order.notes ?? undefined}
+          notes={notes || undefined}
           currency={order.currency}
           locale={locale}
         />
