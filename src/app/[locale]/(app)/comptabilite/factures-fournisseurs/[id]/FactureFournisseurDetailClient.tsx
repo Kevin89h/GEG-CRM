@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import Link from "next/link"
-import { ArrowLeft, Plus, X } from "lucide-react"
+import { ArrowLeft, Plus, X, ChevronDown, Ban, Trash2, Printer } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 import { useRouter } from "next/navigation"
 
@@ -111,6 +111,38 @@ export default function FactureFournisseurDetailClient({
   }
 
   const isPaid = invoice.status === "paid" || invoice.status === "cancelled"
+  const isCancelled = invoice.status === "cancelled"
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setMenuOpen(false)
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
+
+  async function cancelInvoice() {
+    if (!window.confirm("Annuler cette facture fournisseur ?")) return
+    const res = await fetch(`/api/supplier-invoices/${invoice.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "cancelled" }),
+    })
+    if (res.ok) {
+      setInvoice(prev => ({ ...prev, status: "cancelled" }))
+      setMenuOpen(false)
+    }
+  }
+
+  async function deleteInvoice() {
+    if (!window.confirm("Supprimer définitivement cette facture ? Cette action est irréversible.")) return
+    const res = await fetch(`/api/supplier-invoices/${invoice.id}`, { method: "DELETE" })
+    const json = await res.json()
+    if (!res.ok) { alert(json.error ?? "Erreur"); return }
+    router.push(`/${locale}/comptabilite/factures-fournisseurs`)
+  }
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-8">
@@ -139,6 +171,40 @@ export default function FactureFournisseurDetailClient({
               Enregistrer un paiement
             </button>
           )}
+          {/* Menu actions */}
+          <div className="relative" ref={menuRef}>
+            <button
+              onClick={() => setMenuOpen(v => !v)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              Actions <ChevronDown className="w-4 h-4" />
+            </button>
+            {menuOpen && (
+              <div className="absolute right-0 mt-1 w-52 bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1">
+                <button
+                  onClick={() => { window.print(); setMenuOpen(false) }}
+                  className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <Printer className="w-4 h-4 text-gray-400" /> Imprimer
+                </button>
+                {!isCancelled && (
+                  <button
+                    onClick={cancelInvoice}
+                    className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-amber-700 hover:bg-amber-50"
+                  >
+                    <Ban className="w-4 h-4" /> Annuler la facture
+                  </button>
+                )}
+                <div className="my-1 border-t border-gray-100" />
+                <button
+                  onClick={deleteInvoice}
+                  className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
+                >
+                  <Trash2 className="w-4 h-4" /> Supprimer
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

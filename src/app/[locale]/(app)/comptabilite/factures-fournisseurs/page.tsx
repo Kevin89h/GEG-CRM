@@ -1,6 +1,6 @@
 import { createCompanyClient } from "@/lib/company"
 import Link from "next/link"
-import { Plus } from "lucide-react"
+import { Plus, Download } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 
 const STATUS_LABEL: Record<string, string> = {
@@ -39,12 +39,20 @@ export default async function FacturesFournisseursPage({ params }: { params: Pro
           <h1 className="text-2xl font-bold text-gray-900">Factures fournisseurs</h1>
           <p className="text-sm text-gray-500 mt-0.5">Gérez vos achats et dépenses directement</p>
         </div>
-        <Link
-          href={`/${locale}/comptabilite/factures-fournisseurs/nouveau`}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          <Plus className="w-4 h-4" /> Nouvelle facture
-        </Link>
+        <div className="flex items-center gap-2">
+          <a
+            href="/api/supplier-invoices/export"
+            className="inline-flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <Download className="w-4 h-4" /> Exporter CSV
+          </a>
+          <Link
+            href={`/${locale}/comptabilite/factures-fournisseurs/nouveau`}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <Plus className="w-4 h-4" /> Nouvelle facture
+          </Link>
+        </div>
       </div>
 
       {/* Stats */}
