@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Plus, Building2, Smartphone, Banknote, ArrowDownLeft, ArrowUpRight, MoreVertical, X, BarChart2, Trash2 } from "lucide-react"
+import { Plus, Building2, Smartphone, Banknote, ArrowDownLeft, ArrowUpRight, MoreVertical, X, BarChart2, Trash2, Download, FileText, Sheet } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
@@ -317,7 +317,31 @@ function TransactionsDrawer({ accountId, accounts, onClose, onNewTx, refreshKey 
               </span>
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden text-xs font-medium text-gray-600">
+              <a
+                href={`/api/tresorerie/transactions/export?format=csv&account_id=${accountId}&account_name=${encodeURIComponent(account?.name ?? "")}`}
+                className="flex items-center gap-1 px-2.5 py-1.5 hover:bg-gray-50 border-r border-gray-200 transition-colors"
+                title="Exporter CSV"
+              >
+                <Download className="w-3.5 h-3.5" /> CSV
+              </a>
+              <a
+                href={`/api/tresorerie/transactions/export?format=xls&account_id=${accountId}&account_name=${encodeURIComponent(account?.name ?? "")}`}
+                className="flex items-center gap-1 px-2.5 py-1.5 hover:bg-gray-50 border-r border-gray-200 transition-colors"
+                title="Exporter Excel"
+              >
+                <Sheet className="w-3.5 h-3.5" /> XLS
+              </a>
+              <a
+                href={`/api/tresorerie/transactions/export?format=pdf&account_id=${accountId}&account_name=${encodeURIComponent(account?.name ?? "")}`}
+                target="_blank"
+                className="flex items-center gap-1 px-2.5 py-1.5 hover:bg-gray-50 transition-colors"
+                title="Exporter PDF"
+              >
+                <FileText className="w-3.5 h-3.5" /> PDF
+              </a>
+            </div>
             <button onClick={onNewTx} className="px-3 py-1.5 text-sm font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition-colors flex items-center gap-1.5">
               <Plus className="w-3.5 h-3.5" /> Mouvement
             </button>
