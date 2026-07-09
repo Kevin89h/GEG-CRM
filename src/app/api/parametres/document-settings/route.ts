@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createCompanyClient } from "@/lib/company"
+import { createClient } from "@/lib/supabase/server"
 
-// POST: upsert document settings
-// Send { id?, ...fields } — if id is present it's an update, otherwise insert
+// POST: upsert document settings (table is in public schema)
 export async function POST(req: NextRequest) {
   const body = await req.json()
-  const { db } = await createCompanyClient()
+  const db = await createClient()
 
   if (body.id) {
     const { id, ...fields } = body
