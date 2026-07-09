@@ -427,9 +427,9 @@ function TransactionsDrawer({ accountId, accounts, onClose, onNewTx, refreshKey 
                       <td className="px-2 py-3 relative">
                         <button
                           onClick={() => setOpenMenuId(openMenuId === t.id ? null : t.id)}
-                          className="p-1 rounded hover:bg-gray-100 text-gray-300 hover:text-gray-600 transition-colors"
+                          className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-800 transition-colors"
                         >
-                          <MoreVertical className="w-4 h-4" />
+                          <MoreVertical className="w-3.5 h-3.5" />
                         </button>
                         {openMenuId === t.id && (
                           <div className="absolute right-2 top-8 z-50 bg-white border border-gray-200 rounded-xl shadow-lg py-1 w-40">
