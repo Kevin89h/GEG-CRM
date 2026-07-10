@@ -23,46 +23,59 @@ export async function POST(req: Request) {
     const month = String(now.getMonth() + 1).padStart(2, "0")
     const prefix = `FF-${year}-${month}-`
 
-    const { data: existing } = await db
-      .from("supplier_invoices")
-      .select("number")
-      .like("number", `${prefix}%`)
-      .order("number", { ascending: false })
-      .limit(1)
+    // Retry up to 5 times in case of unique constraint conflict (race condition)
+    let invoice: { id: string } | null = null
+    let number = ""
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const { data: existing } = await db
+        .from("supplier_invoices")
+        .select("number")
+        .like("number", `${prefix}%`)
+        .order("number", { ascending: false })
+        .limit(1)
+      const lastSeq = existing?.[0]?.number
+        ? parseInt(existing[0].number.replace(prefix, ""), 10)
+        : 0
+      number = `${prefix}${String(lastSeq + 1).padStart(4, "0")}`
 
-    const lastSeq = existing?.[0]?.number
-      ? parseInt(existing[0].number.replace(prefix, ""), 10)
-      : 0
-    const number = `${prefix}${String(lastSeq + 1).padStart(4, "0")}`
+      const { data, error } = await db
+        .from("supplier_invoices")
+        .insert([{
+          number,
+          supplier_name: supplier_name.trim(),
+          currency,
+          invoice_date,
+          due_date: due_date || null,
+          reference: reference || null,
+          notes: notes || null,
+          total_ht,
+          tax_amount,
+          total_ttc,
+          status,
+          purchase_order_id: purchase_order_id || null,
+          reception_id: reception_id || null,
+        }])
+        .select("id")
+        .single()
 
-    const { data: invoice, error: invErr } = await db
-      .from("supplier_invoices")
-      .insert([{
-        number,
-        supplier_name: supplier_name.trim(),
-        currency,
-        invoice_date,
-        due_date: due_date || null,
-        reference: reference || null,
-        notes: notes || null,
-        total_ht,
-        tax_amount,
-        total_ttc,
-        status,
-        purchase_order_id: purchase_order_id || null,
-        reception_id: reception_id || null,
-      }])
-      .select("id")
-      .single()
+      if (!error) {
+        invoice = data
+        break
+      }
+      // Retry only on unique constraint violation
+      if (!error.message.includes("unique")) {
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
+    }
 
-    if (invErr || !invoice) {
-      return NextResponse.json({ error: invErr?.message ?? "Erreur création facture" }, { status: 500 })
+    if (!invoice) {
+      return NextResponse.json({ error: "Impossible de générer un numéro unique pour cette facture" }, { status: 500 })
     }
 
     if (lines?.length > 0) {
       const { error: linesErr } = await db.from("supplier_invoice_lines").insert(
         lines.map((l: { description: string; quantity: number; unit_price: number; tax_rate: number }, i: number) => ({
-          invoice_id: invoice.id,
+          invoice_id: invoice!.id,
           description: l.description,
           quantity: l.quantity,
           unit_price: l.unit_price,
