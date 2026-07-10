@@ -18,12 +18,22 @@ export async function POST(req: Request) {
 
     const { db } = await createCompanyClient()
 
-    const { count } = await db.from("supplier_invoices").select("id", { count: "exact", head: true })
     const now = new Date()
     const year = now.getFullYear()
     const month = String(now.getMonth() + 1).padStart(2, "0")
-    const seq = String((count ?? 0) + 1).padStart(4, "0")
-    const number = `FF-${year}-${month}-${seq}`
+    const prefix = `FF-${year}-${month}-`
+
+    const { data: existing } = await db
+      .from("supplier_invoices")
+      .select("number")
+      .like("number", `${prefix}%`)
+      .order("number", { ascending: false })
+      .limit(1)
+
+    const lastSeq = existing?.[0]?.number
+      ? parseInt(existing[0].number.replace(prefix, ""), 10)
+      : 0
+    const number = `${prefix}${String(lastSeq + 1).padStart(4, "0")}`
 
     const { data: invoice, error: invErr } = await db
       .from("supplier_invoices")
