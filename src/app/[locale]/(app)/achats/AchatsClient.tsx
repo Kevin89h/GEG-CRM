@@ -11,6 +11,13 @@ import {
 } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils"
 
+interface InvoiceRef {
+  id: string
+  number: string
+  purchase_order_id: string
+  status: string
+}
+
 interface Order {
   id: string
   number: string
@@ -21,6 +28,7 @@ interface Order {
   expected_date: string | null
   user_id: string | null
   total: number
+  invoice: InvoiceRef | null
 }
 
 interface Props {
@@ -277,6 +285,7 @@ export default function AchatsClient({ orders }: Props) {
                       {t("colTotal")} <SortIcon field="total" />
                     </button>
                   </th>
+                  <th className="text-left px-4 py-3 hidden lg:table-cell">Facture</th>
                   <th className="text-left px-4 py-3">{t("colStatus")}</th>
                 </tr>
               </thead>
@@ -316,6 +325,20 @@ export default function AchatsClient({ orders }: Props) {
                         {o.total > 0
                           ? formatCurrency(o.total, o.currency as "GNF" | "USD" | "EUR")
                           : "—"}
+                      </td>
+                      <td className="px-4 py-3 hidden lg:table-cell">
+                        {o.invoice ? (
+                          <Link
+                            href={`/${locale}/comptabilite/factures-fournisseurs/${o.invoice.id}`}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
+                            onClick={e => e.stopPropagation()}
+                          >
+                            <FileText className="w-3 h-3" />
+                            {o.invoice.number}
+                          </Link>
+                        ) : (
+                          <span className="text-xs text-gray-300">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${cfg.bg} ${cfg.text}`}>
