@@ -223,7 +223,7 @@ export default function PrintPage({
 
       <div className="no-print">
         <button className="btn btn-secondary" onClick={() => window.close()}>✕ Fermer</button>
-        <a className="btn btn-primary" href={`/api/devis/${id}/pdf`} download={`${docLabel} - ${number}.pdf`}>
+        <a className="btn btn-primary" href={`/api/devis/${id}/pdf${docType === "bon-livraison" ? "?type=bon-livraison" : ""}`} download={`${docLabel} - ${number}.pdf`}>
           ⬇ Télécharger PDF
         </a>
       </div>

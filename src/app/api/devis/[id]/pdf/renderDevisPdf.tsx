@@ -57,12 +57,13 @@ interface Props {
   lines: Line[]
   bankAccounts: BankAccount[]
   docSettings: Record<string, unknown> | null
+  docType?: "bon-livraison"
 }
 
 export async function renderDevisPdf(props: Props): Promise<Buffer> {
   const {
     number, status, currency, createdAt, validUntil, notes, additionalInfo, paymentTerms,
-    accountName, accountCountry, salespersonName, lines, bankAccounts, docSettings: ds,
+    accountName, accountCountry, salespersonName, lines, bankAccounts, docSettings: ds, docType,
   } = props
 
   const color = (ds?.brand_color as string) ?? "#1e3a5f"
@@ -76,7 +77,7 @@ export async function renderDevisPdf(props: Props): Promise<Buffer> {
   const nif = (ds?.nif as string) ?? "446243099"
   const logoUrl = (ds?.logo_url as string) ?? null
 
-  const docLabel = status === "confirmed" ? "BON DE COMMANDE" : "DEVIS"
+  const docLabel = docType === "bon-livraison" ? "BON DE LIVRAISON" : status === "confirmed" ? "BON DE COMMANDE" : "DEVIS"
   const cur = currency === "GNF" ? "FG" : currency
 
   const hasTva = lines.some(l => l.tva_rate > 0)

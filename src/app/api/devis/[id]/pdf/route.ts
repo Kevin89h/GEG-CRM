@@ -11,6 +11,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
+  const isBL = req.nextUrl.searchParams.get("type") === "bon-livraison"
 
   const { db } = await createCompanyClient()
   const publicSupa = await createClient()
@@ -47,7 +48,7 @@ export async function GET(
   }))
 
   const status = (order as Record<string, unknown>).status as string ?? "draft"
-  const docLabel = status === "confirmed" ? "BC" : "DEVIS"
+  const docLabel = isBL ? "BL" : status === "confirmed" ? "BC" : "DEVIS"
   const filename = `${docLabel} - ${order.number}.pdf`
 
   const pdfBytes = await renderDevisPdf({
@@ -71,6 +72,7 @@ export async function GET(
       currency: String(a.currency ?? ""),
     })),
     docSettings: docSettings as Record<string, unknown> | null,
+    docType: isBL ? "bon-livraison" : undefined,
   })
 
   return new NextResponse(pdfBytes as unknown as BodyInit, {
