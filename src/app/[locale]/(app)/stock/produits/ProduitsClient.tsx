@@ -51,6 +51,7 @@ export default function ProduitsClient({ products: initial, categories, units }:
   const CURRENCIES = ["GNF", "USD", "EUR"] as const
   type Currency = "USD" | "GNF" | "EUR"
 
+  const [localUnits, setLocalUnits] = useState(units)
   const [form, setForm] = useState({
     reference: "", name: "", description: "",
     category_id: categories[0]?.id ?? "",
@@ -58,6 +59,27 @@ export default function ProduitsClient({ products: initial, categories, units }:
     buy_price: "", buy_price_currency: "GNF" as Currency,
     sell_price: "", currency: "GNF" as Currency,
   })
+  const [showNewFormat, setShowNewFormat] = useState(false)
+  const [newFormatName, setNewFormatName] = useState("")
+  const [newFormatSaving, setNewFormatSaving] = useState(false)
+
+  async function handleCreateFormat() {
+    if (!newFormatName.trim()) return
+    setNewFormatSaving(true)
+    const res = await fetch("/api/units", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newFormatName.trim(), type: "unit" }),
+    })
+    const json = await res.json()
+    if (res.ok && json.unit) {
+      setLocalUnits(prev => [...prev, json.unit])
+      setForm(f => ({ ...f, unit_id: json.unit.id }))
+      setShowNewFormat(false)
+      setNewFormatName("")
+    }
+    setNewFormatSaving(false)
+  }
 
   const filtered = products.filter(p => {
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -91,7 +113,9 @@ export default function ProduitsClient({ products: initial, categories, units }:
       setProducts(prev => [json, ...prev])
       setModalOpen(false)
       setSaveError("")
-      setForm({ reference: "", name: "", description: "", category_id: categories[0]?.id ?? "", unit_id: units[0]?.id ?? "", buy_price: "", buy_price_currency: "GNF", sell_price: "", currency: "GNF" })
+      setShowNewFormat(false)
+      setNewFormatName("")
+      setForm({ reference: "", name: "", description: "", category_id: categories[0]?.id ?? "", unit_id: localUnits[0]?.id ?? "", buy_price: "", buy_price_currency: "GNF", sell_price: "", currency: "GNF" })
     }
     setSaving(false)
   }
@@ -217,12 +241,53 @@ export default function ProduitsClient({ products: initial, categories, units }:
               onChange={e => setForm(f => ({ ...f, category_id: e.target.value }))}
               options={categories.map(c => ({ value: c.id, label: c.name }))}
             />
-            <Select
-              label={t("formatConditionnement")}
-              value={form.unit_id}
-              onChange={e => setForm(f => ({ ...f, unit_id: e.target.value }))}
-              options={units.map(u => ({ value: u.id, label: u.name }))}
-            />
+            <div>
+              <div className="flex items-end gap-2">
+                <div className="flex-1">
+                  <Select
+                    label={t("formatConditionnement")}
+                    value={form.unit_id}
+                    onChange={e => setForm(f => ({ ...f, unit_id: e.target.value }))}
+                    options={localUnits.map(u => ({ value: u.id, label: u.name }))}
+                  />
+                </div>
+                <button
+                  type="button"
+                  title="Créer un nouveau format"
+                  onClick={() => setShowNewFormat(v => !v)}
+                  className="mb-0.5 flex items-center justify-center w-9 h-9 rounded-lg border border-dashed border-blue-400 text-blue-600 hover:bg-blue-50 transition text-lg font-bold"
+                >
+                  +
+                </button>
+              </div>
+              {showNewFormat && (
+                <div className="mt-2 flex gap-2 items-center p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                  <input
+                    autoFocus
+                    value={newFormatName}
+                    onChange={e => setNewFormatName(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && handleCreateFormat()}
+                    placeholder="Ex: Bidon 20L, Carton 12 pcs…"
+                    className="flex-1 px-2 py-1.5 text-sm border border-blue-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCreateFormat}
+                    disabled={!newFormatName.trim() || newFormatSaving}
+                    className="px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition"
+                  >
+                    {newFormatSaving ? "…" : "Créer"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setShowNewFormat(false); setNewFormatName("") }}
+                    className="px-2 py-1.5 text-xs text-gray-500 hover:text-gray-700 transition"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           <div>
