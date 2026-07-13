@@ -75,7 +75,7 @@ export default function Sidebar({ locale, profile, companies, currentSchema }: P
     const next = locale === "fr" ? "en" : "fr"
     const segments = pathname.split("/")
     segments[1] = next
-    router.push(segments.join("/"))
+    window.location.href = segments.join("/")
   }
 
   return (
