@@ -152,16 +152,22 @@ export async function renderFacturePdf(props: Props): Promise<Buffer> {
     notesText: { fontSize: 8.5, color: "#555", lineHeight: 1.6 },
     // Bottom
     bottomWrap: { flexDirection: "row", margin: "12 20 0 20", gap: 20 },
-    // Bank section now below totals
-    bankSection: { margin: "10 20 0 20", borderTopWidth: 1, borderTopColor: "#eee", paddingTop: 6 },
-    bankTitle: { fontSize: 6.5, fontFamily: "Helvetica", fontWeight: "bold", textTransform: "uppercase", letterSpacing: 0.8, color: "#bbb", marginBottom: 6 },
-    currencyGroup: { marginBottom: 5 },
-    currencyLabel: { fontSize: 6.5, fontFamily: "Helvetica", fontWeight: "bold", color: color, marginBottom: 3 },
-    bankRow: { flexDirection: "row", paddingVertical: 2, borderBottomWidth: 1, borderBottomColor: "#f5f5f5", alignItems: "center" },
-    bankInst: { fontSize: 7, fontFamily: "Helvetica", fontWeight: "bold", color: "#333", width: 75 },
-    bankNum: { fontSize: 7, color: "#444", width: 110 },
-    bankMeta: { fontSize: 6.5, color: "#999", flex: 1 },
-    bankTvaKey: { fontSize: 7, color: "#aaa", marginTop: 4 },
+    // Bank section
+    bankSection: { margin: "12 20 0 20", paddingTop: 8, borderTopWidth: 1, borderTopColor: "#e5e7eb" },
+    bankTitle: { fontSize: 7, fontFamily: "Helvetica", fontWeight: "bold", textTransform: "uppercase", letterSpacing: 1, color: "#9ca3af", marginBottom: 8 },
+    currencyGroup: { marginBottom: 6 },
+    currencyLabel: { fontSize: 7, fontFamily: "Helvetica", fontWeight: "bold", color: color, marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 },
+    bankTableHeader: { flexDirection: "row", paddingBottom: 3, borderBottomWidth: 1, borderBottomColor: "#e5e7eb", marginBottom: 1 },
+    bankThInst: { fontSize: 6.5, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 0.4, width: 90 },
+    bankThNum: { fontSize: 6.5, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 0.4, width: 100 },
+    bankThSwift: { fontSize: 6.5, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 0.4, width: 80 },
+    bankThIban: { fontSize: 6.5, color: "#9ca3af", textTransform: "uppercase", letterSpacing: 0.4, flex: 1 },
+    bankRow: { flexDirection: "row", paddingVertical: 3, borderBottomWidth: 1, borderBottomColor: "#f3f4f6", alignItems: "center" },
+    bankInst: { fontSize: 7.5, fontFamily: "Helvetica", fontWeight: "bold", color: "#374151", width: 90 },
+    bankNum: { fontSize: 7.5, color: "#374151", width: 100 },
+    bankSwift: { fontSize: 7, color: "#6b7280", width: 80 },
+    bankIban: { fontSize: 7, color: "#6b7280", flex: 1 },
+    bankTvaKey: { fontSize: 7, color: "#9ca3af", marginTop: 5 },
     // Totals
     totalsBlock: { width: 230, flexShrink: 0 },
     payComm: { fontSize: 8, color: "#aaa", marginBottom: 8, lineHeight: 1.5 },
@@ -327,23 +333,26 @@ export async function renderFacturePdf(props: Props): Promise<Buffer> {
           </View>
         </View>
 
-        {/* Bank accounts — compact list below totals */}
+        {/* Bank accounts — proper table below totals */}
         {bankAccounts.length > 0 && (
           <View style={s.bankSection} wrap={false}>
             <Text style={s.bankTitle}>Coordonnées bancaires</Text>
             {currencies.map(c => (
               <View key={c} style={s.currencyGroup}>
                 <Text style={s.currencyLabel}>{c}</Text>
+                {/* Column headers */}
+                <View style={s.bankTableHeader}>
+                  <Text style={s.bankThInst}>Banque</Text>
+                  <Text style={s.bankThNum}>N° de compte</Text>
+                  <Text style={s.bankThSwift}>SWIFT / BIC</Text>
+                  <Text style={s.bankThIban}>IBAN</Text>
+                </View>
                 {bankAccounts.filter(a => a.currency === c).map((acc, i) => (
                   <View key={i} style={s.bankRow}>
                     <Text style={s.bankInst}>{acc.institution}</Text>
                     <Text style={s.bankNum}>{acc.account_number}</Text>
-                    <Text style={s.bankMeta}>
-                      {[
-                        acc.swift ? `SWIFT: ${acc.swift}` : "",
-                        acc.iban ? `IBAN: ${acc.iban}` : "",
-                      ].filter(Boolean).join("   ·   ")}
-                    </Text>
+                    <Text style={s.bankSwift}>{acc.swift ?? "—"}</Text>
+                    <Text style={s.bankIban}>{acc.iban ?? "—"}</Text>
                   </View>
                 ))}
               </View>
