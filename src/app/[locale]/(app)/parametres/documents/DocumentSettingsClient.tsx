@@ -99,6 +99,8 @@ export default function DocumentSettingsClient({ settings: initial, companyId }:
   const [saveError, setSaveError] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [preview, setPreview] = useState(false)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   // Bank accounts
@@ -156,6 +158,24 @@ export default function DocumentSettingsClient({ settings: initial, companyId }:
     setSaved(false)
   }
 
+  async function loadPreview() {
+    setPreviewLoading(true)
+    if (previewUrl) URL.revokeObjectURL(previewUrl)
+    const tvaStr = (form as Record<string, unknown>).tva_rate_str as string | undefined
+    const payload = { ...form, tva_rate: tvaStr ? parseFloat(tvaStr) : (form.tva_rate ?? 18) }
+    delete (payload as Record<string, unknown>).tva_rate_str
+    const res = await fetch("/api/parametres/document-settings/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+    if (res.ok) {
+      const blob = await res.blob()
+      setPreviewUrl(URL.createObjectURL(blob))
+    }
+    setPreviewLoading(false)
+  }
+
   async function uploadLogo(file: File) {
     setUploading(true)
     const { supabase } = getCompanyClientBrowser()
@@ -208,10 +228,13 @@ export default function DocumentSettingsClient({ settings: initial, companyId }:
         <p className="text-sm text-gray-500">Configurez l'en-tête et le pied de page de vos documents imprimés</p>
         <div className="flex gap-2">
           <button
-            onClick={() => setPreview(p => !p)}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition"
+            onClick={() => {
+              if (preview) { setPreview(false) } else { setPreview(true); loadPreview() }
+            }}
+            disabled={previewLoading}
+            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition disabled:opacity-50"
           >
-            <Eye className="w-4 h-4" /> {preview ? "Masquer" : "Aperçu"}
+            <Eye className="w-4 h-4" /> {preview ? "Masquer" : previewLoading ? "Génération…" : "Aperçu PDF"}
           </button>
           <button
             onClick={save}
@@ -230,7 +253,7 @@ export default function DocumentSettingsClient({ settings: initial, companyId }:
         </div>
       )}
 
-      <div className={`grid gap-6 ${preview ? "grid-cols-2" : "grid-cols-1"}`}>
+      <div className={`grid gap-6 ${preview ? "grid-cols-[1fr_1.2fr]" : "grid-cols-1"}`}>
         {/* Form */}
         <div className="space-y-6">
           {/* Logo + couleur */}
@@ -427,87 +450,32 @@ export default function DocumentSettingsClient({ settings: initial, companyId }:
           </div>
         </div>
 
-        {/* Preview */}
+        {/* Preview — real PDF in iframe */}
         {preview && (
-          <div className="sticky top-6 h-fit">
-            <p className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Aperçu en-tête document</p>
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-              {/* Document header preview */}
-              <div style={{ borderTopWidth: 4, borderTopStyle: "solid", borderTopColor: brandColor }} className="p-6">
-                <div className="flex items-start justify-between mb-6">
-                  <div>
-                    {form.logo_url
-                      // eslint-disable-next-line @next/next/no-img-element
-                      ? <img src={form.logo_url} alt="Logo" className="h-14 object-contain mb-2" />
-                      : <div className="w-14 h-14 rounded-xl flex items-center justify-center mb-2" style={{ backgroundColor: brandColor }}>
-                          <span className="text-white font-bold text-xl">{(form.company_name ?? "G").charAt(0)}</span>
-                        </div>
-                    }
-                    <p className="font-bold text-gray-900 text-sm">{form.company_name || "Nom de la société"}</p>
-                    {form.tagline && <p className="text-xs text-gray-400">{form.tagline}</p>}
-                  </div>
-                  <div className="text-right">
-                    <p className="text-2xl font-bold" style={{ color: brandColor }}>FACTURE</p>
-                    <p className="text-xs text-gray-400 font-mono mt-1">FAC/2026/00001</p>
-                    <p className="text-xs text-gray-400">Date : 23 mai 2026</p>
-                    <p className="text-xs text-gray-400">Échéance : 22 juin 2026</p>
-                  </div>
+          <div className="sticky top-6">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Aperçu PDF réel</p>
+              <button
+                onClick={loadPreview}
+                disabled={previewLoading}
+                className="text-xs text-blue-600 hover:underline disabled:opacity-50"
+              >
+                {previewLoading ? "Génération…" : "↺ Rafraîchir"}
+              </button>
+            </div>
+            <div className="rounded-xl border border-gray-200 shadow-sm overflow-hidden bg-gray-100" style={{ height: "calc(100vh - 140px)" }}>
+              {previewLoading && (
+                <div className="flex items-center justify-center h-full text-sm text-gray-400">
+                  Génération du PDF…
                 </div>
-
-                <div className="grid grid-cols-2 gap-4 text-xs mb-6">
-                  <div>
-                    <p className="font-semibold text-gray-500 uppercase text-xs mb-1">Émetteur</p>
-                    {form.address_line1 && <p className="text-gray-700">{form.address_line1}</p>}
-                    {form.address_line2 && <p className="text-gray-700">{form.address_line2}</p>}
-                    {(form.city || form.country) && <p className="text-gray-700">{[form.city, form.country].filter(Boolean).join(", ")}</p>}
-                    {form.phone && <p className="text-gray-500">{form.phone}</p>}
-                    {form.email && <p className="text-gray-500">{form.email}</p>}
-                    {form.rccm && <p className="text-gray-400">RCCM : {form.rccm}</p>}
-                    {form.nif && <p className="text-gray-400">NIF : {form.nif}</p>}
-                  </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-gray-500 uppercase text-xs mb-1">Facturé à</p>
-                    <p className="font-semibold text-gray-800">CLIENT EXEMPLE</p>
-                    <p className="text-gray-500">Conakry, Guinée</p>
-                  </div>
-                </div>
-
-                {/* Fake table */}
-                <div className="mb-4">
-                  <div className="text-xs py-2 px-3 text-white rounded-t" style={{ backgroundColor: brandColor }}>
-                    <div className="grid grid-cols-4 font-medium">
-                      <span className="col-span-2">Description</span>
-                      <span className="text-right">Qté × Prix</span>
-                      <span className="text-right">Total</span>
-                    </div>
-                  </div>
-                  <div className="text-xs py-2 px-3 bg-gray-50 grid grid-cols-4 border-b border-gray-100">
-                    <span className="col-span-2 text-gray-700">Produit exemple</span>
-                    <span className="text-right text-gray-500">10 × 50 000</span>
-                    <span className="text-right font-medium text-gray-900">500 000 GNF</span>
-                  </div>
-                  <div className="text-xs pt-2 px-3 flex justify-end">
-                    <div className="text-right space-y-0.5">
-                      <div className="flex gap-8">
-                        <span className="text-gray-500">Total HT</span>
-                        <span className="font-bold text-gray-900">500 000 GNF</span>
-                      </div>
-                      <div className="flex gap-8">
-                        <span className="font-semibold" style={{ color: brandColor }}>Montant dû</span>
-                        <span className="font-bold" style={{ color: brandColor }}>500 000 GNF</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Footer */}
-                {(form.bank_details || form.footer_text) && (
-                  <div className="border-t border-gray-100 pt-3 mt-3 space-y-1">
-                    {form.bank_details && <p className="text-xs text-gray-500">{form.bank_details}</p>}
-                    {form.footer_text && <p className="text-xs text-gray-400 italic">{form.footer_text}</p>}
-                  </div>
-                )}
-              </div>
+              )}
+              {!previewLoading && previewUrl && (
+                <iframe
+                  src={previewUrl}
+                  className="w-full h-full border-0"
+                  title="Aperçu facture"
+                />
+              )}
             </div>
           </div>
         )}
