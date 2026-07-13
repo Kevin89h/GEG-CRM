@@ -9,7 +9,8 @@ export async function middleware(request: NextRequest) {
   const intlResponse = intlMiddleware(request)
   if (intlResponse.status !== 200) return intlResponse
 
-  return await updateSession(request)
+  // Pass intlResponse as base so X-NEXT-INTL-LOCALE request header is preserved
+  return await updateSession(request, intlResponse)
 }
 
 export const config = {
