@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useRef } from "react"
-import { Upload, Save, Eye, Building2, Phone, Mail, Globe, FileText, Palette, Landmark } from "lucide-react"
+import { useState, useRef, useEffect } from "react"
+import { Upload, Save, Eye, Building2, Phone, FileText, Palette, Landmark, Plus, Pencil, Trash2, X, Check } from "lucide-react"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser" // storage upload only
 
 interface Settings {
@@ -27,6 +27,21 @@ interface Settings {
   tva_rate?: number | null
   brand_color?: string | null
 }
+
+interface BankAccount {
+  id: string
+  institution: string
+  account_number: string
+  swift: string | null
+  iban: string | null
+  currency: string
+  is_active: boolean
+}
+
+const EMPTY_BANK: Omit<BankAccount, "id"> = {
+  institution: "", account_number: "", swift: "", iban: "", currency: "GNF", is_active: true,
+}
+const CURRENCIES = ["GNF", "USD", "EUR"]
 
 interface Props {
   settings: Settings | null
@@ -64,15 +79,6 @@ const FIELD_GROUPS = [
     ],
   },
   {
-    title: "Informations bancaires",
-    icon: Landmark,
-    fields: [
-      { key: "bank_name", label: "Nom de la banque", placeholder: "ECOBANK" },
-      { key: "bank_account", label: "N° de compte", placeholder: "7308052262" },
-      { key: "bank_iban", label: "IBAN / RIB", placeholder: "GN..." },
-    ],
-  },
-  {
     title: "Documents",
     icon: FileText,
     fields: [
@@ -94,6 +100,56 @@ export default function DocumentSettingsClient({ settings: initial, companyId }:
   const [uploading, setUploading] = useState(false)
   const [preview, setPreview] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
+
+  // Bank accounts
+  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([])
+  const [editingBank, setEditingBank] = useState<string | null>(null) // id or "new"
+  const [bankForm, setBankForm] = useState<Omit<BankAccount, "id">>(EMPTY_BANK)
+  const [bankSaving, setBankSaving] = useState(false)
+
+  useEffect(() => {
+    fetch("/api/treasury/accounts")
+      .then(r => r.json())
+      .then(d => setBankAccounts(d.accounts ?? []))
+  }, [])
+
+  async function saveBank() {
+    if (!bankForm.institution || !bankForm.account_number) return
+    setBankSaving(true)
+    const isNew = editingBank === "new"
+    const url = isNew ? "/api/treasury/accounts" : `/api/treasury/accounts/${editingBank}`
+    const method = isNew ? "POST" : "PATCH"
+    const body = isNew
+      ? { ...bankForm, name: `${bankForm.institution} – ${bankForm.currency}`, type: "bank" }
+      : { ...bankForm, name: `${bankForm.institution} – ${bankForm.currency}`, type: "bank" }
+    const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+    if (res.ok) {
+      const data = await res.json()
+      if (isNew && data.account) {
+        setBankAccounts(prev => [...prev, data.account])
+      } else {
+        setBankAccounts(prev => prev.map(a => a.id === editingBank ? { ...a, ...bankForm } : a))
+      }
+      setEditingBank(null)
+      setBankForm(EMPTY_BANK)
+    }
+    setBankSaving(false)
+  }
+
+  async function deleteBank(id: string) {
+    if (!confirm("Supprimer ce compte bancaire ?")) return
+    await fetch(`/api/treasury/accounts/${id}?action=purge`, { method: "DELETE" })
+    setBankAccounts(prev => prev.filter(a => a.id !== id))
+  }
+
+  function startEdit(acc: BankAccount) {
+    setEditingBank(acc.id)
+    setBankForm({ institution: acc.institution, account_number: acc.account_number, swift: acc.swift ?? "", iban: acc.iban ?? "", currency: acc.currency, is_active: acc.is_active })
+  }
+
+  function setBank(key: string, value: string) {
+    setBankForm(f => ({ ...f, [key]: value }))
+  }
 
   function set(key: string, value: string) {
     setForm(f => ({ ...f, [key]: value }))
@@ -260,6 +316,115 @@ export default function DocumentSettingsClient({ settings: initial, companyId }:
               </div>
             )
           })}
+          {/* Bank accounts manager */}
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-gray-800 flex items-center gap-2">
+                <Landmark className="w-4 h-4 text-gray-400" /> Comptes bancaires (factures PDF)
+              </h2>
+              {editingBank !== "new" && (
+                <button
+                  onClick={() => { setEditingBank("new"); setBankForm(EMPTY_BANK) }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Ajouter un compte
+                </button>
+              )}
+            </div>
+
+            {/* Table */}
+            {bankAccounts.length > 0 && (
+              <div className="mb-4 rounded-lg border border-gray-100 overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+                    <tr>
+                      <th className="text-left px-3 py-2">Banque</th>
+                      <th className="text-left px-3 py-2">N° compte</th>
+                      <th className="text-left px-3 py-2">SWIFT</th>
+                      <th className="text-left px-3 py-2">IBAN</th>
+                      <th className="text-left px-3 py-2 w-16">Devise</th>
+                      <th className="px-3 py-2 w-16" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {bankAccounts.map(acc => (
+                      editingBank === acc.id ? (
+                        <tr key={acc.id} className="bg-blue-50">
+                          <td className="px-2 py-1.5"><input autoFocus className="w-full px-2 py-1 text-sm border border-blue-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" value={bankForm.institution} onChange={e => setBank("institution", e.target.value)} placeholder="ECOBANK" /></td>
+                          <td className="px-2 py-1.5"><input className="w-full px-2 py-1 text-sm border border-blue-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" value={bankForm.account_number} onChange={e => setBank("account_number", e.target.value)} placeholder="7308052262" /></td>
+                          <td className="px-2 py-1.5"><input className="w-full px-2 py-1 text-sm border border-blue-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" value={bankForm.swift ?? ""} onChange={e => setBank("swift", e.target.value)} placeholder="ECOCGNCN" /></td>
+                          <td className="px-2 py-1.5"><input className="w-full px-2 py-1 text-sm border border-blue-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" value={bankForm.iban ?? ""} onChange={e => setBank("iban", e.target.value)} placeholder="GN01000..." /></td>
+                          <td className="px-2 py-1.5">
+                            <select className="w-full px-2 py-1 text-sm border border-blue-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" value={bankForm.currency} onChange={e => setBank("currency", e.target.value)}>
+                              {CURRENCIES.map(c => <option key={c}>{c}</option>)}
+                            </select>
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <div className="flex gap-1 justify-end">
+                              <button onClick={saveBank} disabled={bankSaving} className="p-1 rounded text-green-600 hover:bg-green-100"><Check className="w-4 h-4" /></button>
+                              <button onClick={() => setEditingBank(null)} className="p-1 rounded text-gray-400 hover:bg-gray-100"><X className="w-4 h-4" /></button>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
+                        <tr key={acc.id} className="hover:bg-gray-50 group">
+                          <td className="px-3 py-2 font-medium text-gray-800">{acc.institution}</td>
+                          <td className="px-3 py-2 text-gray-600 font-mono text-xs">{acc.account_number}</td>
+                          <td className="px-3 py-2 text-gray-500 text-xs">{acc.swift ?? "—"}</td>
+                          <td className="px-3 py-2 text-gray-500 text-xs">{acc.iban ?? "—"}</td>
+                          <td className="px-3 py-2"><span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700">{acc.currency}</span></td>
+                          <td className="px-3 py-2">
+                            <div className="flex gap-1 justify-end opacity-0 group-hover:opacity-100 transition">
+                              <button onClick={() => startEdit(acc)} className="p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50"><Pencil className="w-3.5 h-3.5" /></button>
+                              <button onClick={() => deleteBank(acc.id)} className="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50"><Trash2 className="w-3.5 h-3.5" /></button>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* New account form */}
+            {editingBank === "new" && (
+              <div className="grid grid-cols-5 gap-2 p-3 rounded-lg bg-blue-50 border border-blue-100">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Banque *</label>
+                  <input autoFocus className="w-full px-2 py-1.5 text-sm border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value={bankForm.institution} onChange={e => setBank("institution", e.target.value)} placeholder="ECOBANK" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">N° compte *</label>
+                  <input className="w-full px-2 py-1.5 text-sm border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value={bankForm.account_number} onChange={e => setBank("account_number", e.target.value)} placeholder="7308052262" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">SWIFT / BIC</label>
+                  <input className="w-full px-2 py-1.5 text-sm border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value={bankForm.swift ?? ""} onChange={e => setBank("swift", e.target.value)} placeholder="ECOCGNCN" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">IBAN</label>
+                  <input className="w-full px-2 py-1.5 text-sm border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value={bankForm.iban ?? ""} onChange={e => setBank("iban", e.target.value)} placeholder="GN01000..." />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Devise</label>
+                  <select className="w-full px-2 py-1.5 text-sm border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" value={bankForm.currency} onChange={e => setBank("currency", e.target.value)}>
+                    {CURRENCIES.map(c => <option key={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div className="col-span-5 flex justify-end gap-2 mt-1">
+                  <button onClick={() => setEditingBank(null)} className="px-3 py-1.5 text-sm rounded-lg text-gray-600 hover:bg-gray-100 transition">Annuler</button>
+                  <button onClick={saveBank} disabled={bankSaving || !bankForm.institution || !bankForm.account_number} className="px-3 py-1.5 text-sm rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 transition">
+                    {bankSaving ? "Enregistrement…" : "Ajouter"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {bankAccounts.length === 0 && editingBank !== "new" && (
+              <p className="text-sm text-gray-400 text-center py-4">Aucun compte bancaire. Ces comptes apparaissent dans vos factures PDF.</p>
+            )}
+          </div>
         </div>
 
         {/* Preview */}

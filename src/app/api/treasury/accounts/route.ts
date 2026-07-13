@@ -13,6 +13,23 @@ async function getAdminDb() {
   return (admin as any).schema(schema) as typeof admin
 }
 
+export async function GET() {
+  try {
+    const db = await getAdminDb()
+    const { data, error } = await db
+      .from("treasury_accounts")
+      .select("id, name, institution, account_number, swift, iban, currency, type, is_active")
+      .eq("type", "bank")
+      .order("currency")
+      .order("institution")
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ accounts: data ?? [] })
+  } catch (err) {
+    console.error("Treasury accounts GET error:", err)
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json()
