@@ -153,14 +153,14 @@ export async function renderFacturePdf(props: Props): Promise<Buffer> {
     // Bottom
     bottomWrap: { flexDirection: "row", margin: "12 20 0 20", gap: 20 },
     // Bank section now below totals
-    bankSection: { margin: "10 20 0 20", borderTopWidth: 1, borderTopColor: "#eee", paddingTop: 7 },
-    bankTitle: { fontSize: 6.5, fontFamily: "Helvetica", fontWeight: "bold", textTransform: "uppercase", letterSpacing: 0.8, color: "#aaa", marginBottom: 5 },
-    currencyGroup: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 2 },
-    currencyBadge: { fontSize: 6.5, fontFamily: "Helvetica", fontWeight: "bold", color: "#fff", backgroundColor: color, paddingVertical: 1, paddingHorizontal: 5, borderRadius: 6, alignSelf: "flex-start" },
-    bankRow: { flexDirection: "row", gap: 6, alignItems: "center", marginBottom: 2 },
-    bankInst: { fontSize: 7, fontFamily: "Helvetica", fontWeight: "bold", color: "#555", width: 60 },
-    bankNum: { fontSize: 7, color: "#555" },
-    bankMeta: { fontSize: 6.5, color: "#aaa", flex: 1 },
+    bankSection: { margin: "10 20 0 20", borderTopWidth: 1, borderTopColor: "#eee", paddingTop: 6 },
+    bankTitle: { fontSize: 6.5, fontFamily: "Helvetica", fontWeight: "bold", textTransform: "uppercase", letterSpacing: 0.8, color: "#bbb", marginBottom: 6 },
+    currencyGroup: { marginBottom: 5 },
+    currencyLabel: { fontSize: 6.5, fontFamily: "Helvetica", fontWeight: "bold", color: color, marginBottom: 3 },
+    bankRow: { flexDirection: "row", paddingVertical: 2, borderBottomWidth: 1, borderBottomColor: "#f5f5f5", alignItems: "center" },
+    bankInst: { fontSize: 7, fontFamily: "Helvetica", fontWeight: "bold", color: "#333", width: 75 },
+    bankNum: { fontSize: 7, color: "#444", width: 110 },
+    bankMeta: { fontSize: 6.5, color: "#999", flex: 1 },
     bankTvaKey: { fontSize: 7, color: "#aaa", marginTop: 4 },
     // Totals
     totalsBlock: { width: 230, flexShrink: 0 },
@@ -327,26 +327,23 @@ export async function renderFacturePdf(props: Props): Promise<Buffer> {
           </View>
         </View>
 
-        {/* Bank accounts — compact strip below totals */}
+        {/* Bank accounts — compact list below totals */}
         {bankAccounts.length > 0 && (
           <View style={s.bankSection} wrap={false}>
             <Text style={s.bankTitle}>Coordonnées bancaires</Text>
             {currencies.map(c => (
               <View key={c} style={s.currencyGroup}>
-                <View style={s.currencyBadge}>
-                  <Text style={{ fontSize: 6.5, color: "#fff" }}>{c}</Text>
-                </View>
+                <Text style={s.currencyLabel}>{c}</Text>
                 {bankAccounts.filter(a => a.currency === c).map((acc, i) => (
                   <View key={i} style={s.bankRow}>
                     <Text style={s.bankInst}>{acc.institution}</Text>
                     <Text style={s.bankNum}>{acc.account_number}</Text>
-                    {(acc.swift || acc.iban) && (
-                      <Text style={s.bankMeta}>
-                        {acc.swift ? `SWIFT: ${acc.swift}` : ""}
-                        {acc.swift && acc.iban ? "  ·  " : ""}
-                        {acc.iban ? `IBAN: ${acc.iban}` : ""}
-                      </Text>
-                    )}
+                    <Text style={s.bankMeta}>
+                      {[
+                        acc.swift ? `SWIFT: ${acc.swift}` : "",
+                        acc.iban ? `IBAN: ${acc.iban}` : "",
+                      ].filter(Boolean).join("   ·   ")}
+                    </Text>
                   </View>
                 ))}
               </View>
