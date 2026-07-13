@@ -152,15 +152,16 @@ export async function renderFacturePdf(props: Props): Promise<Buffer> {
     notesText: { fontSize: 8.5, color: "#555", lineHeight: 1.6 },
     // Bottom
     bottomWrap: { flexDirection: "row", margin: "12 20 0 20", gap: 20 },
-    bankSection: { flex: 1 },
-    bankTitle: { fontSize: 7, fontFamily: "Helvetica", fontWeight: "bold", textTransform: "uppercase", letterSpacing: 0.8, color: "#888", marginBottom: 6, paddingBottom: 4, borderBottomWidth: 1, borderBottomColor: "#eee" },
-    currencyGroup: { marginBottom: 6 },
-    currencyBadge: { fontSize: 7, fontFamily: "Helvetica", fontWeight: "bold", color: "#fff", backgroundColor: color, paddingVertical: 1, paddingHorizontal: 6, borderRadius: 8, marginBottom: 4, alignSelf: "flex-start" },
-    bankRow: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: "#f0f0f0", paddingVertical: 2.5, gap: 8, alignItems: "center" },
-    bankInst: { fontSize: 8, fontFamily: "Helvetica", fontWeight: "bold", color: "#111", width: 70 },
-    bankNum: { fontSize: 8, color: "#111" },
-    bankMeta: { fontSize: 7, color: "#aaa", flex: 1 },
-    bankTvaKey: { fontSize: 7.5, color: "#aaa", marginTop: 6 },
+    // Bank section now below totals
+    bankSection: { margin: "10 20 0 20", borderTopWidth: 1, borderTopColor: "#eee", paddingTop: 7 },
+    bankTitle: { fontSize: 6.5, fontFamily: "Helvetica", fontWeight: "bold", textTransform: "uppercase", letterSpacing: 0.8, color: "#aaa", marginBottom: 5 },
+    currencyGroup: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 2 },
+    currencyBadge: { fontSize: 6.5, fontFamily: "Helvetica", fontWeight: "bold", color: "#fff", backgroundColor: color, paddingVertical: 1, paddingHorizontal: 5, borderRadius: 6, alignSelf: "flex-start" },
+    bankRow: { flexDirection: "row", gap: 6, alignItems: "center", marginBottom: 2 },
+    bankInst: { fontSize: 7, fontFamily: "Helvetica", fontWeight: "bold", color: "#555", width: 60 },
+    bankNum: { fontSize: 7, color: "#555" },
+    bankMeta: { fontSize: 6.5, color: "#aaa", flex: 1 },
+    bankTvaKey: { fontSize: 7, color: "#aaa", marginTop: 4 },
     // Totals
     totalsBlock: { width: 230, flexShrink: 0 },
     payComm: { fontSize: 8, color: "#aaa", marginBottom: 8, lineHeight: 1.5 },
@@ -282,40 +283,9 @@ export async function renderFacturePdf(props: Props): Promise<Buffer> {
           </View>
         )}
 
-        {/* Bottom: bank accounts + totals */}
+        {/* Bottom: totals only */}
         <View style={s.bottomWrap} wrap={false}>
-          {/* Bank accounts */}
-          <View style={s.bankSection}>
-            {bankAccounts.length > 0 && (
-              <>
-                <Text style={s.bankTitle}>Coordonnées bancaires</Text>
-                {currencies.map(c => (
-                  <View key={c} style={s.currencyGroup}>
-                    <View style={s.currencyBadge}>
-                      <Text style={{ fontSize: 7, color: "#fff" }}>{c}</Text>
-                    </View>
-                    {bankAccounts.filter(a => a.currency === c).map((acc, i) => (
-                      <View key={i} style={s.bankRow} wrap={false}>
-                        <Text style={s.bankInst}>{acc.institution}</Text>
-                        <Text style={s.bankNum}>{acc.account_number}</Text>
-                        {(acc.swift || acc.iban) && (
-                          <Text style={s.bankMeta}>
-                            {acc.swift ? `SWIFT: ${acc.swift}` : ""}
-                            {acc.swift && acc.iban ? "  ·  " : ""}
-                            {acc.iban ? `IBAN: ${acc.iban}` : ""}
-                          </Text>
-                        )}
-                      </View>
-                    ))}
-                  </View>
-                ))}
-                {bankMeta.tva_key && (
-                  <Text style={s.bankTvaKey}>Clé TVA : {bankMeta.tva_key}</Text>
-                )}
-              </>
-            )}
-            {qrDataUrl && <Image src={qrDataUrl} style={s.qrImage} />}
-          </View>
+          <View style={{ flex: 1 }} />
 
           {/* Totals */}
           <View style={s.totalsBlock}>
@@ -356,6 +326,36 @@ export async function renderFacturePdf(props: Props): Promise<Buffer> {
             )}
           </View>
         </View>
+
+        {/* Bank accounts — compact strip below totals */}
+        {bankAccounts.length > 0 && (
+          <View style={s.bankSection} wrap={false}>
+            <Text style={s.bankTitle}>Coordonnées bancaires</Text>
+            {currencies.map(c => (
+              <View key={c} style={s.currencyGroup}>
+                <View style={s.currencyBadge}>
+                  <Text style={{ fontSize: 6.5, color: "#fff" }}>{c}</Text>
+                </View>
+                {bankAccounts.filter(a => a.currency === c).map((acc, i) => (
+                  <View key={i} style={s.bankRow}>
+                    <Text style={s.bankInst}>{acc.institution}</Text>
+                    <Text style={s.bankNum}>{acc.account_number}</Text>
+                    {(acc.swift || acc.iban) && (
+                      <Text style={s.bankMeta}>
+                        {acc.swift ? `SWIFT: ${acc.swift}` : ""}
+                        {acc.swift && acc.iban ? "  ·  " : ""}
+                        {acc.iban ? `IBAN: ${acc.iban}` : ""}
+                      </Text>
+                    )}
+                  </View>
+                ))}
+              </View>
+            ))}
+            {bankMeta.tva_key && (
+              <Text style={s.bankTvaKey}>Clé TVA : {bankMeta.tva_key}</Text>
+            )}
+          </View>
+        )}
 
         </View>{/* end content */}
 
