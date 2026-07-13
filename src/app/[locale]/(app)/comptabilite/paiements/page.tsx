@@ -43,7 +43,7 @@ export default async function PaiementsPage({ params }: { params: Promise<{ loca
       id: p.id as string,
       number: displayNumber as string,
       amount: Number(p.amount),
-      currency: String(p.currency ?? "GNF"),
+      currency: (["GNF","USD","EUR"].includes(String(p.currency)) ? p.currency : "GNF") as "GNF" | "USD" | "EUR",
       method: String(p.method ?? "Manuel"),
       paid_at: String(p.paid_at ?? ""),
       invoice_number: invoice?.number ?? null as string | null,

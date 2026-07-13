@@ -9,7 +9,7 @@ interface Payment {
   id: string
   number: string
   amount: number
-  currency: string
+  currency: "GNF" | "USD" | "EUR"
   method: string
   paid_at: string
   invoice_number: string | null
