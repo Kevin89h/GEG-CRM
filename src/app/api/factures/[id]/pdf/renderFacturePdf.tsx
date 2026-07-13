@@ -86,6 +86,27 @@ export async function renderFacturePdf(props: Props): Promise<Buffer> {
   const logoUrl = (ds?.logo_url as string) ?? null
   const bankMeta = (ds?.bank_details as Record<string, string> | null) ?? {}
 
+  // Layout config — all true by default
+  const lc = (ds?.layout_config as Record<string, unknown>) ?? {}
+  const showStripe        = lc.show_stripe         !== false
+  const showLogo          = lc.show_logo            !== false
+  const logoRight         = lc.logo_position        === "right"
+  const showTagline       = lc.show_tagline         !== false
+  const showCompanyAddr   = lc.show_company_address !== false
+  const showClientPhone   = lc.show_client_phone    !== false
+  const showClientLoc     = lc.show_client_location !== false
+  const clientRight       = lc.client_position      === "right"
+  const showMetaIssue     = lc.show_meta_issue_date !== false
+  const showMetaDue       = lc.show_meta_due_date   !== false
+  const showMetaCurrency  = lc.show_meta_currency   !== false
+  const showNotes         = lc.show_notes           !== false
+  const showPayComm       = lc.show_payment_comm    !== false
+  const showBankSection   = lc.show_bank_section    !== false
+  const showFooterPhone   = lc.show_footer_phone    !== false
+  const showFooterWebsite = lc.show_footer_website  !== false
+  const showFooterNif     = lc.show_footer_nif      !== false
+  const showFooterEmail   = lc.show_footer_email    !== false
+
   const sc = statusConfig[status] ?? statusConfig.sent
   const cur = currency === "GNF" ? "FG" : currency
 
@@ -109,7 +130,8 @@ export async function renderFacturePdf(props: Props): Promise<Buffer> {
   const balance = totalTTC - totalPaid
 
   const fmtAmt = (n: number) => `${fmt(Math.round(n))} ${cur}`
-  const currencies = Array.from(new Set(bankAccounts.map(a => a.currency)))
+  const relevantAccounts = bankAccounts.filter(a => a.currency === "GNF")
+  const currencies = Array.from(new Set(relevantAccounts.map(a => a.currency)))
 
   const s = StyleSheet.create({
     page: { fontFamily: "Helvetica", fontSize: 9, color: "#111", backgroundColor: "#fff", padding: 0 },
@@ -198,30 +220,30 @@ export async function renderFacturePdf(props: Props): Promise<Buffer> {
       <Page size="A4" style={s.page}>
         <View style={s.content}>
         {/* Stripe */}
-        <View style={s.stripe} />
+        {showStripe && <View style={s.stripe} />}
 
         {/* Header */}
-        <View style={s.header}>
+        <View style={[s.header, logoRight ? { flexDirection: "row-reverse" } : {}]}>
           <View>
-            {logoUrl
+            {showLogo && logoUrl
               ? <Image src={logoUrl} style={s.logo} />
-              : <Text style={s.coName}>{companyName}</Text>
+              : (!showLogo || !logoUrl) && <Text style={s.coName}>{companyName}</Text>
             }
-            {logoUrl && <Text style={s.coName}>{companyName}</Text>}
-            <Text style={s.coDetail}>{addr1}{"\n"}{city}</Text>
+            {showLogo && logoUrl && <Text style={s.coName}>{companyName}</Text>}
+            {showCompanyAddr && <Text style={s.coDetail}>{addr1}{"\n"}{city}</Text>}
           </View>
-          <Text style={s.tagline}>{tagline}</Text>
+          {showTagline && <Text style={s.tagline}>{tagline}</Text>}
         </View>
 
         {/* Title row */}
-        <View style={s.titleRow}>
+        <View style={[s.titleRow, clientRight ? { flexDirection: "row-reverse" } : {}]}>
           <View>
             <Text style={s.billToLabel}>Facturé à</Text>
             <Text style={s.billToName}>{accountName}</Text>
-            {(accountCity || accountCountry) && (
+            {showClientLoc && (accountCity || accountCountry) && (
               <Text style={s.billToDetail}>{[accountCity, accountCountry].filter(Boolean).join(", ")}</Text>
             )}
-            {accountPhone && <Text style={s.billToDetail}>{accountPhone}</Text>}
+            {showClientPhone && accountPhone && <Text style={s.billToDetail}>{accountPhone}</Text>}
           </View>
           <View style={s.docInfo}>
             <Text style={s.docLabelText}>Facture</Text>
@@ -234,20 +256,24 @@ export async function renderFacturePdf(props: Props): Promise<Buffer> {
 
         {/* Meta bar */}
         <View style={s.metaBar}>
-          <View style={s.metaCell}>
-            <Text style={s.metaLabel}>Date de la facture</Text>
-            <Text style={s.metaValue}>{fmtDate(issueDate)}</Text>
-          </View>
-          {dueDate && (
+          {showMetaIssue && (
+            <View style={s.metaCell}>
+              <Text style={s.metaLabel}>Date de la facture</Text>
+              <Text style={s.metaValue}>{fmtDate(issueDate)}</Text>
+            </View>
+          )}
+          {showMetaDue && dueDate && (
             <View style={s.metaCell}>
               <Text style={s.metaLabel}>{"Date d'échéance"}</Text>
               <Text style={s.metaValue}>{fmtDate(dueDate)}</Text>
             </View>
           )}
-          <View style={s.metaCellLast}>
-            <Text style={s.metaLabel}>Devise</Text>
-            <Text style={s.metaValue}>{currency}</Text>
-          </View>
+          {showMetaCurrency && (
+            <View style={s.metaCellLast}>
+              <Text style={s.metaLabel}>Devise</Text>
+              <Text style={s.metaValue}>{currency}</Text>
+            </View>
+          )}
         </View>
 
         {/* Products table */}
@@ -283,7 +309,7 @@ export async function renderFacturePdf(props: Props): Promise<Buffer> {
         </View>
 
         {/* Notes */}
-        {notes && (
+        {showNotes && notes && (
           <View style={s.notesBox}>
             <Text style={s.notesText}>{notes}</Text>
           </View>
@@ -295,10 +321,12 @@ export async function renderFacturePdf(props: Props): Promise<Buffer> {
 
           {/* Totals */}
           <View style={s.totalsBlock}>
-            <Text style={s.payComm}>
-              {"Communication de paiement :\n"}
-              <Text style={s.payCommNum}>{number}</Text>
-            </Text>
+            {showPayComm && (
+              <Text style={s.payComm}>
+                {"Communication de paiement :\n"}
+                <Text style={s.payCommNum}>{number}</Text>
+              </Text>
+            )}
 
             {hasTva && (
               <View style={s.totRow}>
@@ -334,12 +362,11 @@ export async function renderFacturePdf(props: Props): Promise<Buffer> {
         </View>
 
         {/* Bank accounts — proper table below totals */}
-        {bankAccounts.length > 0 && (
+        {showBankSection && relevantAccounts.length > 0 && (
           <View style={s.bankSection} wrap={false}>
             <Text style={s.bankTitle}>Coordonnées bancaires</Text>
             {currencies.map(c => (
               <View key={c} style={s.currencyGroup}>
-                <Text style={s.currencyLabel}>{c}</Text>
                 {/* Column headers */}
                 <View style={s.bankTableHeader}>
                   <Text style={s.bankThInst}>Banque</Text>
@@ -347,7 +374,7 @@ export async function renderFacturePdf(props: Props): Promise<Buffer> {
                   <Text style={s.bankThSwift}>SWIFT / BIC</Text>
                   <Text style={s.bankThIban}>IBAN</Text>
                 </View>
-                {bankAccounts.filter(a => a.currency === c).map((acc, i) => (
+                {relevantAccounts.filter(a => a.currency === c).map((acc, i) => (
                   <View key={i} style={s.bankRow}>
                     <Text style={s.bankInst}>{acc.institution}</Text>
                     <Text style={s.bankNum}>{acc.account_number}</Text>
@@ -367,12 +394,12 @@ export async function renderFacturePdf(props: Props): Promise<Buffer> {
 
         {/* Footer — fixed at bottom every page */}
         <View style={s.footer} fixed>
-          {phone && <View style={s.footerItem}><Text style={s.footerText}>📞  {phone}</Text></View>}
-          {phone && website && <View style={s.footerDivider} />}
-          {website && <View style={s.footerItem}><Text style={s.footerText}>🌐  {website}</Text></View>}
-          {website && nif && <View style={s.footerDivider} />}
-          {nif && <View style={s.footerItem}><Text style={[s.footerText, { fontSize: 7 }]}>NIF  {nif}</Text></View>}
-          {email && (
+          {showFooterPhone && phone && <View style={s.footerItem}><Text style={s.footerText}>📞  {phone}</Text></View>}
+          {showFooterPhone && phone && showFooterWebsite && website && <View style={s.footerDivider} />}
+          {showFooterWebsite && website && <View style={s.footerItem}><Text style={s.footerText}>🌐  {website}</Text></View>}
+          {showFooterWebsite && website && showFooterNif && nif && <View style={s.footerDivider} />}
+          {showFooterNif && nif && <View style={s.footerItem}><Text style={[s.footerText, { fontSize: 7 }]}>NIF  {nif}</Text></View>}
+          {showFooterEmail && email && (
             <>
               <View style={s.footerDivider} />
               <View style={s.footerItem}><Text style={s.footerText}>✉  {email}</Text></View>

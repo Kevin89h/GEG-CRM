@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
       docSettings: ds,
     })
 
-    return new NextResponse(buf, {
+    return new NextResponse(buf as unknown as BodyInit, {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",

@@ -24,8 +24,29 @@ interface Settings {
   bank_name?: string | null
   bank_account?: string | null
   bank_iban?: string | null
-  tva_rate?: number | null
   brand_color?: string | null
+  layout_config?: LayoutConfig | null
+}
+
+interface LayoutConfig {
+  show_stripe?: boolean
+  show_logo?: boolean
+  logo_position?: "left" | "right"
+  show_tagline?: boolean
+  show_company_address?: boolean
+  show_client_phone?: boolean
+  show_client_location?: boolean
+  client_position?: "left" | "right"
+  show_meta_issue_date?: boolean
+  show_meta_due_date?: boolean
+  show_meta_currency?: boolean
+  show_notes?: boolean
+  show_payment_comm?: boolean
+  show_bank_section?: boolean
+  show_footer_phone?: boolean
+  show_footer_website?: boolean
+  show_footer_nif?: boolean
+  show_footer_email?: boolean
 }
 
 interface BankAccount {
@@ -82,7 +103,6 @@ const FIELD_GROUPS = [
     title: "Documents",
     icon: FileText,
     fields: [
-      { key: "tva_rate_str", label: "Taux TVA (%)", placeholder: "18" },
       { key: "footer_text", label: "Pied de page", placeholder: "Merci pour votre confiance. Règlement à 30 jours.", textarea: true },
     ],
   },
@@ -91,8 +111,8 @@ const FIELD_GROUPS = [
 export default function DocumentSettingsClient({ settings: initial, companyId }: Props) {
   const [form, setForm] = useState<Settings & { tva_rate_str?: string }>(
     initial
-      ? { ...initial, tva_rate_str: String(initial.tva_rate ?? 18) }
-      : { company_id: companyId, country: "Guinée", brand_color: "#0d2545", tva_rate_str: "18", logo_url: "/geg-logo.png" }
+      ? { ...initial }
+      : { company_id: companyId, country: "Guinée", brand_color: "#0d2545", logo_url: "/geg-logo.png" }
   )
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -161,13 +181,10 @@ export default function DocumentSettingsClient({ settings: initial, companyId }:
   async function loadPreview() {
     setPreviewLoading(true)
     if (previewUrl) URL.revokeObjectURL(previewUrl)
-    const tvaStr = (form as Record<string, unknown>).tva_rate_str as string | undefined
-    const payload = { ...form, tva_rate: tvaStr ? parseFloat(tvaStr) : (form.tva_rate ?? 18) }
-    delete (payload as Record<string, unknown>).tva_rate_str
     const res = await fetch("/api/parametres/document-settings/preview", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(form),
     })
     if (res.ok) {
       const blob = await res.blob()
@@ -192,14 +209,11 @@ export default function DocumentSettingsClient({ settings: initial, companyId }:
   async function save() {
     setSaving(true)
     setSaveError(null)
-    const tvaStr = (form as Record<string, unknown>).tva_rate_str as string | undefined
     const payload: Record<string, unknown> = {
       ...form,
-      tva_rate: tvaStr ? parseFloat(tvaStr) : (form.tva_rate ?? 18),
       company_id: companyId,
       updated_at: new Date().toISOString(),
     }
-    delete payload.tva_rate_str
 
     const res = await fetch("/api/parametres/document-settings", {
       method: "POST",
@@ -339,6 +353,112 @@ export default function DocumentSettingsClient({ settings: initial, companyId }:
               </div>
             )
           })}
+          {/* Layout config */}
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+            <h2 className="font-semibold text-gray-800 mb-5 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-gray-400" /> Mise en page de la facture
+            </h2>
+            <div className="space-y-5">
+              {/* Position options */}
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Position</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1.5">Logo</p>
+                    <div className="flex gap-2">
+                      {(["left", "right"] as const).map(pos => (
+                        <button key={pos}
+                          onClick={() => setForm(f => ({ ...f, layout_config: { ...(f.layout_config ?? {}), logo_position: pos } }))}
+                          className={`flex-1 py-1.5 text-xs rounded-lg border transition ${(form.layout_config?.logo_position ?? "left") === pos ? "border-blue-500 bg-blue-50 text-blue-700 font-medium" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}
+                        >
+                          {pos === "left" ? "← Gauche" : "Droite →"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1.5">Bloc client / N° facture</p>
+                    <div className="flex gap-2">
+                      {(["left", "right"] as const).map(pos => (
+                        <button key={pos}
+                          onClick={() => setForm(f => ({ ...f, layout_config: { ...(f.layout_config ?? {}), client_position: pos } }))}
+                          className={`flex-1 py-1.5 text-xs rounded-lg border transition ${(form.layout_config?.client_position ?? "left") === pos ? "border-blue-500 bg-blue-50 text-blue-700 font-medium" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}
+                        >
+                          {pos === "left" ? "← Gauche" : "Droite →"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Toggle groups */}
+              {([
+                {
+                  label: "En-tête",
+                  items: [
+                    { key: "show_stripe",          label: "Bande colorée" },
+                    { key: "show_logo",             label: "Logo" },
+                    { key: "show_tagline",          label: "Slogan" },
+                    { key: "show_company_address",  label: "Adresse société" },
+                  ],
+                },
+                {
+                  label: "Bloc client",
+                  items: [
+                    { key: "show_client_location", label: "Ville / Pays client" },
+                    { key: "show_client_phone",    label: "Téléphone client" },
+                  ],
+                },
+                {
+                  label: "Barre de méta",
+                  items: [
+                    { key: "show_meta_issue_date", label: "Date de la facture" },
+                    { key: "show_meta_due_date",   label: "Date d'échéance" },
+                    { key: "show_meta_currency",   label: "Devise" },
+                  ],
+                },
+                {
+                  label: "Corps",
+                  items: [
+                    { key: "show_notes",        label: "Notes / remarques" },
+                    { key: "show_payment_comm", label: "Communication de paiement" },
+                    { key: "show_bank_section", label: "Coordonnées bancaires" },
+                  ],
+                },
+                {
+                  label: "Pied de page",
+                  items: [
+                    { key: "show_footer_phone",   label: "Téléphone" },
+                    { key: "show_footer_website", label: "Site web" },
+                    { key: "show_footer_email",   label: "Email" },
+                    { key: "show_footer_nif",     label: "NIF" },
+                  ],
+                },
+              ] as { label: string; items: { key: string; label: string }[] }[]).map(group => (
+                <div key={group.label}>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{group.label}</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {group.items.map(item => {
+                      const val = (form.layout_config as Record<string, unknown> | null | undefined)?.[item.key] !== false
+                      return (
+                        <button key={item.key}
+                          onClick={() => setForm(f => ({ ...f, layout_config: { ...(f.layout_config ?? {}), [item.key]: !val } }))}
+                          className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition ${val ? "border-blue-200 bg-blue-50 text-blue-800" : "border-gray-200 bg-gray-50 text-gray-400 line-through"}`}
+                        >
+                          <span className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center text-xs ${val ? "border-blue-500 bg-blue-500 text-white" : "border-gray-300"}`}>
+                            {val ? "✓" : ""}
+                          </span>
+                          {item.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Bank accounts manager */}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
             <div className="flex items-center justify-between mb-4">
