@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
-import { Plus, Trash2, ArrowLeft, Info } from "lucide-react"
+import { Plus, Trash2, ArrowLeft, Info, RefreshCw } from "lucide-react"
 import Link from "next/link"
 import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/Button"
@@ -12,6 +12,8 @@ import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 
 interface Product { id: string; name: string; reference: string | null; buy_price: number | null }
 interface Props { products: Product[]; locale: string }
+
+const STORAGE_KEY = "nouvel_achat_draft"
 
 interface Line {
   id: number
@@ -24,25 +26,69 @@ interface Line {
 let _lid = 0
 const nextId = () => ++_lid
 
-export default function NouvelAchatClient({ products, locale }: Props) {
+const DEFAULT_FORM = {
+  supplier_name: "",
+  currency: "GNF" as "USD" | "GNF" | "EUR",
+  incoterm: "CIF",
+  order_date: new Date().toISOString().split("T")[0],
+  expected_date: "",
+  notes: "",
+  freight_cost: "",
+  insurance_cost: "",
+  global_discount_pct: "",
+}
+
+const DEFAULT_LINES: Line[] = [
+  { id: nextId(), product_id: "", description: "", quantity: "1", unit_price: "0" },
+]
+
+export default function NouvelAchatClient({ products: initialProducts, locale }: Props) {
   const t = useTranslations("achats")
   const router = useRouter()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [form, setForm] = useState({
-    supplier_name: "",
-    currency: "GNF" as "USD" | "GNF" | "EUR",
-    incoterm: "CIF",
-    order_date: new Date().toISOString().split("T")[0],
-    expected_date: "",
-    notes: "",
-    freight_cost: "",
-    insurance_cost: "",
-    global_discount_pct: "",
+  const [products, setProducts] = useState<Product[]>(initialProducts)
+  const [refreshing, setRefreshing] = useState(false)
+
+  // Restore draft from sessionStorage
+  const [form, setForm] = useState<typeof DEFAULT_FORM>(() => {
+    if (typeof window === "undefined") return DEFAULT_FORM
+    try {
+      const saved = sessionStorage.getItem(STORAGE_KEY)
+      if (saved) return JSON.parse(saved).form ?? DEFAULT_FORM
+    } catch { /* ignore */ }
+    return DEFAULT_FORM
   })
-  const [lines, setLines] = useState<Line[]>([
-    { id: nextId(), product_id: "", description: "", quantity: "1", unit_price: "0" },
-  ])
+  const [lines, setLines] = useState<Line[]>(() => {
+    if (typeof window === "undefined") return DEFAULT_LINES
+    try {
+      const saved = sessionStorage.getItem(STORAGE_KEY)
+      if (saved) return JSON.parse(saved).lines ?? DEFAULT_LINES
+    } catch { /* ignore */ }
+    return DEFAULT_LINES
+  })
+
+  // Persist draft to sessionStorage on every change
+  useEffect(() => {
+    try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ form, lines })) } catch { /* ignore */ }
+  }, [form, lines])
+
+  const refreshProducts = useCallback(async () => {
+    setRefreshing(true)
+    try {
+      const { supabase } = getCompanyClientBrowser()
+      const { data } = await supabase
+        .from("products").select("id, name, reference, buy_price").eq("is_active", true).order("name")
+      if (data) setProducts(data)
+    } finally { setRefreshing(false) }
+  }, [])
+
+  // Refresh products when tab becomes visible (user returns from another tab)
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === "visible") refreshProducts() }
+    document.addEventListener("visibilitychange", onVisible)
+    return () => document.removeEventListener("visibilitychange", onVisible)
+  }, [refreshProducts])
 
   const INCOTERMS = [
     { value: "EXW", label: t("incotermEXW") },
@@ -128,6 +174,7 @@ export default function NouvelAchatClient({ products, locale }: Props) {
     const json = await res.json()
     if (!res.ok) { setError(json.error ?? t("errorGeneric")); setSaving(false); return }
 
+    try { sessionStorage.removeItem(STORAGE_KEY) } catch { /* ignore */ }
     router.push(`/${locale}/achats/${json.id}`)
   }
 
@@ -183,7 +230,14 @@ export default function NouvelAchatClient({ products, locale }: Props) {
 
         {/* Lignes produits */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-          <h2 className="font-semibold text-gray-800 mb-4">{t("sectionProducts")}</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-gray-800">{t("sectionProducts")}</h2>
+            <button onClick={refreshProducts} disabled={refreshing}
+              className="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-blue-600 transition disabled:opacity-40">
+              <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? "animate-spin" : ""}`} />
+              Rafraîchir les produits
+            </button>
+          </div>
           <div className="space-y-3">
             <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-400 px-1">
               <div className="col-span-4">{t("colProduct")}</div>
