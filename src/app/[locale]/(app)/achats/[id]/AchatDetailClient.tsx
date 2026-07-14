@@ -1,11 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import {
   Truck, Trash2, Plus, Star, ChevronRight, Package,
-  MessageSquare, Clock, FileText, Printer, X, Check,
-  Info, MoreHorizontal,
+  MessageSquare, FileText, Printer, X, Check,
+  Info, MoreHorizontal, Paperclip, Download,
 } from "lucide-react"
 import Link from "next/link"
 import { useTranslations } from "next-intl"
@@ -95,6 +95,48 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
   const [tab, setTab] = useState<Tab>("produits")
   const [newCost, setNewCost] = useState({ type: "transport_maritime", label: t("costTypeTransportMaritime"), amount: "", currency: order.currency })
   const [chatMsg, setChatMsg] = useState("")
+  const [attachments, setAttachments] = useState<{ name: string; url: string; size: number }[]>([])
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Load existing attachments from storage on mount
+  useEffect(() => {
+    async function loadAttachments() {
+      const { supabase } = getCompanyClientBrowser()
+      const { data } = await supabase.storage.from("documents").list(`achats/${order.id}`)
+      if (!data) return
+      const files = await Promise.all(data.map(async f => {
+        const { data: { publicUrl } } = supabase.storage.from("documents").getPublicUrl(`achats/${order.id}/${f.name}`)
+        return { name: f.name, url: publicUrl, size: f.metadata?.size ?? 0 }
+      }))
+      setAttachments(files)
+    }
+    loadAttachments()
+  }, [order.id])
+
+  async function uploadAttachment(file: File) {
+    setUploading(true)
+    const { supabase } = getCompanyClientBrowser()
+    const path = `achats/${order.id}/${file.name}`
+    const { error } = await supabase.storage.from("documents").upload(path, file, { upsert: true })
+    if (!error) {
+      const { data: { publicUrl } } = supabase.storage.from("documents").getPublicUrl(path)
+      setAttachments(prev => [...prev.filter(a => a.name !== file.name), { name: file.name, url: publicUrl, size: file.size }])
+    }
+    setUploading(false)
+  }
+
+  async function deleteAttachment(name: string) {
+    const { supabase } = getCompanyClientBrowser()
+    await supabase.storage.from("documents").remove([`achats/${order.id}/${name}`])
+    setAttachments(prev => prev.filter(a => a.name !== name))
+  }
+
+  function formatSize(bytes: number) {
+    if (bytes < 1024) return `${bytes} o`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} Ko`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`
+  }
 
   const costTypeLabel: Record<string, string> = {
     transport_maritime: t("costTypeTransportMaritime"),
@@ -759,10 +801,49 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
               placeholder={t("sendMessagePlaceholder")}
               className="w-full h-20 text-xs border border-gray-200 rounded p-2.5 resize-none focus:outline-none focus:ring-1 focus:ring-purple-400 placeholder:text-gray-300"
             />
-            {chatMsg && (
-              <button className="mt-2 px-3 py-1.5 text-xs font-medium bg-[#7c3aed] text-white rounded hover:bg-[#6d28d9] transition">
-                {t("send")}
+            <div className="mt-2 flex items-center gap-2">
+              {chatMsg && (
+                <button className="px-3 py-1.5 text-xs font-medium bg-[#7c3aed] text-white rounded hover:bg-[#6d28d9] transition">
+                  {t("send")}
+                </button>
+              )}
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                title="Joindre un fichier"
+                className="p-1.5 rounded border border-gray-200 text-gray-400 hover:text-purple-600 hover:border-purple-300 transition disabled:opacity-40"
+              >
+                <Paperclip className={`w-4 h-4 ${uploading ? "animate-pulse" : ""}`} />
               </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                multiple
+                onChange={e => {
+                  Array.from(e.target.files ?? []).forEach(uploadAttachment)
+                  e.target.value = ""
+                }}
+              />
+            </div>
+
+            {/* Attachments list */}
+            {attachments.length > 0 && (
+              <div className="mt-3 space-y-1">
+                {attachments.map(a => (
+                  <div key={a.name} className="flex items-center gap-2 px-2 py-1.5 bg-gray-50 rounded text-xs group">
+                    <Paperclip className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                    <span className="flex-1 truncate text-gray-700 font-medium">{a.name}</span>
+                    <span className="text-gray-400 flex-shrink-0">{formatSize(a.size)}</span>
+                    <a href={a.url} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-blue-600 transition flex-shrink-0">
+                      <Download className="w-3.5 h-3.5" />
+                    </a>
+                    <button onClick={() => deleteAttachment(a.name)} className="text-gray-300 hover:text-red-400 transition flex-shrink-0 opacity-0 group-hover:opacity-100">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
