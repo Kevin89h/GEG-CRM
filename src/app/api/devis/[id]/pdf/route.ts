@@ -12,6 +12,7 @@ export async function GET(
 ) {
   const { id } = await params
   const isBL = req.nextUrl.searchParams.get("type") === "bon-livraison"
+  const showImages = req.nextUrl.searchParams.get("images") !== "0"
 
   const { db } = await createCompanyClient()
   const publicSupa = await createClient()
@@ -38,6 +39,18 @@ export async function GET(
   ])
 
   const orderTva = Boolean((order as Record<string, unknown>).tva)
+
+  const productIds = ((rawLines ?? []) as Record<string, unknown>[]).map(l => l.product_id as string).filter(Boolean)
+  const productImageMap: Record<string, string> = {}
+  if (showImages && productIds.length > 0) {
+    const { data: prods } = await db.from("products").select("id, image_url").in("id", productIds)
+    for (const p of prods ?? []) {
+      if ((p as Record<string, unknown>).image_url) {
+        productImageMap[(p as Record<string, unknown>).id as string] = (p as Record<string, unknown>).image_url as string
+      }
+    }
+  }
+
   const lines = ((rawLines ?? []) as Record<string, unknown>[]).map(l => ({
     id: String(l.id ?? ""),
     description: String(l.description ?? ""),
@@ -45,6 +58,7 @@ export async function GET(
     unit_price: Number(l.unit_price) || 0,
     discount: Number(l.discount) || 0,
     tva_rate: orderTva && !l.tva_exempt ? 18 : 0,
+    image_url: showImages && l.product_id ? (productImageMap[l.product_id as string] ?? null) : null,
   }))
 
   const status = (order as Record<string, unknown>).status as string ?? "draft"

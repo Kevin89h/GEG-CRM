@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { formatDate } from "@/lib/utils"
 
 function fmt(value: number, decimals = 0): string {
@@ -16,6 +16,7 @@ interface Line {
   unit_price: number
   discount: number
   tva_rate?: number | null
+  image_url?: string | null
   product: { name: string; reference: string | null } | null
 }
 
@@ -79,6 +80,8 @@ export default function FacturePrintPage({
   accountName, accountCity, accountCountry, accountPhone,
   lines, payments, locale, docSettings, bankAccounts = [],
 }: Props) {
+  const [showImages, setShowImages] = useState(true)
+
   useEffect(() => {
     document.title = `Facture ${number}`
   }, [number])
@@ -316,7 +319,10 @@ export default function FacturePrintPage({
 
       <div className="no-print">
         <button className="btn btn-secondary" onClick={() => window.close()}>✕ Fermer</button>
-        <a className="btn btn-primary" href={`/api/factures/${id}/pdf`} download={`Facture ${number}.pdf`}>⬇ Télécharger PDF</a>
+        <button className="btn btn-secondary" onClick={() => setShowImages(v => !v)}>
+          {showImages ? "🚫 Masquer images" : "🖼 Afficher images"}
+        </button>
+        <a className="btn btn-primary" href={`/api/factures/${id}/pdf${showImages ? "" : "?images=0"}`} download={`Facture ${number}.pdf`}>⬇ Télécharger PDF</a>
       </div>
 
       <div className="page">
@@ -399,10 +405,15 @@ export default function FacturePrintPage({
                   return (
                     <tr key={l.id}>
                       <td>
-                        <div className="td-desc">{l.description}</div>
-                        {l.discount > 0 && (
-                          <div className="td-muted">Remise {l.discount}%</div>
-                        )}
+                        <div style={{ display: "flex", alignItems: "flex-start", gap: "8px" }}>
+                          {showImages && l.image_url && (
+                            <img src={l.image_url} alt="" style={{ width: "36px", height: "36px", objectFit: "cover", borderRadius: "4px", flexShrink: 0 }} />
+                          )}
+                          <div>
+                            <div className="td-desc">{l.description}</div>
+                            {l.discount > 0 && <div className="td-muted">Remise {l.discount}%</div>}
+                          </div>
+                        </div>
                       </td>
                       <td className="td-r">{fmt(l.quantity, 2)} U</td>
                       <td className="td-r">{fmt(l.unit_price, 0)} {curSymbol}</td>
