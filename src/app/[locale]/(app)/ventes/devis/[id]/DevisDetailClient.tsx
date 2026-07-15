@@ -62,6 +62,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
   const t = useTranslations("devis")
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [addingLine, setAddingLine] = useState(false)
   const [activeTab, setActiveTab] = useState<"lines" | "other" | "notes">("lines")
   const [tva, setTva] = useState<boolean>(order.tva ?? false)
   const [lines, setLines] = useState<Line[]>(order.lines)
@@ -187,17 +188,23 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
   }
 
   async function addLine() {
-    const res = await fetch(`/api/devis/${order.id}/lines`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ description: "Nouvelle ligne", quantity: 1, unit_price: 0, discount: 0 }),
-    })
-    const data = await res.json()
-    if (!res.ok) {
-      alert(`Erreur: ${data.error ?? res.status}`)
-      return
+    if (addingLine) return
+    setAddingLine(true)
+    try {
+      const res = await fetch(`/api/devis/${order.id}/lines`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description: "Nouvelle ligne", quantity: 1, unit_price: 0, discount: 0 }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        alert(`Erreur: ${data.error ?? res.status}`)
+        return
+      }
+      setLines(prev => [...prev, { ...data, product: null, unit: null, tva_exempt: false }])
+    } finally {
+      setAddingLine(false)
     }
-    setLines(prev => [...prev, { ...data, product: null, unit: null, tva_exempt: false }])
   }
 
   async function selectProduct(lineId: string, productId: string) {
@@ -664,10 +671,11 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
               <div className="px-4 py-3 border-t border-gray-50">
                 <button
                   onClick={addLine}
-                  className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors"
+                  disabled={addingLine}
+                  className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Plus className="w-4 h-4" />
-                  Ajouter une ligne
+                  {addingLine ? "Ajout..." : "Ajouter une ligne"}
                 </button>
               </div>
             )}
