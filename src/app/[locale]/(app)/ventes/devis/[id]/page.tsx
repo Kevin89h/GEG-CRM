@@ -57,7 +57,7 @@ export default async function DevisDetailPage({ params }: { params: Promise<{ lo
   const { data: allProducts } = await supabase
     .from("products")
     .select("id, name, reference, sale_price, unit:units(name)")
-    .eq("is_active", true)
+    .neq("is_active", false)
     .order("name")
 
   // Linked documents count
