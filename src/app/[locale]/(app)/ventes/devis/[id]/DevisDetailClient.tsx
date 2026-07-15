@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
 import { CheckCircle, Receipt, X, Printer, ArrowLeft, RotateCcw, Truck, Plus, Trash2, Copy } from "lucide-react"
@@ -63,6 +63,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [addingLine, setAddingLine] = useState(false)
+  const selectingProductRef = useRef(false)
   const [activeTab, setActiveTab] = useState<"lines" | "other" | "notes">("lines")
   const [tva, setTva] = useState<boolean>(order.tva ?? false)
   const [lines, setLines] = useState<Line[]>(order.lines)
@@ -210,6 +211,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
   async function selectProduct(lineId: string, productId: string) {
     const p = allProducts.find(p => p.id === productId)
     if (!p) return
+    selectingProductRef.current = false
     setProductSearch(prev => ({ ...prev, [lineId]: "" }))
     setLines(prev => prev.map(l => l.id === lineId ? {
       ...l,
@@ -556,6 +558,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                             value={productSearch[l.id] !== undefined ? productSearch[l.id] : l.description}
                             onChange={e => setProductSearch(prev => ({ ...prev, [l.id]: e.target.value }))}
                             onBlur={e => {
+                              if (selectingProductRef.current) return
                               if (!productSearch[l.id]) return
                               updateLine(l.id, "description", e.target.value)
                               setTimeout(() => setProductSearch(prev => { const n = { ...prev }; delete n[l.id]; return n }), 200)
@@ -572,7 +575,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                                 {matches.map(p => (
                                   <button
                                     key={p.id}
-                                    onMouseDown={() => selectProduct(l.id, p.id)}
+                                    onMouseDown={() => { selectingProductRef.current = true; selectProduct(l.id, p.id) }}
                                     className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center justify-between gap-2"
                                   >
                                     <span className="font-medium text-gray-900 truncate">{p.name}</span>
