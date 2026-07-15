@@ -5,11 +5,12 @@ import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useTranslations } from "next-intl"
 import {
-  Plus, Search, LayoutList, LayoutGrid, ChevronLeft, ChevronRight,
-  Clock, CheckCircle2, XCircle, FileText, AlertTriangle, Calendar,
+  Plus, Search, LayoutList, LayoutGrid,
+  Clock, FileText, AlertTriangle, Download,
   ChevronUp, ChevronDown, ChevronsUpDown,
 } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils"
+import { exportToXls } from "@/lib/exportXls"
 
 interface InvoiceRef {
   id: string
@@ -35,11 +36,20 @@ interface Props {
   orders: Order[]
 }
 
-type Tab = "all" | "rfq" | "po"
+type Tab = "all" | "draft" | "sent" | "confirmed" | "received"
+
+function fmtMulti(byCur: Record<string, number>) {
+  return Object.entries(byCur)
+    .filter(([, v]) => v > 0)
+    .map(([cur, val]) => formatCurrency(val, cur as "GNF" | "USD" | "EUR"))
+    .join(" · ") || "—"
+}
 
 function isOverdue(dateStr: string | null) {
   if (!dateStr) return false
-  return new Date(dateStr) < new Date(new Date().toDateString())
+  const d = new Date(dateStr)
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  return d < today
 }
 
 export default function AchatsClient({ orders }: Props) {
@@ -55,10 +65,10 @@ export default function AchatsClient({ orders }: Props) {
     cancelled: { label: t("statusCancelled"), bg: "bg-red-50",     text: "text-red-700",     dot: "bg-red-400" },
   }
 
-  function relativeDate(dateStr: string | null, locale: string): { label: string; overdue: boolean } {
+  function relativeDate(dateStr: string | null): { label: string; overdue: boolean } {
     if (!dateStr) return { label: "—", overdue: false }
     const d = new Date(dateStr)
-    const now = new Date()
+    const now = new Date(); now.setHours(0, 0, 0, 0)
     const diff = Math.round((d.getTime() - now.getTime()) / 86400000)
     if (diff === 0) return { label: t("dateToday"), overdue: false }
     if (diff === -1) return { label: t("dateYesterday"), overdue: true }
@@ -72,6 +82,8 @@ export default function AchatsClient({ orders }: Props) {
 
   const [tab, setTab] = useState<Tab>("all")
   const [search, setSearch] = useState("")
+  const [filterCurrency, setFilterCurrency] = useState<string>("all")
+  const [filterOverdue, setFilterOverdue] = useState(false)
   const [sortField, setSortField] = useState<SortField>("order_date")
   const [sortDir, setSortDir] = useState<SortDir>("desc")
 
@@ -87,36 +99,39 @@ export default function AchatsClient({ orders }: Props) {
       : <ChevronDown className="w-3 h-3 ml-1 text-blue-500" />
   }
 
-  const today = new Date(new Date().toDateString())
+  const currencies = useMemo(() => {
+    const set = new Set(orders.map(o => o.currency).filter(Boolean))
+    return Array.from(set).sort()
+  }, [orders])
 
-  const rfqOrders = orders.filter(o => o.status === "draft" || o.status === "sent")
-  const poOrders  = orders.filter(o => o.status === "confirmed" || o.status === "received")
-
-  const stats = useMemo(() => ({
-    nouveau:         orders.filter(o => o.status === "draft").length,
-    envoye:          orders.filter(o => o.status === "sent").length,
-    rfqEnRetard:     rfqOrders.filter(o => isOverdue(o.expected_date)).length,
-    nonConfirme:     rfqOrders.length,
-    receptionEnRetard: orders.filter(o => o.status === "confirmed" && isOverdue(o.expected_date)).length,
-    otd: (() => {
-      const received = orders.filter(o => o.status === "received" && o.expected_date)
-      if (!received.length) return 100
-      const onTime = received.filter(o => !isOverdue(o.expected_date)).length
-      return Math.round((onTime / received.length) * 100)
-    })(),
-    avgDays: (() => {
-      const withDates = orders.filter(o => o.order_date && o.expected_date)
-      if (!withDates.length) return 0
-      const avg = withDates.reduce((s, o) => {
-        const diff = (new Date(o.expected_date!).getTime() - new Date(o.order_date!).getTime()) / 86400000
-        return s + Math.max(0, diff)
-      }, 0) / withDates.length
-      return Math.round(avg * 100) / 100
-    })(),
-  }), [orders, rfqOrders])
+  const stats = useMemo(() => {
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    const openOrders = orders.filter(o => o.status !== "received" && o.status !== "cancelled")
+    const overdue = openOrders.filter(o => o.expected_date && new Date(o.expected_date) < today)
+    const toPay: Record<string, number> = {}
+    for (const o of openOrders) {
+      if (o.total > 0) toPay[o.currency] = (toPay[o.currency] ?? 0) + o.total
+    }
+    return {
+      draft:     orders.filter(o => o.status === "draft").length,
+      sent:      orders.filter(o => o.status === "sent").length,
+      confirmed: orders.filter(o => o.status === "confirmed").length,
+      received:  orders.filter(o => o.status === "received").length,
+      enRetard:  overdue.length,
+      total:     orders.length,
+      toPay,
+      toPayTotal: fmtMulti(toPay),
+    }
+  }, [orders])
 
   const displayed = useMemo(() => {
-    let base = tab === "rfq" ? rfqOrders : tab === "po" ? poOrders : orders
+    let base: Order[]
+    if (tab === "draft")     base = orders.filter(o => o.status === "draft")
+    else if (tab === "sent") base = orders.filter(o => o.status === "sent")
+    else if (tab === "confirmed") base = orders.filter(o => o.status === "confirmed")
+    else if (tab === "received")  base = orders.filter(o => o.status === "received")
+    else base = orders
+
     if (search) {
       const q = search.toLowerCase()
       base = base.filter(o =>
@@ -124,6 +139,12 @@ export default function AchatsClient({ orders }: Props) {
         o.supplier_name.toLowerCase().includes(q)
       )
     }
+    if (filterCurrency !== "all") base = base.filter(o => o.currency === filterCurrency)
+    if (filterOverdue) {
+      const today = new Date(); today.setHours(0, 0, 0, 0)
+      base = base.filter(o => o.expected_date && new Date(o.expected_date) < today)
+    }
+
     const dir = sortDir === "asc" ? 1 : -1
     base = [...base].sort((a, b) => {
       switch (sortField) {
@@ -136,18 +157,20 @@ export default function AchatsClient({ orders }: Props) {
       }
     })
     return base
-  }, [tab, search, sortField, sortDir, orders, rfqOrders, poOrders])
+  }, [tab, search, filterCurrency, filterOverdue, sortField, sortDir, orders])
 
   const TABS: { key: Tab; label: string; count: number }[] = [
-    { key: "all", label: t("tabAll"),  count: orders.length },
-    { key: "rfq", label: t("tabRfq"),  count: rfqOrders.length },
-    { key: "po",  label: t("tabPo"),   count: poOrders.length },
+    { key: "draft",     label: t("statusDraft"),     count: stats.draft },
+    { key: "sent",      label: t("statusSent"),      count: stats.sent },
+    { key: "confirmed", label: t("statusConfirmed"), count: stats.confirmed },
+    { key: "received",  label: t("statusReceived"),  count: stats.received },
+    { key: "all",       label: t("tabAll"),          count: stats.total },
   ]
 
   return (
     <div className="-mx-4 -my-4 md:-m-6 min-h-screen bg-gray-50/50">
-      {/* Top toolbar */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3 flex flex-wrap items-center gap-2">
+      {/* Toolbar */}
+      <div className="bg-white border-b border-gray-200 px-4 md:px-6 py-3 flex flex-wrap items-center gap-2">
         <Link
           href={`/${locale}/achats/nouveau`}
           className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded bg-[#7c3aed] text-white hover:bg-[#6d28d9] transition"
@@ -155,99 +178,108 @@ export default function AchatsClient({ orders }: Props) {
           <Plus className="w-3.5 h-3.5" /> {t("btnNew")}
         </Link>
 
-        {/* Tabs */}
+        <button
+          onClick={() => exportToXls(displayed.map(o => ({
+            "Numéro":     o.number,
+            "Fournisseur": o.supplier_name,
+            "Statut":     o.status,
+            "Date commande":  o.order_date ?? "",
+            "Date livraison": o.expected_date ?? "",
+            "Total":      o.total,
+            "Devise":     o.currency,
+          })), "commandes-achats")}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded border border-gray-200 text-gray-600 hover:bg-gray-50 transition"
+        >
+          <Download className="w-3.5 h-3.5" /> Export XLS
+        </button>
+
+        {/* Status tabs */}
         <div className="flex items-center gap-1 overflow-x-auto">
-          {TABS.map(tab => (
+          {TABS.map(t_ => (
             <button
-              key={tab.key}
-              onClick={() => { setTab(tab.key);  }}
+              key={t_.key}
+              onClick={() => setTab(t_.key)}
               className={`whitespace-nowrap px-3 py-1.5 text-sm rounded transition font-medium ${
-                tab.key === tab.key
+                tab === t_.key
                   ? "bg-gray-100 text-gray-900"
                   : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
               }`}
             >
-              {tab.label}
-              <span className="ml-1.5 text-xs text-gray-400">({tab.count})</span>
+              {t_.label}
+              <span className="ml-1.5 text-xs text-gray-400">({t_.count})</span>
             </button>
           ))}
         </div>
 
-        {/* Search */}
-        <div className="relative ml-auto">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-          <input
-            value={search}
-            onChange={e => { setSearch(e.target.value);  }}
-            placeholder={t("searchPlaceholder")}
-            className="pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 w-full sm:w-60"
-          />
+        <div className="flex items-center gap-2 ml-auto">
+          {/* Currency filter */}
+          {currencies.length > 1 && (
+            <select
+              value={filterCurrency}
+              onChange={e => setFilterCurrency(e.target.value)}
+              className="text-xs border border-gray-200 rounded px-2 py-1.5 bg-white text-gray-600 focus:outline-none focus:ring-1 focus:ring-blue-400"
+            >
+              <option value="all">Toutes devises</option>
+              {currencies.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          )}
+
+          {/* Overdue filter */}
+          <button
+            onClick={() => setFilterOverdue(v => !v)}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded border transition font-medium ${
+              filterOverdue
+                ? "bg-red-50 border-red-300 text-red-700"
+                : "border-gray-200 text-gray-500 hover:border-gray-300"
+            }`}
+          >
+            <AlertTriangle className="w-3 h-3" /> En retard
+          </button>
+
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder={t("searchPlaceholder")}
+              className="pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 w-52"
+            />
+          </div>
         </div>
 
         <span className="text-xs text-gray-400">{displayed.length} commande{displayed.length !== 1 ? "s" : ""}</span>
 
-        {/* View toggles */}
         <div className="flex items-center gap-0.5 border border-gray-200 rounded p-0.5">
           <button className="p-1.5 rounded bg-gray-100 text-gray-700"><LayoutList className="w-3.5 h-3.5" /></button>
           <button className="p-1.5 rounded text-gray-400 hover:bg-gray-50"><LayoutGrid className="w-3.5 h-3.5" /></button>
-          <button className="p-1.5 rounded text-gray-400 hover:bg-gray-50"><Calendar className="w-3.5 h-3.5" /></button>
         </div>
       </div>
 
-      {/* Stats bar */}
-      <div className="bg-white border-b border-gray-200 px-4 overflow-x-auto">
-        <table className="w-full text-sm min-w-[640px]">
-          <thead>
-            <tr className="text-xs text-gray-400 uppercase tracking-wide">
-              <th className="py-2 pr-6 font-medium text-left w-16"></th>
-              <th className="py-2 px-4 font-medium text-center">{t("statsNew")}</th>
-              <th className="py-2 px-4 font-medium text-center">{t("statsSent")}</th>
-              <th className="py-2 px-4 font-medium text-center text-orange-500">{t("statsRfqOverdue")}</th>
-              <th className="py-2 px-4 font-medium text-center">{t("statsUnconfirmed")}</th>
-              <th className="py-2 px-4 font-medium text-center text-red-500">{t("statsReceiptOverdue")}</th>
-              <th className="py-2 px-4 font-medium text-center">OTD</th>
-              <th className="py-2 px-4 font-medium text-center">{t("statsDaysToOrder")}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[
-              { label: t("statsRowAll"), nouveau: stats.nouveau, envoye: stats.envoye, retard: stats.rfqEnRetard, nonConf: stats.nonConfirme, recepRetard: stats.receptionEnRetard, otd: stats.otd, jours: stats.avgDays },
-              { label: t("statsRowMine"), nouveau: 0,             envoye: 0,           retard: 0,                  nonConf: 0,                recepRetard: 0,                        otd: 100,       jours: 0 },
-            ].map(row => (
-              <tr key={row.label} className="border-t border-gray-100">
-                <td className="py-2 pr-6 text-xs font-medium text-gray-500">{row.label}</td>
-                <td className="py-2 px-4 text-center">
-                  <button className="group flex flex-col items-center gap-0.5 mx-auto hover:text-blue-600 transition">
-                    <span className={`text-lg font-semibold ${row.nouveau > 0 ? "text-blue-600" : "text-gray-400"}`}>{row.nouveau}</span>
-                    <span className="text-[10px] text-gray-400 group-hover:text-blue-500">{t("statsNew")}</span>
-                  </button>
-                </td>
-                <td className="py-2 px-4 text-center">
-                  <span className={`text-lg font-semibold ${row.envoye > 0 ? "text-gray-700" : "text-gray-300"}`}>{row.envoye}</span>
-                </td>
-                <td className="py-2 px-4 text-center">
-                  <span className={`text-lg font-semibold ${row.retard > 0 ? "text-orange-500" : "text-gray-300"}`}>{row.retard}</span>
-                </td>
-                <td className="py-2 px-4 text-center">
-                  <span className={`text-lg font-semibold ${row.nonConf > 0 ? "text-blue-500" : "text-gray-300"}`}>{row.nonConf}</span>
-                </td>
-                <td className="py-2 px-4 text-center">
-                  <span className={`text-lg font-semibold ${row.recepRetard > 0 ? "text-red-500" : "text-gray-300"}`}>{row.recepRetard}</span>
-                </td>
-                <td className="py-2 px-4 text-center">
-                  <span className={`text-lg font-semibold ${row.otd < 80 ? "text-red-500" : "text-gray-700"}`}>{row.otd} %</span>
-                </td>
-                <td className="py-2 px-4 text-center">
-                  <span className="text-lg font-semibold text-gray-700">{row.jours.toFixed(2)}</span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* Stats cards */}
+      <div className="bg-white border-b border-gray-200 px-4 md:px-6 py-3">
+        <div className="flex items-stretch gap-1">
+          {[
+            { label: t("statusDraft"),     value: stats.draft,     color: stats.draft > 0     ? "text-blue-600"    : "text-gray-300", bg: stats.draft > 0     ? "bg-blue-50"    : "" },
+            { label: "En retard",          value: stats.enRetard,  color: stats.enRetard > 0  ? "text-red-600"     : "text-gray-300", bg: stats.enRetard > 0  ? "bg-red-50"     : "" },
+            { label: t("statusConfirmed"), value: stats.confirmed, color: stats.confirmed > 0 ? "text-green-600"   : "text-gray-300", bg: stats.confirmed > 0 ? "bg-green-50"   : "" },
+            { label: t("statusReceived"),  value: stats.received,  color: stats.received > 0  ? "text-emerald-600" : "text-gray-300", bg: stats.received > 0  ? "bg-emerald-50" : "" },
+          ].map(s => (
+            <div key={s.label} className={`flex-1 flex flex-col items-center py-3 px-4 rounded-lg mx-1 ${s.bg}`}>
+              <span className={`text-2xl font-bold tabular-nums ${s.color}`}>{s.value}</span>
+              <span className="text-[11px] text-gray-400 mt-0.5">{s.label}</span>
+            </div>
+          ))}
+          <div className="w-px bg-gray-200 mx-3" />
+          <div className="flex flex-col items-end justify-center px-4">
+            <span className="text-xs text-gray-400">À payer</span>
+            <span className="text-lg font-bold text-red-600 tabular-nums">{stats.toPayTotal}</span>
+          </div>
+        </div>
       </div>
 
       {/* Main table */}
-      <div className="px-4 py-4">
+      <div className="px-4 md:px-6 py-4">
         {displayed.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-200 py-20 text-center text-gray-400">
             <FileText className="w-10 h-10 mx-auto mb-3 opacity-30" />
@@ -256,103 +288,98 @@ export default function AchatsClient({ orders }: Props) {
         ) : (
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
             <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-320px)]">
-            <table className="w-full text-sm">
-              <thead className="sticky top-0 z-10">
-                <tr className="bg-gray-50 border-b border-gray-200 text-xs text-gray-500 font-medium">
-                  <th className="w-8 px-4 py-3 hidden sm:table-cell">
-                    <input type="checkbox" className="rounded border-gray-300" />
-                  </th>
-                  <th className="text-left px-4 py-3">
-                    <button onClick={() => handleSort("number")} className="flex items-center hover:text-gray-900 transition">
-                      {t("colReference")} <SortIcon field="number" />
-                    </button>
-                  </th>
-                  <th className="text-left px-4 py-3">
-                    <button onClick={() => handleSort("supplier_name")} className="flex items-center hover:text-gray-900 transition">
-                      {t("colSupplier")} <SortIcon field="supplier_name" />
-                    </button>
-                  </th>
-                  <th className="text-left px-4 py-3 hidden md:table-cell">{t("colCompany")}</th>
-                  <th className="text-left px-4 py-3 hidden md:table-cell">{t("colBuyer")}</th>
-                  <th className="text-left px-4 py-3 hidden sm:table-cell">
-                    <button onClick={() => handleSort("expected_date")} className="flex items-center hover:text-gray-900 transition">
-                      {t("colDueDate")} <SortIcon field="expected_date" />
-                    </button>
-                  </th>
-                  <th className="text-left px-4 py-3 hidden lg:table-cell">{t("colActivities")}</th>
-                  <th className="text-right px-4 py-3">
-                    <button onClick={() => handleSort("total")} className="flex items-center ml-auto hover:text-gray-900 transition">
-                      {t("colTotal")} <SortIcon field="total" />
-                    </button>
-                  </th>
-                  <th className="text-left px-4 py-3 hidden lg:table-cell">Facture</th>
-                  <th className="text-left px-4 py-3">{t("colStatus")}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {displayed.map(o => {
-                  const cfg = STATUS_CONFIG[o.status] ?? STATUS_CONFIG.draft
-                  const date = relativeDate(o.expected_date, locale)
-                  return (
-                    <tr key={o.id} className="hover:bg-blue-50/20 transition-colors group">
-                      <td className="px-4 py-3 hidden sm:table-cell">
-                        <input type="checkbox" className="rounded border-gray-300" />
-                      </td>
-                      <td className="px-4 py-3">
-                        <Link
-                          href={`/${locale}/achats/${o.id}`}
-                          className="font-mono font-semibold text-blue-600 hover:underline text-xs"
-                        >
-                          {o.number || "—"}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 font-medium text-gray-900">{o.supplier_name}</td>
-                      <td className="px-4 py-3 text-gray-500 hidden md:table-cell">GEG SAS Guinée</td>
-                      <td className="px-4 py-3 hidden md:table-cell">
-                        <div className="w-6 h-6 rounded-full bg-green-600 flex items-center justify-center text-white text-[10px] font-bold">
-                          L
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 hidden sm:table-cell">
-                        <span className={`text-xs ${date.overdue ? "text-red-600 font-medium" : "text-gray-500"}`}>
-                          {date.label}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 hidden lg:table-cell">
-                        <Clock className="w-4 h-4 text-gray-300" />
-                      </td>
-                      <td className="px-4 py-3 text-right font-semibold text-gray-900 text-xs tabular-nums">
-                        {o.total > 0
-                          ? formatCurrency(o.total, o.currency as "GNF" | "USD" | "EUR")
-                          : "—"}
-                      </td>
-                      <td className="px-4 py-3 hidden lg:table-cell">
-                        {o.invoice ? (
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 z-10">
+                  <tr className="bg-gray-50 border-b border-gray-200 text-xs text-gray-500 font-medium">
+                    <th className="w-8 px-4 py-3 hidden sm:table-cell">
+                      <input type="checkbox" className="rounded border-gray-300" />
+                    </th>
+                    <th className="text-left px-4 py-3">
+                      <button onClick={() => handleSort("number")} className="flex items-center hover:text-gray-900 transition">
+                        {t("colReference")} <SortIcon field="number" />
+                      </button>
+                    </th>
+                    <th className="text-left px-4 py-3">
+                      <button onClick={() => handleSort("supplier_name")} className="flex items-center hover:text-gray-900 transition">
+                        {t("colSupplier")} <SortIcon field="supplier_name" />
+                      </button>
+                    </th>
+                    <th className="text-left px-4 py-3 hidden sm:table-cell">
+                      <button onClick={() => handleSort("order_date")} className="flex items-center hover:text-gray-900 transition">
+                        {t("colOrderDate")} <SortIcon field="order_date" />
+                      </button>
+                    </th>
+                    <th className="text-left px-4 py-3 hidden sm:table-cell">
+                      <button onClick={() => handleSort("expected_date")} className="flex items-center hover:text-gray-900 transition">
+                        {t("colDueDate")} <SortIcon field="expected_date" />
+                      </button>
+                    </th>
+                    <th className="text-right px-4 py-3">
+                      <button onClick={() => handleSort("total")} className="flex items-center ml-auto hover:text-gray-900 transition">
+                        {t("colTotal")} <SortIcon field="total" />
+                      </button>
+                    </th>
+                    <th className="text-left px-4 py-3 hidden lg:table-cell">Facture</th>
+                    <th className="text-left px-4 py-3">{t("colStatus")}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {displayed.map(o => {
+                    const cfg = STATUS_CONFIG[o.status] ?? STATUS_CONFIG.draft
+                    const date = relativeDate(o.expected_date)
+                    return (
+                      <tr key={o.id} className="hover:bg-blue-50/20 transition-colors group">
+                        <td className="px-4 py-3 hidden sm:table-cell">
+                          <input type="checkbox" className="rounded border-gray-300" />
+                        </td>
+                        <td className="px-4 py-3">
                           <Link
-                            href={`/${locale}/comptabilite/factures-fournisseurs/${o.invoice.id}`}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
-                            onClick={e => e.stopPropagation()}
+                            href={`/${locale}/achats/${o.id}`}
+                            className="font-mono font-semibold text-blue-600 hover:underline text-xs"
                           >
-                            <FileText className="w-3 h-3" />
-                            {o.invoice.number}
+                            {o.number || "—"}
                           </Link>
-                        ) : (
-                          <span className="text-xs text-gray-300">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${cfg.bg} ${cfg.text}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
-                          {cfg.label}
-                        </span>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+                        </td>
+                        <td className="px-4 py-3 font-medium text-gray-900">{o.supplier_name}</td>
+                        <td className="px-4 py-3 text-xs text-gray-500 hidden sm:table-cell">
+                          {o.order_date ? formatDate(o.order_date, locale) : "—"}
+                        </td>
+                        <td className="px-4 py-3 hidden sm:table-cell">
+                          <span className={`text-xs ${date.overdue ? "text-red-600 font-medium" : "text-gray-500"}`}>
+                            {date.label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold text-gray-900 text-xs tabular-nums">
+                          {o.total > 0
+                            ? formatCurrency(o.total, o.currency as "GNF" | "USD" | "EUR")
+                            : "—"}
+                        </td>
+                        <td className="px-4 py-3 hidden lg:table-cell">
+                          {o.invoice ? (
+                            <Link
+                              href={`/${locale}/comptabilite/factures-fournisseurs/${o.invoice.id}`}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
+                              onClick={e => e.stopPropagation()}
+                            >
+                              <FileText className="w-3 h-3" />
+                              {o.invoice.number}
+                            </Link>
+                          ) : (
+                            <span className="text-xs text-gray-300">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${cfg.bg} ${cfg.text}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+                            {cfg.label}
+                          </span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
-
           </div>
         )}
       </div>

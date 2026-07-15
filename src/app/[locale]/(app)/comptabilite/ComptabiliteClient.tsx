@@ -785,6 +785,9 @@ export default function ComptabiliteClient({ locale, isSuperAdmin, clientStats, 
           <Link href={`/${locale}/comptabilite/paiements`} className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-1.5">
             <FileText className="w-4 h-4" /> Paiements
           </Link>
+          <Link href={`/${locale}/comptabilite/paiements-fournisseurs`} className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-1.5">
+            <FileText className="w-4 h-4" /> Paiements fournisseurs
+          </Link>
           <Link href={`/${locale}/comptabilite/resultat`} className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-1.5">
             <BarChart2 className="w-4 h-4" /> Compte de résultat
           </Link>

@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useRef } from "react"
 import Link from "next/link"
-import { Plus, Download, Upload, Search, ChevronUp, ChevronDown, X } from "lucide-react"
+import { Plus, Download, Upload, Search, ChevronUp, ChevronDown, X, CreditCard } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 import { useRouter } from "next/navigation"
 
@@ -120,6 +120,12 @@ export default function FacturesFournisseursListClient({
           <p className="text-sm text-gray-500 mt-0.5">Gérez vos achats et dépenses directement</p>
         </div>
         <div className="flex items-center gap-2">
+          <Link
+            href={`/${locale}/comptabilite/paiements-fournisseurs`}
+            className="inline-flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <CreditCard className="w-4 h-4" /> Paiements
+          </Link>
           <button
             onClick={() => setImportOpen(true)}
             className="inline-flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"

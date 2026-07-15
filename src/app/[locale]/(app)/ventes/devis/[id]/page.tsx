@@ -58,7 +58,6 @@ export default async function DevisDetailPage({ params }: { params: Promise<{ lo
     .from("products")
     .select("id, name, reference, sale_price, unit:units(name)")
     .eq("is_active", true)
-    .eq("can_be_sold", true)
     .order("name")
 
   // Linked documents count
