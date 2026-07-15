@@ -34,7 +34,7 @@ export default async function FacturePdfPage({ params }: { params: Promise<{ loc
     .select(`
       id, number, status, currency, issue_date, due_date, notes, order_id,
       account:accounts(id, name, city, country, phone),
-      lines:invoice_lines(id, description, quantity, unit_price, discount, position, tva_rate, product:products(name, reference))
+      lines:invoice_lines(id, description, quantity, unit_price, discount, position, tva_rate, product:products(name, reference, image_url))
     `)
     .eq("id", id)
     .single()
@@ -62,6 +62,10 @@ export default async function FacturePdfPage({ params }: { params: Promise<{ loc
       unit_price: Number(l.unit_price) || 0,
       discount: Number(l.discount) || 0,
       tva_rate: l.tva_rate != null ? Number(l.tva_rate) : null,
+      image_url: (() => {
+        const p = Array.isArray(l.product) ? l.product[0] : l.product
+        return (p as Record<string, unknown> | null)?.image_url as string | null ?? null
+      })(),
       product: Array.isArray(l.product)
         ? (l.product[0] ?? null)
         : (l.product as { name: string; reference: string | null } | null),

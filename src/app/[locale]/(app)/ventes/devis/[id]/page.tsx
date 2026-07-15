@@ -56,7 +56,7 @@ export default async function DevisDetailPage({ params }: { params: Promise<{ lo
 
   const { data: allProducts } = await supabase
     .from("products")
-    .select("id, name, reference, sell_price, unit:units(name)")
+    .select("id, name, reference, sell_price, image_url, unit:units(name)")
     .neq("is_active", false)
     .order("name")
 
@@ -86,6 +86,7 @@ export default async function DevisDetailPage({ params }: { params: Promise<{ lo
     name: p.name as string,
     reference: (p.reference as string | null) ?? null,
     sale_price: (p.sell_price as number | null) ?? null,
+    image_url: (p.image_url as string | null) ?? null,
     unit: Array.isArray(p.unit) ? (p.unit[0] as { name: string } | null) ?? null : (p.unit as { name: string } | null),
   }))
 

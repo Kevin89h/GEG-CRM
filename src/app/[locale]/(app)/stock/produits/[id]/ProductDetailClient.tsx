@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/Button"
 interface Product {
   id: string
   name: string
+  image_url: string | null
   reference: string | null
   merchant_reference: string | null
   sku: string | null
@@ -101,9 +102,11 @@ export default function ProductDetailClient({
   const [documents, setDocuments] = useState<ProductDocument[]>(initialDocs)
   const [uploading, setUploading] = useState(false)
   const [uploadType, setUploadType] = useState<"technical_sheet" | "safety_data_sheet" | "other">("technical_sheet")
+  const [uploadingImage, setUploadingImage] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const imageInputRef = useRef<HTMLInputElement>(null)
 
   const PRODUCT_TYPES = [
     { value: "consumable", label: t("typeConsommable") },
@@ -241,6 +244,31 @@ export default function ProductDetailClient({
     }
   }
 
+  async function uploadImage(file: File) {
+    setUploadingImage(true)
+    try {
+      const supabase = createClient()
+      const ext = file.name.split(".").pop() ?? "jpg"
+      const path = `${product.id}/image.${ext}`
+      const { error: storageError } = await supabase.storage
+        .from("product-documents")
+        .upload(path, file, { upsert: true })
+      if (storageError) throw storageError
+      const { data: urlData } = supabase.storage.from("product-documents").getPublicUrl(path)
+      const res = await fetch(`/api/stock/produits/${product.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image_url: urlData.publicUrl }),
+      })
+      if (res.ok) {
+        setProduct(p => ({ ...p, image_url: urlData.publicUrl }))
+      }
+    } finally {
+      setUploadingImage(false)
+      if (imageInputRef.current) imageInputRef.current.value = ""
+    }
+  }
+
   const [deleteError, setDeleteError] = useState<string | null>(null)
 
   async function deleteProduct() {
@@ -321,8 +349,23 @@ export default function ProductDetailClient({
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm mb-4">
           <div className="px-4 md:px-6 pt-5 pb-4 border-b border-gray-100">
             <div className="flex items-start gap-3 md:gap-4">
-              <div className="w-12 h-12 md:w-16 md:h-16 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
-                <Package className="w-6 h-6 md:w-8 md:h-8 text-blue-400" />
+              <div className="relative group flex-shrink-0">
+                <div className="w-16 h-16 md:w-20 md:h-20 rounded-xl bg-blue-50 flex items-center justify-center overflow-hidden border border-gray-100">
+                  {product.image_url
+                    ? <img src={product.image_url} alt={product.name} className="w-full h-full object-cover" />
+                    : <Package className="w-6 h-6 md:w-8 md:h-8 text-blue-400" />
+                  }
+                </div>
+                <button
+                  onClick={() => imageInputRef.current?.click()}
+                  disabled={uploadingImage}
+                  className="absolute inset-0 rounded-xl bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center"
+                >
+                  <Upload className="w-5 h-5 text-white" />
+                </button>
+                <input ref={imageInputRef} type="file" accept="image/*" className="hidden"
+                  onChange={e => { if (e.target.files?.[0]) uploadImage(e.target.files[0]) }}
+                />
               </div>
               <div className="flex-1 min-w-0">
                 {editing ? (

@@ -43,7 +43,7 @@ export default async function DevisPdfPage({ params }: { params: Promise<{ local
 
   const productIds = (rawLines ?? []).map((l: Record<string, unknown>) => l.product_id as string).filter(Boolean)
   const { data: products } = productIds.length > 0
-    ? await db.from("products").select("id, name, reference").in("id", productIds)
+    ? await db.from("products").select("id, name, reference, image_url").in("id", productIds)
     : { data: [] }
   const productMap = Object.fromEntries((products ?? []).map((p: Record<string, unknown>) => [p.id, p]))
 
@@ -55,6 +55,7 @@ export default async function DevisPdfPage({ params }: { params: Promise<{ local
     unit_price: Number(l.unit_price) || 0,
     discount: Number(l.discount) || 0,
     tva_rate: orderTva && !l.tva_exempt ? 18 : 0,
+    image_url: l.product_id ? ((productMap[l.product_id as string] as Record<string, unknown> | undefined)?.image_url as string | null) ?? null : null,
     product: l.product_id ? (productMap[l.product_id as string] as { name: string; reference: string | null } | null) ?? null : null,
   }))
 

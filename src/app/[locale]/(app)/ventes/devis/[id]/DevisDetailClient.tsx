@@ -552,7 +552,15 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                   <tr key={l.id} className={l.tva_exempt ? "bg-gray-50/50" : ""}>
                     <td className="px-4 py-2">
                       {isDraft ? (
-                        <div className="relative">
+                        <div className="relative flex items-start gap-2">
+                          {l.product_id && allProducts.find(p => p.id === l.product_id)?.image_url && (
+                            <img
+                              src={allProducts.find(p => p.id === l.product_id)!.image_url!}
+                              alt=""
+                              className="w-9 h-9 rounded object-cover border border-gray-100 flex-shrink-0 mt-0.5"
+                            />
+                          )}
+                        <div className="relative flex-1">
                           <input
                             className="w-full text-sm font-medium text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none py-0.5"
                             value={productSearch[l.id] !== undefined ? productSearch[l.id] : l.description}
@@ -576,9 +584,13 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                                   <button
                                     key={p.id}
                                     onMouseDown={() => { selectingProductRef.current = true; selectProduct(l.id, p.id) }}
-                                    className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center justify-between gap-2"
+                                    className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center gap-2"
                                   >
-                                    <span className="font-medium text-gray-900 truncate">{p.name}</span>
+                                    {p.image_url
+                                      ? <img src={p.image_url} alt="" className="w-8 h-8 rounded object-cover border border-gray-100 flex-shrink-0" />
+                                      : <div className="w-8 h-8 rounded bg-gray-100 flex-shrink-0" />
+                                    }
+                                    <span className="font-medium text-gray-900 truncate flex-1">{p.name}</span>
                                     <span className="text-gray-400 text-xs shrink-0">
                                       {p.sale_price != null ? `${formatNumber(p.sale_price)}` : ""}
                                       {p.reference ? ` · ${p.reference}` : ""}
@@ -589,11 +601,18 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                             ) : null
                           })()}
                         </div>
+                        </div>
                       ) : (
-                        <>
-                          <p className="font-medium text-gray-900">{l.description}</p>
-                          {l.product?.reference && <p className="text-xs text-gray-400 font-mono">{l.product.reference}</p>}
-                        </>
+                        <div className="flex items-start gap-2">
+                          {l.product_id && (() => {
+                            const img = allProducts.find(p => p.id === l.product_id)?.image_url
+                            return img ? <img src={img} alt="" className="w-9 h-9 rounded object-cover border border-gray-100 flex-shrink-0" /> : null
+                          })()}
+                          <div>
+                            <p className="font-medium text-gray-900">{l.description}</p>
+                            {l.product?.reference && <p className="text-xs text-gray-400 font-mono">{l.product.reference}</p>}
+                          </div>
+                        </div>
                       )}
                     </td>
                     <td className="px-4 py-2 text-right">

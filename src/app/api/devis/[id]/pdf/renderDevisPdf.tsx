@@ -32,6 +32,7 @@ interface Line {
   unit_price: number
   discount: number
   tva_rate: number
+  image_url?: string | null
 }
 
 interface BankAccount {
@@ -225,9 +226,14 @@ export async function renderDevisPdf(props: Props): Promise<Buffer> {
             const sub = l.quantity * l.unit_price * (1 - l.discount / 100)
             return (
               <View key={l.id} style={[s.tableRow, i % 2 === 1 ? s.tableRowEven : {}]} wrap={false}>
-                <View style={{ flex: 4 }}>
-                  <Text style={s.tdDesc}>{l.description}</Text>
-                  {l.discount > 0 && <Text style={s.tdMuted}>Remise {l.discount}%</Text>}
+                <View style={{ flex: 4, flexDirection: "row", alignItems: "flex-start", gap: 6 }}>
+                  {l.image_url && (
+                    <Image src={l.image_url} style={{ width: 32, height: 32, borderRadius: 4, objectFit: "cover" }} />
+                  )}
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.tdDesc}>{l.description}</Text>
+                    {l.discount > 0 && <Text style={s.tdMuted}>Remise {l.discount}%</Text>}
+                  </View>
                 </View>
                 <Text style={[{ width: 50, fontSize: 8.5, color: "#333" }, s.tdR]}>{fmt(l.quantity, 2)} U</Text>
                 <Text style={[{ width: 80, fontSize: 8.5, color: "#333" }, s.tdR]}>{fmt(l.unit_price, 0)} {cur}</Text>
