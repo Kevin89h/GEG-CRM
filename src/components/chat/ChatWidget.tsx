@@ -27,10 +27,10 @@ function formatTime(iso: string) {
 
 // Parse @mentions and highlight them
 function renderContent(content: string) {
-  const parts = content.split(/(@\w[\w\s]*)/g)
+  const parts = content.split(/(@[\w.'-]+)/g)
   return parts.map((part, i) =>
     part.startsWith("@")
-      ? <span key={i} className="text-blue-600 font-medium">{part}</span>
+      ? <span key={i} className="bg-blue-100 text-blue-700 rounded px-0.5 font-medium">{part}</span>
       : <span key={i}>{part}</span>
   )
 }
