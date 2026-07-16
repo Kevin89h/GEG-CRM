@@ -67,6 +67,11 @@ export default function NotificationBell({ userId, locale }: Props) {
 
   const unread = notifs.filter(n => !n.read).length
 
+  useEffect(() => {
+    const base = "GEG CRM"
+    document.title = unread > 0 ? `(${unread}) ${base}` : base
+  }, [unread])
+
   function timeAgo(date: string) {
     const diff = (Date.now() - new Date(date).getTime()) / 1000
     if (diff < 60) return "À l'instant"
