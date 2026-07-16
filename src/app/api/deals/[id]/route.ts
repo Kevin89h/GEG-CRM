@@ -53,22 +53,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   // Notify newly added assignees
   const prevIds: string[] = Array.isArray(before?.assigned_to) ? before.assigned_to : []
   const newlyAdded = nextAssignedIds.filter(pid => !prevIds.includes(pid))
+  console.log("[deals PATCH] prevIds:", prevIds, "nextIds:", nextAssignedIds, "newlyAdded:", newlyAdded)
   if (newlyAdded.length > 0) {
-    try {
-      const supabase = await createClient()
-      await supabase.from("notifications").insert(
-        newlyAdded.map(profileId => ({
-          user_id: profileId,
-          type: "deal_assigned",
-          title: `Nouvelle opportunité assignée`,
-          body: `"${before?.title ?? data?.title}" vous a été assignée.`,
-          link: `/deals/${id}`,
-          read: false,
-        }))
-      )
-    } catch {
-      // Notification failure is non-blocking
-    }
+    const supabase = await createClient()
+    const { error: notifError } = await supabase.from("notifications").insert(
+      newlyAdded.map(profileId => ({
+        user_id: profileId,
+        type: "deal_assigned",
+        title: `Nouvelle opportunité assignée`,
+        body: `"${before?.title ?? data?.title}" vous a été assignée.`,
+        link: `/deals/${id}`,
+        read: false,
+      }))
+    )
+    if (notifError) console.error("[notifications] insert error:", notifError.message, notifError.details)
   }
 
   return NextResponse.json(data)
