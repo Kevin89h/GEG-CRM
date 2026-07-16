@@ -151,9 +151,11 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
   }
 
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
 
   async function saveEdit() {
     setSaveError(null)
+    setSaving(true)
     const body = {
       title: editForm.title,
       products_requested: editForm.products_requested || null,
@@ -177,6 +179,7 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
     } else {
       setSaveError(data.error ?? "Erreur lors de l'enregistrement")
     }
+    setSaving(false)
   }
 
   async function addActivity() {
@@ -452,7 +455,9 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
               {saveError && <p className="text-sm text-red-600 mb-3">{saveError}</p>}
               <div className="flex justify-end gap-2">
               <button onClick={() => { setEditing(false); setSaveError(null) }} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-50 transition">Annuler</button>
-              <button onClick={saveEdit} className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">Enregistrer</button>
+              <button onClick={saveEdit} disabled={saving} className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition">
+                {saving ? "Enregistrement…" : "Enregistrer"}
+              </button>
               </div>
             </div>
           </div>
