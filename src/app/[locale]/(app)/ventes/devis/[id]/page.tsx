@@ -6,27 +6,31 @@ import DevisDetailClient from "./DevisDetailClient"
 
 export default async function DevisDetailPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params
-  const { db: supabase } = await createCompanyClient()
+  let { db: supabase, schema } = await createCompanyClient()
   const publicSupa = await createClient()
-  const schema = await getCompanySchema()
+
+  const SELECT_ORDER = `id, number, status, currency, valid_until, notes, additional_info, created_at, payment_terms, client_order_ref, date_order, tva, account:accounts(id, name, country), contact:contacts(id, first_name, last_name), salesperson:employees(full_name), lines:sales_order_lines(id, description, quantity, unit_price, discount, position, product_id, tva_exempt, product:products(name, reference))`
+
+  let { data: order } = await supabase.from("sales_orders").select(SELECT_ORDER).eq("id", id).single()
+
+  if (!order && schema !== "geg_guinee") {
+    const rawSupa = await createClient()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fallbackDb = (rawSupa as any).schema("geg_guinee") as typeof supabase
+    const { data: fallbackOrder } = await fallbackDb.from("sales_orders").select(SELECT_ORDER).eq("id", id).single()
+    if (fallbackOrder) {
+      order = fallbackOrder
+      supabase = fallbackDb
+      schema = "geg_guinee"
+    }
+  }
+
+  if (!order) notFound()
+
   const { data: company } = await publicSupa.from("companies").select("id").eq("schema_name", schema).single()
   const { data: docSettings } = company
     ? await publicSupa.from("document_settings").select("*").eq("company_id", company.id).maybeSingle()
     : { data: null }
-
-  const { data: order } = await supabase
-    .from("sales_orders")
-    .select(`
-      id, number, status, currency, valid_until, notes, additional_info, created_at, payment_terms, client_order_ref, date_order, tva,
-      account:accounts(id, name, country),
-      contact:contacts(id, first_name, last_name),
-      salesperson:employees(full_name),
-      lines:sales_order_lines(id, description, quantity, unit_price, discount, position, product_id, tva_exempt, product:products(name, reference))
-    `)
-    .eq("id", id)
-    .single()
-
-  if (!order) notFound()
 
   // Stock levels
   const productIds = (order.lines ?? [])

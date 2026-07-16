@@ -6,19 +6,33 @@ import FactureDetailClient from "./FactureDetailClient"
 
 export default async function FactureDetailPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params
-  const { db } = await createCompanyClient()
+  let { db, schema } = await createCompanyClient()
   const publicSupa = await createClient()
-  const schema = await getCompanySchema()
+
+  // Try to find the invoice in the current schema; fall back to geg_guinee if needed
+  let { data: inv } = await db.from("invoices").select("id, number, status, currency, account_id, issue_date, due_date, notes").eq("id", id).single()
+
+  if (!inv && schema !== "geg_guinee") {
+    const supabase = await createClient()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fallbackDb = (supabase as any).schema("geg_guinee") as typeof supabase
+    const { data: fallbackInv } = await fallbackDb.from("invoices").select("id, number, status, currency, account_id, issue_date, due_date, notes").eq("id", id).single()
+    if (fallbackInv) {
+      inv = fallbackInv
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      db = fallbackDb as any
+      schema = "geg_guinee"
+    }
+  }
+
+  if (!inv) notFound()
+
   const { data: company } = await publicSupa.from("companies").select("id").eq("schema_name", schema).single()
   const { data: docSettings } = company
     ? await publicSupa.from("document_settings").select("*").eq("company_id", company.id).maybeSingle()
     : { data: null }
 
-  const [{ data: inv }, { data: lines }, { data: payments }, { data: treasuryAccounts }] = await Promise.all([
-    db.from("invoices")
-      .select("id, number, status, currency, account_id, issue_date, due_date, notes")
-      .eq("id", id)
-      .single(),
+  const [{ data: lines }, { data: payments }, { data: treasuryAccounts }] = await Promise.all([
     db.from("invoice_lines")
       .select("id, product_id, description, quantity, unit_price, discount, position, tva_rate")
       .eq("invoice_id", id)
@@ -35,8 +49,6 @@ export default async function FactureDetailPage({ params }: { params: Promise<{ 
 
   const warehouses: { id: string; name: string; city: string | null }[] = []
   const deliveryNotes: { id: string; number: string; status: string; delivery_date: string | null }[] = []
-
-  if (!inv) notFound()
 
   const { data: account } = inv.account_id
     ? await db.from("accounts").select("name, country").eq("id", inv.account_id).single()

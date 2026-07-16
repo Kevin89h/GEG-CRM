@@ -15,9 +15,43 @@ export async function generateMetadata({ params }: { params: Promise<{ locale: s
 
 export default async function FacturePdfPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params
-  const { db } = await createCompanyClient()
   const publicSupa = await createClient()
-  const schema = await getCompanySchema()
+  let { db, schema } = await createCompanyClient()
+
+  // The invoice may belong to a different company schema — try current schema first,
+  // then fall back to geg_guinee so a company-switch doesn't break PDF links.
+  let { data: invoice } = await db
+    .from("invoices")
+    .select(`
+      id, number, status, currency, issue_date, due_date, notes, order_id,
+      account:accounts(id, name, city, country, phone),
+      lines:invoice_lines(id, description, quantity, unit_price, discount, position, tva_rate, product:products(name, reference, image_url))
+    `)
+    .eq("id", id)
+    .single()
+
+  if (!invoice && schema !== "geg_guinee") {
+    const supabase = await createClient()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fallbackDb = (supabase as any).schema("geg_guinee") as typeof supabase
+    schema = "geg_guinee"
+    const { data: fallbackInvoice } = await fallbackDb
+      .from("invoices")
+      .select(`
+        id, number, status, currency, issue_date, due_date, notes, order_id,
+        account:accounts(id, name, city, country, phone),
+        lines:invoice_lines(id, description, quantity, unit_price, discount, position, tva_rate, product:products(name, reference, image_url))
+      `)
+      .eq("id", id)
+      .single()
+    if (fallbackInvoice) {
+      invoice = fallbackInvoice
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      db = fallbackDb as any
+    }
+  }
+
+  if (!invoice) notFound()
 
   const { data: company } = await publicSupa
     .from("companies")
@@ -28,18 +62,6 @@ export default async function FacturePdfPage({ params }: { params: Promise<{ loc
   const { data: docSettings } = company
     ? await publicSupa.from("document_settings").select("*").eq("company_id", company.id).maybeSingle()
     : { data: null }
-
-  const { data: invoice } = await db
-    .from("invoices")
-    .select(`
-      id, number, status, currency, issue_date, due_date, notes, order_id,
-      account:accounts(id, name, city, country, phone),
-      lines:invoice_lines(id, description, quantity, unit_price, discount, position, tva_rate, product:products(name, reference, image_url))
-    `)
-    .eq("id", id)
-    .single()
-
-  if (!invoice) notFound()
 
   const { data: payments } = await db.from("payments").select("amount, paid_at").eq("invoice_id", id).order("paid_at")
 

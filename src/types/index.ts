@@ -123,7 +123,7 @@ export interface Contact {
 
 export interface Deal {
   id: string
-  account_id: string
+  account_id: string | null
   title: string
   stage: DealStage
   value: number | null
@@ -132,6 +132,14 @@ export interface Deal {
   close_date: string | null
   owner_id: string | null
   notes: string | null
+  prospect_name: string | null
+  source: string | null
+  source_detail: string | null
+  products_requested: string | null
+  priority: string
+  next_action: string | null
+  next_action_date: string | null
+  assigned_to: string | null
   created_at: string
   updated_at: string
 }

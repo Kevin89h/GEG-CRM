@@ -5,20 +5,17 @@ export default async function DealsPage() {
   const { supabase, db } = await createCompanyClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  const [{ data: deals }, { data: accounts }, { data: profiles }] = await Promise.all([
-    db
-      .from("deals")
-      .select("*, account:accounts(id, name, type)")
-      .order("created_at", { ascending: false }),
+  const [{ data: deals }, { data: accounts }, { data: employees }] = await Promise.all([
+    db.from("deals").select("*, account:accounts(id, name, type)").order("created_at", { ascending: false }),
     db.from("accounts").select("id, name").order("name"),
-    db.from("profiles").select("id, full_name, email"),
+    db.from("employees").select("id, full_name").eq("is_active", true).order("full_name"),
   ])
 
   return (
     <DealsClient
       deals={deals ?? []}
       accounts={accounts ?? []}
-      profiles={profiles ?? []}
+      employees={employees ?? []}
       currentUserId={user?.id ?? ""}
     />
   )
