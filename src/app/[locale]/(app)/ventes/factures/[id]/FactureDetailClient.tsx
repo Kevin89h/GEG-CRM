@@ -91,6 +91,8 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
   })
   const [exchangeRate, setExchangeRate] = useState<number | null>(null)
   const [loadingRate, setLoadingRate] = useState(false)
+  const [globalDiscount, setGlobalDiscount] = useState("")
+  const [applyingDiscount, setApplyingDiscount] = useState(false)
 
   // Fetch exchange rate whenever payment currency differs from invoice currency
   useEffect(() => {
@@ -161,6 +163,22 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
       ...prev,
       lines: prev.lines.map(l => ({ ...l, tva_rate: newRate })),
     }))
+  }
+
+  async function applyGlobalDiscount() {
+    const pct = parseFloat(globalDiscount)
+    if (isNaN(pct) || pct < 0 || pct > 100) return
+    setApplyingDiscount(true)
+    await Promise.all(invoice.lines.map(l =>
+      fetch(`/api/invoices/${invoice.id}/lines/${l.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ discount: pct }),
+      })
+    ))
+    setInvoice(prev => ({ ...prev, lines: prev.lines.map(l => ({ ...l, discount: pct })) }))
+    setApplyingDiscount(false)
+    setGlobalDiscount("")
   }
 
   async function deleteLine(lineId: string) {
@@ -583,10 +601,31 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
         </table>
         </div>
         {canEdit && (
-          <div className="px-4 py-2 border-t border-gray-50 flex items-center justify-between">
-            <button onClick={addLine} className="text-sm text-blue-600 hover:text-blue-500 font-medium transition-colors">
-              + Ajouter une ligne
-            </button>
+          <div className="px-4 py-2 border-t border-gray-50 flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-3">
+              <button onClick={addLine} className="text-sm text-blue-600 hover:text-blue-500 font-medium transition-colors">
+                + Ajouter une ligne
+              </button>
+              <span className="text-gray-200">|</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-gray-500">Remise globale</span>
+                <input
+                  type="number" min="0" max="100" step="0.1"
+                  value={globalDiscount}
+                  onChange={e => setGlobalDiscount(e.target.value)}
+                  placeholder="0"
+                  className="w-16 text-sm text-right border border-gray-200 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                />
+                <span className="text-xs text-gray-400">%</span>
+                <button
+                  onClick={applyGlobalDiscount}
+                  disabled={applyingDiscount || !globalDiscount}
+                  className="text-xs px-2.5 py-1 bg-gray-800 text-white rounded-md hover:bg-gray-700 disabled:opacity-40 transition-colors"
+                >
+                  {applyingDiscount ? "…" : "Appliquer"}
+                </button>
+              </div>
+            </div>
             <button
               onClick={toggleAllTva}
               className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors border ${
