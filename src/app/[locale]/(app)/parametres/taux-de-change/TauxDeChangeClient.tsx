@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, TrendingUp } from "lucide-react"
+import { Plus, TrendingUp, RefreshCw } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 
 interface Rate {
@@ -34,7 +34,28 @@ export default function TauxDeChangeClient({ rates: initialRates }: Props) {
   const [rates, setRates] = useState(initialRates)
   const [form, setForm] = useState({ from: "USD" as Currency, to: "GNF" as Currency, rate: "", notes: "", date: new Date().toISOString().slice(0, 10) })
   const [saving, setSaving] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [refreshMsg, setRefreshMsg] = useState<string | null>(null)
+
+  async function refreshRates() {
+    setRefreshing(true)
+    setRefreshMsg(null)
+    setError(null)
+    const res = await fetch("/api/exchange-rates/refresh", { method: "POST" })
+    const json = await res.json()
+    setRefreshing(false)
+    if (!res.ok) { setError(json.error ?? "Erreur de mise à jour"); return }
+    const newRates = json.rates as Rate[]
+    setRates(prev => {
+      const updated = [...prev]
+      for (const r of newRates) {
+        updated.unshift({ ...r, id: `tmp-${r.from_currency}-${r.to_currency}` })
+      }
+      return updated
+    })
+    setRefreshMsg(`${json.updated} taux mis à jour le ${new Date().toLocaleDateString("fr")}`)
+  }
 
   // Group by pair, latest first
   const byPair: Record<string, Rate[]> = {}
@@ -78,7 +99,18 @@ export default function TauxDeChangeClient({ rates: initialRates }: Props) {
 
   return (
     <div className="max-w-3xl">
-      <p className="text-sm text-gray-500 mb-6">Gérez les taux de change (USD, EUR, XOF ↔ GNF) pour les calculs de prix de revient</p>
+      <div className="flex items-center justify-between mb-6">
+        <p className="text-sm text-gray-500">Gérez les taux de change (USD, EUR, XOF ↔ GNF) pour les calculs de prix de revient</p>
+        <button
+          onClick={refreshRates}
+          disabled={refreshing}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-60 transition-colors"
+        >
+          <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
+          {refreshing ? "Mise à jour…" : "Actualiser les taux"}
+        </button>
+      </div>
+      {refreshMsg && <p className="text-sm text-emerald-600 mb-4">{refreshMsg}</p>}
 
       {/* Current rates */}
       <div className="grid grid-cols-2 gap-4 mb-8">
