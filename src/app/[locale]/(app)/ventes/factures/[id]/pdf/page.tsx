@@ -18,32 +18,32 @@ export default async function FacturePdfPage({ params }: { params: Promise<{ loc
   const publicSupa = await createClient()
   let { db, schema } = await createCompanyClient()
 
-  // The invoice may belong to a different company schema — try current schema first,
-  // then fall back to geg_guinee so a company-switch doesn't break PDF links.
-  let { data: invoice } = await db
+  // image_url is fetched separately so a missing column on products never breaks the invoice load.
+  const INVOICE_SELECT = `
+    id, number, status, currency, issue_date, due_date, notes, order_id,
+    account:accounts(id, name, city, country, phone),
+    lines:invoice_lines(id, description, quantity, unit_price, discount, position, tva_rate, product:products(id, name, reference))
+  `
+
+  let { data: invoice, error: invoiceError } = await db
     .from("invoices")
-    .select(`
-      id, number, status, currency, issue_date, due_date, notes, order_id,
-      account:accounts(id, name, city, country, phone),
-      lines:invoice_lines(id, description, quantity, unit_price, discount, position, tva_rate, product:products(name, reference, image_url))
-    `)
+    .select(INVOICE_SELECT)
     .eq("id", id)
     .single()
+
+  if (invoiceError) console.error("[PDF] Invoice query error:", invoiceError.message, invoiceError.code)
 
   if (!invoice && schema !== "geg_guinee") {
     const supabase = await createClient()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const fallbackDb = (supabase as any).schema("geg_guinee") as typeof supabase
     schema = "geg_guinee"
-    const { data: fallbackInvoice } = await fallbackDb
+    const { data: fallbackInvoice, error: fallbackError } = await fallbackDb
       .from("invoices")
-      .select(`
-        id, number, status, currency, issue_date, due_date, notes, order_id,
-        account:accounts(id, name, city, country, phone),
-        lines:invoice_lines(id, description, quantity, unit_price, discount, position, tva_rate, product:products(name, reference, image_url))
-      `)
+      .select(INVOICE_SELECT)
       .eq("id", id)
       .single()
+    if (fallbackError) console.error("[PDF] Fallback invoice query error:", fallbackError.message, fallbackError.code)
     if (fallbackInvoice) {
       invoice = fallbackInvoice
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -75,23 +75,44 @@ export default async function FacturePdfPage({ params }: { params: Promise<{ loc
   const account = Array.isArray(invoice.account) ? invoice.account[0] : invoice.account
   const acc = account as Record<string, string | null> | null
 
-  const lines = ((invoice.lines ?? []) as Record<string, unknown>[])
+  // Fetch product images separately so a missing image_url column never breaks the PDF.
+  const rawLines = ((invoice.lines ?? []) as Record<string, unknown>[])
     .sort((a, b) => (a.position as number) - (b.position as number))
-    .map(l => ({
+
+  const productIds = rawLines
+    .map(l => {
+      const p = Array.isArray(l.product) ? l.product[0] : l.product
+      return (p as Record<string, unknown> | null)?.id as string | undefined
+    })
+    .filter((pid): pid is string => Boolean(pid))
+
+  const imageByProductId: Record<string, string> = {}
+  if (productIds.length > 0) {
+    const { data: productImages } = await db
+      .from("products")
+      .select("id, image_url")
+      .in("id", productIds)
+    for (const p of productImages ?? []) {
+      if (p.image_url) imageByProductId[p.id] = p.image_url
+    }
+  }
+
+  const lines = rawLines.map(l => {
+    const p = Array.isArray(l.product) ? l.product[0] : l.product
+    const productId = (p as Record<string, unknown> | null)?.id as string | undefined
+    return {
       id: String(l.id ?? ""),
       description: String(l.description ?? ""),
       quantity: Number(l.quantity) || 0,
       unit_price: Number(l.unit_price) || 0,
       discount: Number(l.discount) || 0,
       tva_rate: l.tva_rate != null ? Number(l.tva_rate) : null,
-      image_url: (() => {
-        const p = Array.isArray(l.product) ? l.product[0] : l.product
-        return (p as Record<string, unknown> | null)?.image_url as string | null ?? null
-      })(),
+      image_url: productId ? (imageByProductId[productId] ?? null) : null,
       product: Array.isArray(l.product)
         ? (l.product[0] ?? null)
         : (l.product as { name: string; reference: string | null } | null),
-    }))
+    }
+  })
 
   const paymentList = (payments ?? []).map(p => ({
     amount: Number(p.amount) || 0,
