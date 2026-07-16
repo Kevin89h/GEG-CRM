@@ -26,7 +26,7 @@ export interface Product {
   description: string | null
   buy_price: number | null
   sell_price: number | null
-  currency: "USD" | "GNF" | "EUR"
+  currency: "USD" | "GNF" | "EUR" | "XOF"
   is_active: boolean
   created_at: string
   updated_at: string
@@ -127,7 +127,7 @@ export interface Deal {
   title: string
   stage: DealStage
   value: number | null
-  currency: "USD" | "GNF" | "EUR"
+  currency: "USD" | "GNF" | "EUR" | "XOF"
   probability: number | null
   close_date: string | null
   owner_id: string | null

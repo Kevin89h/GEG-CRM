@@ -755,6 +755,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
                     className="w-20 border border-gray-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-700"
                   >
                     <option value="GNF">GNF</option>
+                    <option value="XOF">XOF</option>
                     <option value="USD">USD</option>
                     <option value="EUR">EUR</option>
                   </select>

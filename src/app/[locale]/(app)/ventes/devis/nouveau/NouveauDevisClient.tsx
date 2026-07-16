@@ -37,7 +37,7 @@ interface Line {
   tva_exempt: boolean
 }
 
-type Currency = "GNF" | "USD" | "EUR"
+type Currency = "GNF" | "USD" | "EUR" | "XOF"
 
 let _id = 0
 const uid = () => ++_id
@@ -572,6 +572,7 @@ export default function NouveauDevisClient({
                   className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="GNF">GNF</option>
+                  <option value="XOF">XOF</option>
                   <option value="USD">USD</option>
                   <option value="EUR">EUR</option>
                 </select>
