@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createCompanyClient } from "@/lib/company"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { sendPushToUser } from "@/lib/webpush"
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -66,6 +67,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       }))
     )
     if (notifError) console.error("notifications insert error:", notifError.message)
+
+    const dealTitle = before?.title ?? data?.title ?? "Opportunité"
+    await Promise.allSettled(
+      newlyAdded.map((pid) =>
+        sendPushToUser(pid, {
+          title: "Nouvelle opportunité assignée",
+          body: `"${dealTitle}" vous a été assignée.`,
+          url: `/deals/${id}`,
+          tag: `deal-${id}`,
+        })
+      )
+    )
   }
 
   return NextResponse.json(data)

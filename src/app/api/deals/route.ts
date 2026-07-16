@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createCompanyClient } from "@/lib/company"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { sendPushToUser } from "@/lib/webpush"
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
@@ -41,6 +42,16 @@ export async function POST(req: NextRequest) {
           link: `/deals/${data.id}`,
           read: false,
         }))
+      )
+      await Promise.allSettled(
+        assignedIds.map((pid) =>
+          sendPushToUser(pid, {
+            title: "Nouvelle opportunité assignée",
+            body: `"${body.title}" vous a été assignée.`,
+            url: `/deals/${data.id}`,
+            tag: `deal-${data.id}`,
+          })
+        )
       )
     } catch {
       // Non-blocking
