@@ -150,7 +150,10 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
     setStageSaving(false)
   }
 
+  const [saveError, setSaveError] = useState<string | null>(null)
+
   async function saveEdit() {
+    setSaveError(null)
     const body = {
       title: editForm.title,
       products_requested: editForm.products_requested || null,
@@ -167,10 +170,12 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     })
+    const data = await res.json()
     if (res.ok) {
-      const data = await res.json()
       setDeal(d => ({ ...d, ...data }))
       setEditing(false)
+    } else {
+      setSaveError(data.error ?? "Erreur lors de l'enregistrement")
     }
   }
 
@@ -443,9 +448,12 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
                 <textarea className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 resize-none" rows={3} value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} />
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2 sticky bottom-0 bg-white rounded-b-2xl">
-              <button onClick={() => setEditing(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-50 transition">Annuler</button>
+            <div className="px-6 py-4 border-t border-gray-100 sticky bottom-0 bg-white rounded-b-2xl">
+              {saveError && <p className="text-sm text-red-600 mb-3">{saveError}</p>}
+              <div className="flex justify-end gap-2">
+              <button onClick={() => { setEditing(false); setSaveError(null) }} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-50 transition">Annuler</button>
               <button onClick={saveEdit} className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">Enregistrer</button>
+              </div>
             </div>
           </div>
         </div>
