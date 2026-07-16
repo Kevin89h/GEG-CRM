@@ -1,11 +1,15 @@
 import webpush from "web-push"
 import { createAdminClient } from "@/lib/supabase/admin"
 
-webpush.setVapidDetails(
-  "mailto:kevin@globalenergy.group",
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-  process.env.VAPID_PRIVATE_KEY!
-)
+let vapidConfigured = false
+function ensureVapid() {
+  if (vapidConfigured) return
+  const pub = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+  const priv = process.env.VAPID_PRIVATE_KEY
+  if (!pub || !priv) return
+  webpush.setVapidDetails("mailto:kevin@globalenergy.group", pub, priv)
+  vapidConfigured = true
+}
 
 export async function sendPushToUser(
   userId: string,
@@ -18,6 +22,8 @@ export async function sendPushToUser(
     .eq("user_id", userId)
 
   if (!subs || subs.length === 0) return
+  ensureVapid()
+  if (!vapidConfigured) return
 
   await Promise.allSettled(
     subs.map((sub) =>
