@@ -4,6 +4,7 @@ import { getCompanySchema } from "@/lib/company"
 import Sidebar from "@/components/layout/Sidebar"
 import MobileHeader from "@/components/layout/MobileHeader"
 import ChatWidget from "@/components/chat/ChatWidget"
+import PwaInstallBanner from "@/components/PwaInstallBanner"
 
 interface Props {
   children: React.ReactNode
@@ -53,6 +54,8 @@ export default async function AppLayout({ children, params }: Props) {
           {children}
         </div>
       </main>
+
+      <PwaInstallBanner />
 
       <div className="no-print" data-no-pdf>
         <ChatWidget
