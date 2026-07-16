@@ -17,14 +17,17 @@ interface Props {
   rates: Rate[]
 }
 
-const CURRENCIES = ["USD", "EUR", "GNF"] as const
+const CURRENCIES = ["USD", "EUR", "GNF", "XOF"] as const
 type Currency = typeof CURRENCIES[number]
 
 const PAIRS: { from: Currency; to: Currency; label: string }[] = [
   { from: "USD", to: "GNF", label: "Dollar → Franc guinéen" },
   { from: "EUR", to: "GNF", label: "Euro → Franc guinéen" },
+  { from: "XOF", to: "GNF", label: "Franc CFA → Franc guinéen" },
   { from: "EUR", to: "USD", label: "Euro → Dollar" },
   { from: "USD", to: "EUR", label: "Dollar → Euro" },
+  { from: "XOF", to: "USD", label: "Franc CFA → Dollar" },
+  { from: "XOF", to: "EUR", label: "Franc CFA → Euro" },
 ]
 
 export default function TauxDeChangeClient({ rates: initialRates }: Props) {
@@ -75,7 +78,7 @@ export default function TauxDeChangeClient({ rates: initialRates }: Props) {
 
   return (
     <div className="max-w-3xl">
-      <p className="text-sm text-gray-500 mb-6">Gérez les taux USD/EUR → GNF pour les calculs de prix de revient</p>
+      <p className="text-sm text-gray-500 mb-6">Gérez les taux de change (USD, EUR, XOF ↔ GNF) pour les calculs de prix de revient</p>
 
       {/* Current rates */}
       <div className="grid grid-cols-2 gap-4 mb-8">
