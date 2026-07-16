@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
       source: body.source ?? "other",
       source_detail: body.source_detail ?? null,
       products_requested: body.products_requested ?? null,
-      assigned_to: body.assigned_to ?? null,
+      assigned_to: Array.isArray(body.assigned_to) ? body.assigned_to : body.assigned_to ? [body.assigned_to] : null,
       priority: body.priority ?? "normal",
       value: body.value ?? null,
       currency: body.currency ?? "USD",
@@ -27,20 +27,28 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
-  // Notify assigned employee if set at creation
-  if (body.assigned_to && data) {
+  // Notify assigned employees if set at creation
+  const assignedIds: string[] = Array.isArray(body.assigned_to) ? body.assigned_to : body.assigned_to ? [body.assigned_to] : []
+  if (assignedIds.length > 0 && data) {
     try {
-      const { data: emp } = await db.from("employees").select("profile_id").eq("id", body.assigned_to).single()
-      if (emp?.profile_id) {
-        const supabase = await createClient()
-        await supabase.from("notifications").insert([{
-          user_id: emp.profile_id,
-          type: "deal_assigned",
-          title: `Nouvelle opportunité assignée`,
-          body: `"${body.title}" vous a été assignée.`,
-          link: `/deals/${data.id}`,
-          read: false,
-        }])
+      const supabase = await createClient()
+      const { data: emps } = await db.from("employees").select("id, email, profile_id").in("id", assignedIds)
+      for (const emp of emps ?? []) {
+        let profileId = emp.profile_id ?? null
+        if (!profileId && emp.email) {
+          const { data: prof } = await supabase.from("profiles").select("id").eq("email", emp.email).single()
+          profileId = prof?.id ?? null
+        }
+        if (profileId) {
+          await supabase.from("notifications").insert([{
+            user_id: profileId,
+            type: "deal_assigned",
+            title: `Nouvelle opportunité assignée`,
+            body: `"${body.title}" vous a été assignée.`,
+            link: `/deals/${data.id}`,
+            read: false,
+          }])
+        }
       }
     } catch {
       // Non-blocking

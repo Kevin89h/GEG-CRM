@@ -34,12 +34,12 @@ interface Deal {
   notes: string | null
   next_action: string | null
   next_action_date: string | null
-  assigned_to: string | null
+  assigned_to: string[]
   account_id: string | null
   prospect_name: string | null
   created_at: string
   account: { id: string; name: string; type: string } | null
-  assignedEmployee: { id: string; full_name: string } | null
+  assignedEmployees: { id: string; full_name: string }[]
 }
 
 interface Props {
@@ -121,7 +121,7 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
     notes: deal.notes ?? "",
     next_action: deal.next_action ?? "",
     next_action_date: deal.next_action_date ?? "",
-    assigned_to: deal.assigned_to ?? "",
+    assigned_to: deal.assigned_to ?? [],
     priority: deal.priority,
     value: deal.value?.toString() ?? "",
     currency: deal.currency,
@@ -151,7 +151,7 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
       notes: editForm.notes || null,
       next_action: editForm.next_action || null,
       next_action_date: editForm.next_action_date || null,
-      assigned_to: editForm.assigned_to || null,
+      assigned_to: editForm.assigned_to,
       priority: editForm.priority,
       value: editForm.value ? parseFloat(editForm.value) : null,
       currency: editForm.currency,
@@ -342,7 +342,11 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
             <h2 className="text-sm font-semibold text-gray-900 mb-2">Assignation</h2>
             <div className="flex items-center gap-2 text-sm">
               <span className="text-gray-400 text-xs w-20">Responsable</span>
-              <span className="text-gray-700">{deal.assignedEmployee?.full_name ?? "Non assigné"}</span>
+              <span className="text-gray-700">
+                {deal.assignedEmployees?.length > 0
+                  ? deal.assignedEmployees.map(e => e.full_name).join(", ")
+                  : "Non assigné"}
+              </span>
             </div>
             {deal.account && (
               <div className="flex items-center gap-2 text-sm">
@@ -381,10 +385,24 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-medium text-gray-500 block mb-1">Assigné à</label>
-                  <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" value={editForm.assigned_to} onChange={e => setEditForm(f => ({ ...f, assigned_to: e.target.value }))}>
-                    <option value="">— Non assigné</option>
-                    {employees.map(e => <option key={e.id} value={e.id}>{e.full_name}</option>)}
-                  </select>
+                  <div className="border border-gray-200 rounded-lg p-2 space-y-1 max-h-36 overflow-y-auto">
+                    {employees.map(emp => (
+                      <label key={emp.id} className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-gray-50 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={editForm.assigned_to.includes(emp.id)}
+                          onChange={e => setEditForm(f => ({
+                            ...f,
+                            assigned_to: e.target.checked
+                              ? [...f.assigned_to, emp.id]
+                              : f.assigned_to.filter(id => id !== emp.id),
+                          }))}
+                          className="rounded"
+                        />
+                        <span className="text-sm text-gray-700">{emp.full_name}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
                 <div>
                   <label className="text-xs font-medium text-gray-500 block mb-1">Priorité</label>

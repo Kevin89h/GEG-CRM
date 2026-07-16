@@ -15,7 +15,7 @@ interface DealRow {
   probability: number | null
   priority: string
   source: string | null
-  assigned_to: string | null
+  assigned_to: string[] | null
   prospect_name: string | null
   products_requested: string | null
   account: { id: string; name: string } | null
@@ -101,7 +101,7 @@ export default function DealsClient({ deals: initial, accounts, employees, curre
     source: "whatsapp",
     source_detail: "",
     products_requested: "",
-    assigned_to: "",
+    assigned_to: [] as string[],
     priority: "normal",
     value: "",
     currency: "USD",
@@ -112,7 +112,7 @@ export default function DealsClient({ deals: initial, accounts, employees, curre
   }
 
   function resetForm() {
-    setForm({ title: "", account_id: "", prospect_name: "", stage: "lead", source: "whatsapp", source_detail: "", products_requested: "", assigned_to: "", priority: "normal", value: "", currency: "USD" })
+    setForm({ title: "", account_id: "", prospect_name: "", stage: "lead", source: "whatsapp", source_detail: "", products_requested: "", assigned_to: [], priority: "normal", value: "", currency: "USD" })
     setClientType("existing")
   }
 
@@ -128,7 +128,7 @@ export default function DealsClient({ deals: initial, accounts, employees, curre
       source: form.source,
       source_detail: form.source_detail || null,
       products_requested: form.products_requested || null,
-      assigned_to: form.assigned_to || null,
+      assigned_to: form.assigned_to.length > 0 ? form.assigned_to : null,
       priority: form.priority,
       value: form.value ? parseFloat(form.value) : null,
       currency: form.currency,
@@ -213,7 +213,7 @@ export default function DealsClient({ deals: initial, accounts, employees, curre
                 </div>
                 <div className="px-2 pb-2 space-y-2 min-h-16">
                   {stageDeals.map(deal => {
-                    const emp = employees.find(e => e.id === deal.assigned_to)
+                    const assignedEmps = employees.filter(e => Array.isArray(deal.assigned_to) && deal.assigned_to.includes(e.id))
                     const clientName = deal.account?.name ?? deal.prospect_name ?? null
                     return (
                       <button
@@ -242,11 +242,11 @@ export default function DealsClient({ deals: initial, accounts, employees, curre
                             {deal.value ? (
                               <span className="text-xs font-semibold text-blue-600">{formatCurrency(deal.value, deal.currency as "USD" | "GNF" | "EUR")}</span>
                             ) : null}
-                            {emp && (
-                              <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center flex-shrink-0">
+                            {assignedEmps.map(emp => (
+                              <span key={emp.id} className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center flex-shrink-0">
                                 {initials(emp.full_name)}
                               </span>
-                            )}
+                            ))}
                           </div>
                         </div>
                       </button>
@@ -281,7 +281,7 @@ export default function DealsClient({ deals: initial, accounts, employees, curre
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {deals.map(deal => {
-                    const emp = employees.find(e => e.id === deal.assigned_to)
+                    const assignedEmps = employees.filter(e => Array.isArray(deal.assigned_to) && deal.assigned_to.includes(e.id))
                     const clientName = deal.account?.name ?? deal.prospect_name ?? "—"
                     return (
                       <tr
@@ -311,7 +311,7 @@ export default function DealsClient({ deals: initial, accounts, employees, curre
                           )}
                         </td>
                         <td className="px-4 py-3 hidden md:table-cell text-gray-600 text-xs">
-                          {emp ? emp.full_name : "—"}
+                          {assignedEmps.length > 0 ? assignedEmps.map(e => e.full_name).join(", ") : "—"}
                         </td>
                         <td className="px-4 py-3 font-medium text-blue-600">
                           {deal.value ? formatCurrency(deal.value, deal.currency as "USD" | "GNF" | "EUR") : "—"}
@@ -428,14 +428,24 @@ export default function DealsClient({ deals: initial, accounts, employees, curre
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-medium text-gray-500 block mb-1">Assigné à</label>
-                  <select
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-                    value={form.assigned_to}
-                    onChange={e => f("assigned_to", e.target.value)}
-                  >
-                    <option value="">— Non assigné</option>
-                    {employees.map(e => <option key={e.id} value={e.id}>{e.full_name}</option>)}
-                  </select>
+                  <div className="border border-gray-200 rounded-lg p-2 space-y-1 max-h-32 overflow-y-auto">
+                    {employees.map(emp => (
+                      <label key={emp.id} className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-gray-50 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={form.assigned_to.includes(emp.id)}
+                          onChange={e => setForm(prev => ({
+                            ...prev,
+                            assigned_to: e.target.checked
+                              ? [...prev.assigned_to, emp.id]
+                              : prev.assigned_to.filter(id => id !== emp.id),
+                          }))}
+                          className="rounded"
+                        />
+                        <span className="text-sm text-gray-700">{emp.full_name}</span>
+                      </label>
+                    ))}
+                  </div>
                 </div>
                 <div>
                   <label className="text-xs font-medium text-gray-500 block mb-1">Priorité</label>

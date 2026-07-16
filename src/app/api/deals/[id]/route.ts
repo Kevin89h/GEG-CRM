@@ -8,7 +8,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data, error } = await db
     .from("deals")
-    .select("*, account:accounts(id, name, type), assignedEmployee:employees!assigned_to(id, full_name)")
+    .select("*, account:accounts(id, name, type)")
     .eq("id", id)
     .single()
 
@@ -38,28 +38,35 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     .from("deals")
     .update(patch)
     .eq("id", id)
-    .select("*, account:accounts(id, name, type), assignedEmployee:employees!assigned_to(id, full_name)")
+    .select("*, account:accounts(id, name, type)")
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
-  // Notify newly assigned employee if changed
-  const newAssignedTo = patch.assigned_to as string | null | undefined
-  if (newAssignedTo && newAssignedTo !== before?.assigned_to) {
+  // Notify newly added assignees
+  const prevIds: string[] = Array.isArray(before?.assigned_to) ? before.assigned_to : before?.assigned_to ? [before.assigned_to] : []
+  const nextIds: string[] = Array.isArray(patch.assigned_to) ? patch.assigned_to as string[] : patch.assigned_to ? [patch.assigned_to as string] : []
+  const newlyAdded = nextIds.filter(id => !prevIds.includes(id))
+  if (newlyAdded.length > 0) {
     try {
-      // Find the profile linked to this employee
-      const { data: emp } = await db.from("employees").select("profile_id").eq("id", newAssignedTo).single()
-      const profileId = emp?.profile_id
-      if (profileId) {
-        const supabase = await createClient()
-        await supabase.from("notifications").insert([{
-          user_id: profileId,
-          type: "deal_assigned",
-          title: `Nouvelle opportunité assignée`,
-          body: `"${before?.title ?? data?.title}" vous a été assignée.`,
-          link: `/deals/${id}`,
-          read: false,
-        }])
+      const supabase = await createClient()
+      const { data: emps } = await db.from("employees").select("id, email, profile_id").in("id", newlyAdded)
+      for (const emp of emps ?? []) {
+        let profileId = emp.profile_id ?? null
+        if (!profileId && emp.email) {
+          const { data: prof } = await supabase.from("profiles").select("id").eq("email", emp.email).single()
+          profileId = prof?.id ?? null
+        }
+        if (profileId) {
+          await supabase.from("notifications").insert([{
+            user_id: profileId,
+            type: "deal_assigned",
+            title: `Nouvelle opportunité assignée`,
+            body: `"${before?.title ?? data?.title}" vous a été assignée.`,
+            link: `/deals/${id}`,
+            read: false,
+          }])
+        }
       }
     } catch {
       // Notification failure is non-blocking
