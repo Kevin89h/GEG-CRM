@@ -1,10 +1,12 @@
 import { createCompanyClient } from "@/lib/company"
+import { createClient } from "@/lib/supabase/server"
 import { notFound } from "next/navigation"
 import DealDetailClient from "./DealDetailClient"
 
 export default async function DealDetailPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { id } = await params
   const { db } = await createCompanyClient()
+  const authClient = await createClient()
 
   const { data: deal } = await db
     .from("deals")
@@ -18,18 +20,18 @@ export default async function DealDetailPage({ params }: { params: Promise<{ loc
 
   const [
     { data: activities },
-    { data: employees },
+    { data: profiles },
     { data: accounts },
-    { data: assignedEmployees },
+    { data: assignedProfiles },
   ] = await Promise.all([
     db.from("activities")
       .select("id, type, subject, notes, date, follow_up_date, completed, user_id")
       .eq("deal_id", id)
       .order("date", { ascending: false }),
-    db.from("employees").select("id, full_name").eq("is_active", true).order("full_name"),
+    authClient.from("profiles").select("id, full_name, email").order("full_name"),
     db.from("accounts").select("id, name").order("name"),
     assignedIds.length > 0
-      ? db.from("employees").select("id, full_name").in("id", assignedIds)
+      ? authClient.from("profiles").select("id, full_name, email").in("id", assignedIds)
       : Promise.resolve({ data: [] }),
   ])
 
@@ -37,14 +39,14 @@ export default async function DealDetailPage({ params }: { params: Promise<{ loc
     ...deal,
     assigned_to: assignedIds,
     account: Array.isArray(deal.account) ? deal.account[0] ?? null : deal.account,
-    assignedEmployees: (assignedEmployees ?? []) as { id: string; full_name: string }[],
+    assignedEmployees: (assignedProfiles ?? []) as { id: string; full_name: string | null; email: string }[],
   }
 
   return (
     <DealDetailClient
       deal={normalizedDeal}
       activities={activities ?? []}
-      employees={employees ?? []}
+      profiles={(profiles ?? []) as { id: string; full_name: string | null; email: string }[]}
       accounts={accounts ?? []}
     />
   )

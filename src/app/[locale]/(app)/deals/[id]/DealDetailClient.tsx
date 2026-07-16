@@ -39,13 +39,19 @@ interface Deal {
   prospect_name: string | null
   created_at: string
   account: { id: string; name: string; type: string } | null
-  assignedEmployees: { id: string; full_name: string }[]
+  assignedEmployees: { id: string; full_name: string | null; email: string }[]
+}
+
+interface UserProfile {
+  id: string
+  full_name: string | null
+  email: string
 }
 
 interface Props {
   deal: Deal
   activities: Activity[]
-  employees: { id: string; full_name: string }[]
+  profiles: UserProfile[]
   accounts: { id: string; name: string }[]
 }
 
@@ -109,7 +115,7 @@ function formatDateTime(d: string) {
   return new Date(d).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
 }
 
-export default function DealDetailClient({ deal: initial, activities: initialActs, employees, accounts }: Props) {
+export default function DealDetailClient({ deal: initial, activities: initialActs, profiles, accounts }: Props) {
   const router = useRouter()
   const [deal, setDeal] = useState(initial)
   const [activities, setActivities] = useState(initialActs)
@@ -344,7 +350,7 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
               <span className="text-gray-400 text-xs w-20">Responsable</span>
               <span className="text-gray-700">
                 {deal.assignedEmployees?.length > 0
-                  ? deal.assignedEmployees.map(e => e.full_name).join(", ")
+                  ? deal.assignedEmployees.map(e => e.full_name ?? e.email).join(", ")
                   : "Non assigné"}
               </span>
             </div>
@@ -386,20 +392,20 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
                 <div>
                   <label className="text-xs font-medium text-gray-500 block mb-1">Assigné à</label>
                   <div className="border border-gray-200 rounded-lg p-2 space-y-1 max-h-36 overflow-y-auto">
-                    {employees.map(emp => (
-                      <label key={emp.id} className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-gray-50 cursor-pointer">
+                    {profiles.map(p => (
+                      <label key={p.id} className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-gray-50 cursor-pointer">
                         <input
                           type="checkbox"
-                          checked={editForm.assigned_to.includes(emp.id)}
+                          checked={editForm.assigned_to.includes(p.id)}
                           onChange={e => setEditForm(f => ({
                             ...f,
                             assigned_to: e.target.checked
-                              ? [...f.assigned_to, emp.id]
-                              : f.assigned_to.filter(id => id !== emp.id),
+                              ? [...f.assigned_to, p.id]
+                              : f.assigned_to.filter(id => id !== p.id),
                           }))}
                           className="rounded"
                         />
-                        <span className="text-sm text-gray-700">{emp.full_name}</span>
+                        <span className="text-sm text-gray-700">{p.full_name ?? p.email}</span>
                       </label>
                     ))}
                   </div>

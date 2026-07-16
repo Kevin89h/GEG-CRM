@@ -21,10 +21,16 @@ interface DealRow {
   account: { id: string; name: string } | null
 }
 
+interface UserProfile {
+  id: string
+  full_name: string | null
+  email: string
+}
+
 interface Props {
   deals: DealRow[]
   accounts: { id: string; name: string }[]
-  employees: { id: string; full_name: string }[]
+  profiles: UserProfile[]
   currentUserId: string
 }
 
@@ -85,7 +91,7 @@ function EmptyColumn() {
   )
 }
 
-export default function DealsClient({ deals: initial, accounts, employees, currentUserId }: Props) {
+export default function DealsClient({ deals: initial, accounts, profiles, currentUserId }: Props) {
   const router = useRouter()
   const [deals, setDeals] = useState(initial)
   const [view, setView] = useState<"kanban" | "list">("kanban")
@@ -213,7 +219,7 @@ export default function DealsClient({ deals: initial, accounts, employees, curre
                 </div>
                 <div className="px-2 pb-2 space-y-2 min-h-16">
                   {stageDeals.map(deal => {
-                    const assignedEmps = employees.filter(e => Array.isArray(deal.assigned_to) && deal.assigned_to.includes(e.id))
+                    const assignedEmps = profiles.filter(p => Array.isArray(deal.assigned_to) && deal.assigned_to.includes(p.id))
                     const clientName = deal.account?.name ?? deal.prospect_name ?? null
                     return (
                       <button
@@ -242,9 +248,9 @@ export default function DealsClient({ deals: initial, accounts, employees, curre
                             {deal.value ? (
                               <span className="text-xs font-semibold text-blue-600">{formatCurrency(deal.value, deal.currency as "USD" | "GNF" | "EUR")}</span>
                             ) : null}
-                            {assignedEmps.map(emp => (
-                              <span key={emp.id} className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center flex-shrink-0">
-                                {initials(emp.full_name)}
+                            {assignedEmps.map(p => (
+                              <span key={p.id} className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center flex-shrink-0">
+                                {initials(p.full_name ?? p.email)}
                               </span>
                             ))}
                           </div>
@@ -281,7 +287,7 @@ export default function DealsClient({ deals: initial, accounts, employees, curre
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {deals.map(deal => {
-                    const assignedEmps = employees.filter(e => Array.isArray(deal.assigned_to) && deal.assigned_to.includes(e.id))
+                    const assignedEmps = profiles.filter(p => Array.isArray(deal.assigned_to) && deal.assigned_to.includes(p.id))
                     const clientName = deal.account?.name ?? deal.prospect_name ?? "—"
                     return (
                       <tr
@@ -311,7 +317,7 @@ export default function DealsClient({ deals: initial, accounts, employees, curre
                           )}
                         </td>
                         <td className="px-4 py-3 hidden md:table-cell text-gray-600 text-xs">
-                          {assignedEmps.length > 0 ? assignedEmps.map(e => e.full_name).join(", ") : "—"}
+                          {assignedEmps.length > 0 ? assignedEmps.map(p => p.full_name ?? p.email).join(", ") : "—"}
                         </td>
                         <td className="px-4 py-3 font-medium text-blue-600">
                           {deal.value ? formatCurrency(deal.value, deal.currency as "USD" | "GNF" | "EUR") : "—"}
@@ -429,20 +435,20 @@ export default function DealsClient({ deals: initial, accounts, employees, curre
                 <div>
                   <label className="text-xs font-medium text-gray-500 block mb-1">Assigné à</label>
                   <div className="border border-gray-200 rounded-lg p-2 space-y-1 max-h-32 overflow-y-auto">
-                    {employees.map(emp => (
-                      <label key={emp.id} className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-gray-50 cursor-pointer">
+                    {profiles.map(p => (
+                      <label key={p.id} className="flex items-center gap-2 px-1 py-0.5 rounded hover:bg-gray-50 cursor-pointer">
                         <input
                           type="checkbox"
-                          checked={form.assigned_to.includes(emp.id)}
+                          checked={form.assigned_to.includes(p.id)}
                           onChange={e => setForm(prev => ({
                             ...prev,
                             assigned_to: e.target.checked
-                              ? [...prev.assigned_to, emp.id]
-                              : prev.assigned_to.filter(id => id !== emp.id),
+                              ? [...prev.assigned_to, p.id]
+                              : prev.assigned_to.filter(id => id !== p.id),
                           }))}
                           className="rounded"
                         />
-                        <span className="text-sm text-gray-700">{emp.full_name}</span>
+                        <span className="text-sm text-gray-700">{p.full_name ?? p.email}</span>
                       </label>
                     ))}
                   </div>

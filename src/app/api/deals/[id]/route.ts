@@ -43,31 +43,23 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
-  // Notify newly added assignees
+  // Notify newly added assignees (assigned_to now stores profile IDs directly)
   const prevIds: string[] = Array.isArray(before?.assigned_to) ? before.assigned_to : before?.assigned_to ? [before.assigned_to] : []
   const nextIds: string[] = Array.isArray(patch.assigned_to) ? patch.assigned_to as string[] : patch.assigned_to ? [patch.assigned_to as string] : []
-  const newlyAdded = nextIds.filter(id => !prevIds.includes(id))
+  const newlyAdded = nextIds.filter(pid => !prevIds.includes(pid))
   if (newlyAdded.length > 0) {
     try {
       const supabase = await createClient()
-      const { data: emps } = await db.from("employees").select("id, email, profile_id").in("id", newlyAdded)
-      for (const emp of emps ?? []) {
-        let profileId = emp.profile_id ?? null
-        if (!profileId && emp.email) {
-          const { data: prof } = await supabase.from("profiles").select("id").eq("email", emp.email).single()
-          profileId = prof?.id ?? null
-        }
-        if (profileId) {
-          await supabase.from("notifications").insert([{
-            user_id: profileId,
-            type: "deal_assigned",
-            title: `Nouvelle opportunité assignée`,
-            body: `"${before?.title ?? data?.title}" vous a été assignée.`,
-            link: `/deals/${id}`,
-            read: false,
-          }])
-        }
-      }
+      await supabase.from("notifications").insert(
+        newlyAdded.map(profileId => ({
+          user_id: profileId,
+          type: "deal_assigned",
+          title: `Nouvelle opportunité assignée`,
+          body: `"${before?.title ?? data?.title}" vous a été assignée.`,
+          link: `/deals/${id}`,
+          read: false,
+        }))
+      )
     } catch {
       // Notification failure is non-blocking
     }

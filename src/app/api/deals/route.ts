@@ -27,29 +27,21 @@ export async function POST(req: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
-  // Notify assigned employees if set at creation
+  // Notify assigned users (assigned_to stores profile IDs directly)
   const assignedIds: string[] = Array.isArray(body.assigned_to) ? body.assigned_to : body.assigned_to ? [body.assigned_to] : []
   if (assignedIds.length > 0 && data) {
     try {
       const supabase = await createClient()
-      const { data: emps } = await db.from("employees").select("id, email, profile_id").in("id", assignedIds)
-      for (const emp of emps ?? []) {
-        let profileId = emp.profile_id ?? null
-        if (!profileId && emp.email) {
-          const { data: prof } = await supabase.from("profiles").select("id").eq("email", emp.email).single()
-          profileId = prof?.id ?? null
-        }
-        if (profileId) {
-          await supabase.from("notifications").insert([{
-            user_id: profileId,
-            type: "deal_assigned",
-            title: `Nouvelle opportunité assignée`,
-            body: `"${body.title}" vous a été assignée.`,
-            link: `/deals/${data.id}`,
-            read: false,
-          }])
-        }
-      }
+      await supabase.from("notifications").insert(
+        assignedIds.map(profileId => ({
+          user_id: profileId,
+          type: "deal_assigned",
+          title: `Nouvelle opportunité assignée`,
+          body: `"${body.title}" vous a été assignée.`,
+          link: `/deals/${data.id}`,
+          read: false,
+        }))
+      )
     } catch {
       // Non-blocking
     }
