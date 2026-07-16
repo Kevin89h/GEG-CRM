@@ -53,7 +53,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   // Notify newly added assignees
   const prevIds: string[] = Array.isArray(before?.assigned_to) ? before.assigned_to : []
   const newlyAdded = nextAssignedIds.filter(pid => !prevIds.includes(pid))
-  console.log("[deals PATCH] prevIds:", prevIds, "nextIds:", nextAssignedIds, "newlyAdded:", newlyAdded)
   if (newlyAdded.length > 0) {
     const supabase = createAdminClient()
     const { error: notifError } = await supabase.from("notifications").insert(
@@ -66,7 +65,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         read: false,
       }))
     )
-    if (notifError) console.error("[notifications] insert error:", notifError.message, notifError.details)
+    if (notifError) console.error("notifications insert error:", notifError.message)
   }
 
   return NextResponse.json(data)
