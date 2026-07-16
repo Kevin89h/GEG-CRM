@@ -46,6 +46,7 @@ interface ProductOption {
   name: string
   reference: string | null
   sale_price: number | null
+  image_url: string | null
   unit: { name: string } | null
 }
 
