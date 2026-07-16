@@ -12,6 +12,7 @@ import { Modal } from "@/components/ui/Modal"
 import { createClient } from "@/lib/supabase/client"
 import { formatDate, formatCurrency, formatNumber } from "@/lib/utils"
 import DocumentLayout from "@/components/print/DocumentLayout"
+import ShareButton from "@/components/ShareButton"
 
 interface Line {
   id: string
@@ -511,6 +512,12 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
           <a href={`/${locale}/ventes/factures/${invoice.id}/pdf`} target="_blank" className="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">
             <Printer className="w-4 h-4" /> {t("printPdf")}
           </a>
+          <ShareButton
+            number={invoice.number}
+            clientName={invoice.account?.name}
+            pdfUrl={`/${locale}/ventes/factures/${invoice.id}/pdf`}
+            type="facture"
+          />
           {!isCancelled && invoice.status !== "draft" && (
             <Button variant="secondary" onClick={createDeliveryNote} disabled={creatingBL}>
               <Truck className="w-4 h-4" /> {creatingBL ? t("creating") : t("deliveryNote")}

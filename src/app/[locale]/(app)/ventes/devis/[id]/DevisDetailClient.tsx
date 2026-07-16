@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { formatDate, formatNumber } from "@/lib/utils"
 import DocumentLayout from "@/components/print/DocumentLayout"
+import ShareButton from "@/components/ShareButton"
 
 interface Line {
   id: string
@@ -379,6 +380,12 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
           >
             <Printer className="w-4 h-4" /> {t("printPdf")}
           </a>
+          <ShareButton
+            number={order.number}
+            clientName={order.account?.name}
+            pdfUrl={`/${locale}/ventes/devis/${order.id}/pdf`}
+            type="devis"
+          />
           {order.status === "confirmed" && (
             <a
               href={`/${locale}/ventes/devis/${order.id}/bon-livraison`}
