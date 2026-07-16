@@ -17,6 +17,21 @@ export const metadata: Metadata = {
   other: {
     "mobile-web-app-capable": "yes",
   },
+  openGraph: {
+    title: "GEG CRM",
+    description: "Customer Relationship Management — Global Energy Group",
+    url: "https://crm.gegoil.com",
+    siteName: "GEG CRM",
+    images: [
+      {
+        url: "https://crm.gegoil.com/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "GEG CRM",
+      },
+    ],
+    type: "website",
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
