@@ -34,14 +34,17 @@ interface Employee {
   email: string | null
   phone: string | null
   notes: string | null
+  profile_id: string | null
   commissions?: Commission[]
 }
 
 interface TreasuryAccount { id: string; name: string; currency: string }
+interface UserProfile { id: string; full_name: string | null; email: string }
 
 interface Props {
   employees: Employee[]
   treasuryAccounts: TreasuryAccount[]
+  profiles: UserProfile[]
 }
 
 const CURRENCIES = [
@@ -53,10 +56,10 @@ const CURRENCIES = [
 const emptyForm = {
   full_name: "", title: "", job_description: "", start_date: new Date().toISOString().slice(0, 10),
   salary: "", salary_currency: "GNF", commission_rate: "0",
-  email: "", phone: "", notes: "",
+  email: "", phone: "", notes: "", profile_id: "",
 }
 
-export default function EmployesClient({ employees: initial, treasuryAccounts }: Props) {
+export default function EmployesClient({ employees: initial, treasuryAccounts, profiles }: Props) {
   const [employees, setEmployees] = useState(initial)
   const [modalOpen, setModalOpen] = useState(false)
   const [editEmployee, setEditEmployee] = useState<Employee | null>(null)
@@ -73,7 +76,7 @@ export default function EmployesClient({ employees: initial, treasuryAccounts }:
     setForm({
       full_name: e.full_name, title: e.title ?? "", job_description: e.job_description ?? "",
       start_date: e.start_date, salary: String(e.salary ?? ""), salary_currency: e.salary_currency,
-      commission_rate: String(e.commission_rate), email: e.email ?? "", phone: e.phone ?? "", notes: e.notes ?? "",
+      commission_rate: String(e.commission_rate), email: e.email ?? "", phone: e.phone ?? "", notes: e.notes ?? "", profile_id: e.profile_id ?? "",
     })
     setEditEmployee(e)
     setModalOpen(true)
@@ -94,6 +97,7 @@ export default function EmployesClient({ employees: initial, treasuryAccounts }:
       email: form.email || null,
       phone: form.phone || null,
       notes: form.notes || null,
+      profile_id: form.profile_id || null,
     }
 
     try {
@@ -325,6 +329,19 @@ export default function EmployesClient({ employees: initial, treasuryAccounts }:
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input label="Téléphone" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+224 620 000 000" />
             <Input label="Notes" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optionnel" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Compte utilisateur <span className="text-gray-400 font-normal">(pour les notifications)</span></label>
+            <select
+              value={form.profile_id}
+              onChange={e => setForm(f => ({ ...f, profile_id: e.target.value }))}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            >
+              <option value="">— Aucun compte lié —</option>
+              {profiles.map(p => (
+                <option key={p.id} value={p.id}>{p.full_name ?? p.email} ({p.email})</option>
+              ))}
+            </select>
           </div>
           {saveError && <p className="text-sm text-red-600">{saveError}</p>}
           <div className="flex justify-end gap-3 pt-2">
