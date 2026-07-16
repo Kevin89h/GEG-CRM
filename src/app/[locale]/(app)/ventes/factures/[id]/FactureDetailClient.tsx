@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Plus, Send, Printer, CheckCircle, ArrowLeft, Truck, RotateCcw, X } from "lucide-react"
+import { Plus, Send, Printer, CheckCircle, ArrowLeft, Truck, RotateCcw, X, TrendingDown } from "lucide-react"
 import Link from "next/link"
 import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/Button"
@@ -112,6 +112,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
   }
   const methodLabel: Record<string, string> = {
     cash: t("methodCash"), bank: t("methodBank"), mobile: t("methodMobile"), cheque: t("methodCheque"), other: t("methodOther"),
+    exchange_loss: "Perte sur change",
   }
 
   function lineTotal(l: Line) {
@@ -336,6 +337,50 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
     router.push(`/${locale}/ventes/factures/${json.id}`)
   }
 
+  const hasCrossCurrencyPayments = invoice.payments.some(p => p.currency !== invoice.currency)
+  const canRecordFxLoss = !isPaid && !isCancelled && invoice.status !== "draft" && invoice.balance > 0.005 && hasCrossCurrencyPayments
+
+  async function saveFxLoss() {
+    if (!canRecordFxLoss) return
+    const balanceStr = formatCurrency(invoice.balance, invoice.currency as "USD" | "GNF" | "EUR")
+    if (!window.confirm(`Enregistrer une perte sur change de ${balanceStr} pour solder la facture ?`)) return
+
+    setSaving(true)
+    setError(null)
+    const supabase = createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setError(t("notAuthenticated")); setSaving(false); return }
+
+    const res = await fetch(`/api/invoices/${invoice.id}/payments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        amount: invoice.balance,
+        currency: invoice.currency,
+        exchange_rate: null,
+        amount_in_invoice_currency: null,
+        method: "exchange_loss",
+        treasury_account_id: null,
+        reference: `Perte sur change — ${invoice.number}`,
+        notes: "Solde résiduel passé en perte de change",
+        paid_at: new Date().toISOString().split("T")[0],
+        user_id: user.id,
+      }),
+    })
+
+    const json = await res.json()
+    if (!res.ok || !json.payment) { setError(json.error ?? t("serverError")); setSaving(false); return }
+
+    setInvoice(prev => ({
+      ...prev,
+      total_paid: prev.total_paid + prev.balance,
+      balance: 0,
+      status: "paid",
+      payments: [json.payment, ...prev.payments],
+    }))
+    setSaving(false)
+  }
+
   async function deletePayment(paymentId: string, amount: number, amountInInvoiceCurrency?: number | null) {
     if (!window.confirm(`Annuler ce paiement de ${formatCurrency(amount, invoice.currency as "USD" | "GNF" | "EUR")} ?`)) return
     const res = await fetch(`/api/invoices/${invoice.id}/payments/${paymentId}`, { method: "DELETE" })
@@ -402,6 +447,15 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
             <Button onClick={() => setModalOpen(true)}>
               <Plus className="w-4 h-4" /> {t("registerPayment")}
             </Button>
+          )}
+          {canRecordFxLoss && (
+            <button
+              onClick={saveFxLoss}
+              disabled={saving}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 disabled:opacity-50 transition-colors"
+            >
+              <TrendingDown className="w-4 h-4" /> Perte sur change
+            </button>
           )}
           {["sent", "partial", "paid"].includes(invoice.status) && (
             <Button variant="secondary" onClick={() => setCreditNoteModalOpen(true)}>
@@ -674,30 +728,41 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {invoice.payments.map(p => (
-                <tr key={p.id}>
-                  <td className="px-4 py-3 text-gray-600">{formatDate(p.paid_at, locale)}</td>
-                  <td className="px-4 py-3 text-gray-600">{methodLabel[p.method] ?? p.method}</td>
-                  <td className="px-4 py-3 text-gray-500 font-mono text-xs hidden sm:table-cell">{p.reference ?? "—"}</td>
-                  <td className="px-4 py-3 text-right font-semibold text-emerald-700">
-                    +{formatCurrency(p.amount, p.currency as "USD" | "GNF" | "EUR")}
-                    {p.amount_in_invoice_currency != null && p.currency !== invoice.currency && (
-                      <span className="block text-xs font-normal text-gray-400">
-                        ≈ {formatCurrency(p.amount_in_invoice_currency, invoice.currency as "USD" | "GNF" | "EUR")} (taux {p.exchange_rate})
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => deletePayment(p.id, p.amount, p.amount_in_invoice_currency)}
-                      className="text-red-400 hover:text-red-600 transition-colors p-1 rounded hover:bg-red-50"
-                      title="Annuler ce paiement"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {invoice.payments.map(p => {
+                const isFxLoss = p.method === "exchange_loss"
+                return (
+                  <tr key={p.id} className={isFxLoss ? "bg-amber-50/50" : undefined}>
+                    <td className="px-4 py-3 text-gray-600">{formatDate(p.paid_at, locale)}</td>
+                    <td className="px-4 py-3">
+                      {isFxLoss ? (
+                        <span className="inline-flex items-center gap-1 text-amber-700 font-medium text-xs">
+                          <TrendingDown className="w-3 h-3" /> Perte sur change
+                        </span>
+                      ) : (
+                        <span className="text-gray-600">{methodLabel[p.method] ?? p.method}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-gray-500 font-mono text-xs hidden sm:table-cell">{p.reference ?? "—"}</td>
+                    <td className={`px-4 py-3 text-right font-semibold ${isFxLoss ? "text-amber-700" : "text-emerald-700"}`}>
+                      {isFxLoss ? "−" : "+"}{formatCurrency(p.amount, p.currency as "USD" | "GNF" | "EUR")}
+                      {p.amount_in_invoice_currency != null && p.currency !== invoice.currency && (
+                        <span className="block text-xs font-normal text-gray-400">
+                          ≈ {formatCurrency(p.amount_in_invoice_currency, invoice.currency as "USD" | "GNF" | "EUR")} (taux {p.exchange_rate})
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        onClick={() => deletePayment(p.id, p.amount, p.amount_in_invoice_currency)}
+                        className="text-red-400 hover:text-red-600 transition-colors p-1 rounded hover:bg-red-50"
+                        title="Annuler ce paiement"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
           </div>

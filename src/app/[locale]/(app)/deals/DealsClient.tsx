@@ -91,6 +91,7 @@ export default function DealsClient({ deals: initial, accounts, employees, curre
   const [view, setView] = useState<"kanban" | "list">("kanban")
   const [modalOpen, setModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [clientType, setClientType] = useState<"existing" | "new">("existing")
   const [form, setForm] = useState({
     title: "",
@@ -118,6 +119,7 @@ export default function DealsClient({ deals: initial, accounts, employees, curre
   async function handleSave() {
     if (!form.title.trim()) return
     setSaving(true)
+    setSaveError(null)
     const body = {
       title: form.title,
       account_id: clientType === "existing" && form.account_id ? form.account_id : null,
@@ -136,11 +138,13 @@ export default function DealsClient({ deals: initial, accounts, employees, curre
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     })
+    const data = await res.json()
     if (res.ok) {
-      const data = await res.json()
       setDeals(prev => [data, ...prev])
       setModalOpen(false)
       resetForm()
+    } else {
+      setSaveError(data.error ?? "Erreur lors de la création")
     }
     setSaving(false)
   }
@@ -471,15 +475,20 @@ export default function DealsClient({ deals: initial, accounts, employees, curre
                 </div>
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2 sticky bottom-0 bg-white rounded-b-2xl">
-              <button onClick={() => { setModalOpen(false); resetForm() }} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-50 transition">Annuler</button>
-              <button
-                onClick={handleSave}
-                disabled={!form.title.trim() || saving}
-                className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40 transition"
-              >
-                {saving ? "Création…" : "Créer la demande"}
-              </button>
+            <div className="px-6 py-4 border-t border-gray-100 sticky bottom-0 bg-white rounded-b-2xl">
+              {saveError && (
+                <p className="text-sm text-red-600 mb-3">{saveError}</p>
+              )}
+              <div className="flex justify-end gap-2">
+                <button onClick={() => { setModalOpen(false); resetForm(); setSaveError(null) }} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 rounded-lg hover:bg-gray-50 transition">Annuler</button>
+                <button
+                  onClick={handleSave}
+                  disabled={!form.title.trim() || saving}
+                  className="px-4 py-2 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-40 transition"
+                >
+                  {saving ? "Création…" : "Créer la demande"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
