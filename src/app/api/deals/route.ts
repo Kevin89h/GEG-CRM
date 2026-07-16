@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createCompanyClient } from "@/lib/company"
-import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
   const assignedIds: string[] = Array.isArray(body.assigned_to) ? body.assigned_to : body.assigned_to ? [body.assigned_to] : []
   if (assignedIds.length > 0 && data) {
     try {
-      const supabase = await createClient()
+      const supabase = createAdminClient()
       await supabase.from("notifications").insert(
         assignedIds.map(profileId => ({
           user_id: profileId,

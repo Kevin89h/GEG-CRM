@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createCompanyClient } from "@/lib/company"
-import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -55,7 +55,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const newlyAdded = nextAssignedIds.filter(pid => !prevIds.includes(pid))
   console.log("[deals PATCH] prevIds:", prevIds, "nextIds:", nextAssignedIds, "newlyAdded:", newlyAdded)
   if (newlyAdded.length > 0) {
-    const supabase = await createClient()
+    const supabase = createAdminClient()
     const { error: notifError } = await supabase.from("notifications").insert(
       newlyAdded.map(profileId => ({
         user_id: profileId,
