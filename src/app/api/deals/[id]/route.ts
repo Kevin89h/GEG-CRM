@@ -27,11 +27,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     "assigned_to", "next_action", "next_action_date", "account_id", "prospect_name",
   ]
   const patch: Record<string, unknown> = {}
+  let nextAssignedIds: string[] = []
   for (const k of allowedFields) {
     if (!Object.prototype.hasOwnProperty.call(body, k)) continue
     if (k === "assigned_to") {
-      const arr: string[] = Array.isArray(body[k]) ? body[k] : body[k] ? [body[k]] : []
-      patch[k] = `{${arr.join(",")}}`
+      nextAssignedIds = Array.isArray(body[k]) ? body[k] : body[k] ? [body[k]] : []
+      patch[k] = `{${nextAssignedIds.join(",")}}`
     } else {
       patch[k] = body[k]
     }
@@ -49,10 +50,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
-  // Notify newly added assignees (assigned_to now stores profile IDs directly)
-  const prevIds: string[] = Array.isArray(before?.assigned_to) ? before.assigned_to : before?.assigned_to ? [before.assigned_to] : []
-  const nextIds: string[] = Array.isArray(patch.assigned_to) ? patch.assigned_to as string[] : patch.assigned_to ? [patch.assigned_to as string] : []
-  const newlyAdded = nextIds.filter(pid => !prevIds.includes(pid))
+  // Notify newly added assignees
+  const prevIds: string[] = Array.isArray(before?.assigned_to) ? before.assigned_to : []
+  const newlyAdded = nextAssignedIds.filter(pid => !prevIds.includes(pid))
   if (newlyAdded.length > 0) {
     try {
       const supabase = await createClient()
