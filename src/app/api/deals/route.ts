@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createCompanyClient } from "@/lib/company"
+import { createClient } from "@/lib/supabase/server"
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
@@ -25,5 +26,26 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+
+  // Notify assigned employee if set at creation
+  if (body.assigned_to && data) {
+    try {
+      const { data: emp } = await db.from("employees").select("profile_id").eq("id", body.assigned_to).single()
+      if (emp?.profile_id) {
+        const supabase = await createClient()
+        await supabase.from("notifications").insert([{
+          user_id: emp.profile_id,
+          type: "deal_assigned",
+          title: `Nouvelle opportunité assignée`,
+          body: `"${body.title}" vous a été assignée.`,
+          link: `/deals/${data.id}`,
+          read: false,
+        }])
+      }
+    } catch {
+      // Non-blocking
+    }
+  }
+
   return NextResponse.json(data)
 }

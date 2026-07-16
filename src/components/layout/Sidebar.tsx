@@ -27,6 +27,7 @@ import { cn, initials } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import type { Profile } from "@/types"
 import CompanySwitcher from "./CompanySwitcher"
+import NotificationBell from "./NotificationBell"
 
 interface Company {
   id: string
@@ -148,6 +149,14 @@ export default function Sidebar({ locale, profile, companies, currentSchema }: P
           <Globe className="w-4 h-4" />
           {locale === "fr" ? "English" : "Français"}
         </button>
+
+        {/* Notifications */}
+        {profile && (
+          <div className="flex items-center gap-3 px-3 py-2">
+            <NotificationBell userId={profile.id} locale={locale} />
+            <span className="text-slate-400 text-sm font-medium">Notifications</span>
+          </div>
+        )}
 
         {/* Logout */}
         <button
