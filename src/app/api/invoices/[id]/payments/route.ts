@@ -9,7 +9,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   try {
     const { id } = await params
     const body = await req.json()
-    const { amount, currency, method, treasury_account_id, reference, notes, paid_at, user_id } = body
+    const { amount, currency, exchange_rate, amount_in_invoice_currency, method, treasury_account_id, reference, notes, paid_at, user_id } = body
 
     if (!amount || amount <= 0) return NextResponse.json({ error: "Montant invalide" }, { status: 400 })
 
@@ -32,6 +32,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         invoice_id: id,
         amount,
         currency,
+        exchange_rate: exchange_rate ?? null,
+        amount_in_invoice_currency: amount_in_invoice_currency ?? null,
         method,
         treasury_account_id: treasury_account_id || null,
         reference: reference || null,
@@ -44,17 +46,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     if (payErr || !payment) return NextResponse.json({ error: payErr?.message ?? "Erreur" }, { status: 500 })
 
-    // Recalculate balance and update status
-    const { data: inv } = await db
-      .from("invoice_totals")
-      .select("total_ht, total_paid, balance")
-      .eq("id", id)
-      .single()
+    // Recalculate balance using amount_in_invoice_currency when currencies differ
+    const { data: allPayments } = await db
+      .from("payments")
+      .select("amount, amount_in_invoice_currency")
+      .eq("invoice_id", id)
+    const { data: invLines } = await db
+      .from("invoice_lines")
+      .select("quantity, unit_price, discount, tva_rate")
+      .eq("invoice_id", id)
 
-    if (inv) {
-      const newStatus = inv.balance <= 0 ? "paid" : inv.total_paid > 0 ? "partial" : "sent"
-      await db.from("invoices").update({ status: newStatus }).eq("id", id)
-    }
+    const totalPaid = (allPayments ?? []).reduce((s, p) =>
+      s + Number(p.amount_in_invoice_currency ?? p.amount), 0)
+    const totalTTC = (invLines ?? []).reduce((s, l) => {
+      const ht = Number(l.quantity) * Number(l.unit_price) * (1 - Number(l.discount ?? 0) / 100)
+      return s + ht * (1 + Number(l.tva_rate ?? 0) / 100)
+    }, 0)
+    const newStatus = totalPaid >= totalTTC ? "paid" : totalPaid > 0 ? "partial" : "sent"
+    await db.from("invoices").update({ status: newStatus }).eq("id", id)
 
     // Créer une transaction trésorerie (crédit) via le client admin (bypass RLS)
     if (treasury_account_id) {

@@ -38,7 +38,7 @@ export default async function FactureDetailPage({ params }: { params: Promise<{ 
       .eq("invoice_id", id)
       .order("position"),
     db.from("payments")
-      .select("id, amount, currency, method, reference, notes, paid_at")
+      .select("id, amount, currency, method, reference, notes, paid_at, exchange_rate, amount_in_invoice_currency")
       .eq("invoice_id", id)
       .order("paid_at", { ascending: false }),
     db.from("treasury_accounts")
@@ -63,7 +63,8 @@ export default async function FactureDetailPage({ params }: { params: Promise<{ 
     const lineHT = (Number(l.quantity) || 0) * (Number(l.unit_price) || 0) * (1 - (Number(l.discount) || 0) / 100)
     return s + lineHT * (1 + (Number(l.tva_rate) || 0) / 100)
   }, 0)
-  const total_paid = (payments ?? []).reduce((s, p) => s + Number(p.amount), 0)
+  const total_paid = (payments ?? []).reduce((s, p) =>
+    s + Number(p.amount_in_invoice_currency ?? p.amount), 0)
   const balance = total_ttc - total_paid
 
   const invoice = {

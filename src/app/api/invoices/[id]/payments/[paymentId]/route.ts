@@ -35,11 +35,15 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
       .eq("category", "invoice_payment")
   }
 
-  const { data: remaining } = await db.from("payments").select("amount").eq("invoice_id", id)
+  const { data: remaining } = await db
+    .from("payments")
+    .select("amount, amount_in_invoice_currency")
+    .eq("invoice_id", id)
   const { data: inv } = await db.from("invoices").select("id").eq("id", id).single()
   if (!inv) return NextResponse.json({ error: "Facture introuvable" }, { status: 404 })
 
-  const totalPaid = (remaining ?? []).reduce((s, p) => s + Number(p.amount), 0)
+  const totalPaid = (remaining ?? []).reduce((s, p) =>
+    s + Number(p.amount_in_invoice_currency ?? p.amount), 0)
   const newStatus = totalPaid <= 0 ? "sent" : "partial"
   await db.from("invoices").update({ status: newStatus }).eq("id", id)
 

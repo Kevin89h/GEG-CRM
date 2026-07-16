@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Plus, Send, Printer, CheckCircle, ArrowLeft, Truck, RotateCcw, X } from "lucide-react"
 import Link from "next/link"
@@ -31,6 +31,8 @@ interface Payment {
   reference: string | null
   notes: string | null
   paid_at: string
+  exchange_rate?: number | null
+  amount_in_invoice_currency?: number | null
 }
 
 interface TreasuryAccount { id: string; name: string; type: string; currency: string }
@@ -87,6 +89,21 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
     notes: "",
     paid_at: new Date().toISOString().split("T")[0],
   })
+  const [exchangeRate, setExchangeRate] = useState<number | null>(null)
+  const [loadingRate, setLoadingRate] = useState(false)
+
+  // Fetch exchange rate whenever payment currency differs from invoice currency
+  useEffect(() => {
+    const payCurrency = paymentForm.currency
+    const invCurrency = invoice.currency
+    if (payCurrency === invCurrency) { setExchangeRate(null); return }
+    setLoadingRate(true)
+    fetch(`/api/exchange-rates?from=${payCurrency}&to=${invCurrency}`)
+      .then(r => r.json())
+      .then(json => setExchangeRate(json.rate ?? null))
+      .catch(() => setExchangeRate(null))
+      .finally(() => setLoadingRate(false))
+  }, [paymentForm.currency, invoice.currency])
 
   const statusLabel: Record<string, string> = {
     draft: t("statusDraft"), sent: t("statusSent"), partial: t("statusPartial"), paid: t("statusPaid"), cancelled: t("statusCancelled"),
@@ -231,6 +248,16 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
     const amount = parseFloat(paymentForm.amount)
     if (!amount || amount <= 0) { setError(t("invalidAmount")); return }
 
+    const isCrossCurrency = paymentForm.currency !== invoice.currency
+    if (isCrossCurrency && !exchangeRate) {
+      setError("Taux de change introuvable pour cette paire de devises. Configurez-le dans Paramètres → Taux de change.")
+      return
+    }
+
+    const amountInInvoiceCurrency = isCrossCurrency && exchangeRate
+      ? amount * exchangeRate
+      : null
+
     setSaving(true)
     setError(null)
 
@@ -244,6 +271,8 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
       body: JSON.stringify({
         amount,
         currency: paymentForm.currency,
+        exchange_rate: isCrossCurrency ? exchangeRate : null,
+        amount_in_invoice_currency: amountInInvoiceCurrency,
         method: paymentForm.method,
         treasury_account_id: paymentForm.treasury_account_id || null,
         reference: paymentForm.reference || null,
@@ -256,7 +285,9 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
     const json = await res.json()
     if (!res.ok || !json.payment) { setError(json.error ?? t("serverError")); setSaving(false); return }
 
-    const newTotalPaid = invoice.total_paid + amount
+    // Balance uses converted amount when currencies differ
+    const effectiveAmount = amountInInvoiceCurrency ?? amount
+    const newTotalPaid = invoice.total_paid + effectiveAmount
     const newBalance = invoice.total_ttc - newTotalPaid
     const newStatus = newBalance <= 0 ? "paid" : newTotalPaid > 0 ? "partial" : "sent"
 
@@ -287,7 +318,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
     router.push(`/${locale}/ventes/factures/${json.id}`)
   }
 
-  async function deletePayment(paymentId: string, amount: number) {
+  async function deletePayment(paymentId: string, amount: number, amountInInvoiceCurrency?: number | null) {
     if (!window.confirm(`Annuler ce paiement de ${formatCurrency(amount, invoice.currency as "USD" | "GNF" | "EUR")} ?`)) return
     const res = await fetch(`/api/invoices/${invoice.id}/payments/${paymentId}`, { method: "DELETE" })
     const json = await res.json()
@@ -611,10 +642,15 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
                   <td className="px-4 py-3 text-gray-500 font-mono text-xs hidden sm:table-cell">{p.reference ?? "—"}</td>
                   <td className="px-4 py-3 text-right font-semibold text-emerald-700">
                     +{formatCurrency(p.amount, p.currency as "USD" | "GNF" | "EUR")}
+                    {p.amount_in_invoice_currency != null && p.currency !== invoice.currency && (
+                      <span className="block text-xs font-normal text-gray-400">
+                        ≈ {formatCurrency(p.amount_in_invoice_currency, invoice.currency as "USD" | "GNF" | "EUR")} (taux {p.exchange_rate})
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <button
-                      onClick={() => deletePayment(p.id, p.amount)}
+                      onClick={() => deletePayment(p.id, p.amount, p.amount_in_invoice_currency)}
                       className="text-red-400 hover:text-red-600 transition-colors p-1 rounded hover:bg-red-50"
                       title="Annuler ce paiement"
                     >
@@ -760,6 +796,24 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
                     <option value="EUR">EUR</option>
                   </select>
                 </div>
+                {paymentForm.currency !== invoice.currency && (
+                  <div className="mt-2 text-xs rounded-lg px-3 py-2 bg-amber-50 border border-amber-200 text-amber-800">
+                    {loadingRate ? (
+                      "Récupération du taux de change…"
+                    ) : exchangeRate ? (
+                      <>
+                        1 {paymentForm.currency} = {exchangeRate.toLocaleString("fr", { maximumFractionDigits: 4 })} {invoice.currency}
+                        {paymentForm.amount && !isNaN(parseFloat(paymentForm.amount)) && (
+                          <span className="font-semibold ml-2">
+                            → {formatCurrency(parseFloat(paymentForm.amount) * exchangeRate, invoice.currency as "USD" | "GNF" | "EUR")} crédités sur solde facture
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-red-700">Taux introuvable — configurez-le dans Paramètres → Taux de change</span>
+                    )}
+                  </div>
+                )}
               </div>
               <div>
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{t("settlementDate")}</p>
