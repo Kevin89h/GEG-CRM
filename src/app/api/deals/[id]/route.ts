@@ -28,7 +28,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   ]
   const patch: Record<string, unknown> = {}
   for (const k of allowedFields) {
-    if (Object.prototype.hasOwnProperty.call(body, k)) patch[k] = body[k]
+    if (!Object.prototype.hasOwnProperty.call(body, k)) continue
+    if (k === "assigned_to") {
+      const arr: string[] = Array.isArray(body[k]) ? body[k] : body[k] ? [body[k]] : []
+      patch[k] = `{${arr.join(",")}}`
+    } else {
+      patch[k] = body[k]
+    }
   }
 
   // Fetch previous assigned_to before update

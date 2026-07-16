@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
       source: body.source ?? "other",
       source_detail: body.source_detail ?? null,
       products_requested: body.products_requested ?? null,
-      assigned_to: Array.isArray(body.assigned_to) ? body.assigned_to : body.assigned_to ? [body.assigned_to] : null,
+      assigned_to: (() => { const a: string[] = Array.isArray(body.assigned_to) ? body.assigned_to : body.assigned_to ? [body.assigned_to] : []; return `{${a.join(",")}}` })(),
       priority: body.priority ?? "normal",
       value: body.value ?? null,
       currency: body.currency ?? "USD",
