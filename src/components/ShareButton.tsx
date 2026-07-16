@@ -1,17 +1,18 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { Share2, Mail, MessageCircle, X } from "lucide-react"
+import { Share2, Mail, MessageCircle, X, Loader2 } from "lucide-react"
 
 interface Props {
+  documentId: string
   number: string
   clientName: string | null | undefined
-  pdfUrl: string
   type: "facture" | "devis"
 }
 
-export default function ShareButton({ number, clientName, pdfUrl, type }: Props) {
+export default function ShareButton({ documentId, number, clientName, type }: Props) {
   const [open, setOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -23,17 +24,41 @@ export default function ShareButton({ number, clientName, pdfUrl, type }: Props)
   }, [])
 
   const label = type === "facture" ? "Facture" : "Devis"
-  const appUrl = typeof window !== "undefined" ? window.location.href : ""
-  const fullPdfUrl = typeof window !== "undefined" ? `${window.location.origin}${pdfUrl}` : pdfUrl
 
-  const whatsappText = encodeURIComponent(
-    `Bonjour,\n\nVeuillez trouver ci-dessous votre ${label.toLowerCase()} ${number}${clientName ? ` — ${clientName}` : ""}.\n\nLien PDF : ${fullPdfUrl}\n\nCordialement,\nGEG Guinée`
-  )
+  async function getPublicUrl(): Promise<string> {
+    const res = await fetch("/api/document-tokens", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ document_id: documentId, document_type: type }),
+    })
+    const data = await res.json()
+    const origin = window.location.origin
+    return `${origin}/pdf/${data.token}`
+  }
 
-  const emailSubject = encodeURIComponent(`${label} ${number}${clientName ? ` — ${clientName}` : ""}`)
-  const emailBody = encodeURIComponent(
-    `Bonjour,\n\nVeuillez trouver ci-joint votre ${label.toLowerCase()} ${number}.\n\nLien PDF : ${fullPdfUrl}\n\nCordialement,\nGEG Guinée`
-  )
+  async function shareVia(channel: "whatsapp" | "email") {
+    setLoading(true)
+    try {
+      const url = await getPublicUrl()
+      const client = clientName ? ` — ${clientName}` : ""
+
+      if (channel === "whatsapp") {
+        const text = encodeURIComponent(
+          `Bonjour,\n\nVeuillez trouver ci-dessous votre ${label.toLowerCase()} ${number}${client}.\n\nLien PDF : ${url}\n\nCordialement,\nGEG Guinée`
+        )
+        window.open(`https://wa.me/?text=${text}`, "_blank")
+      } else {
+        const subject = encodeURIComponent(`${label} ${number}${client}`)
+        const body = encodeURIComponent(
+          `Bonjour,\n\nVeuillez trouver ci-dessous votre ${label.toLowerCase()} ${number}.\n\nLien PDF : ${url}\n\nCordialement,\nGEG Guinée`
+        )
+        window.location.href = `mailto:?subject=${subject}&body=${body}`
+      }
+    } finally {
+      setLoading(false)
+      setOpen(false)
+    }
+  }
 
   return (
     <div ref={ref} className="relative">
@@ -54,35 +79,39 @@ export default function ShareButton({ number, clientName, pdfUrl, type }: Props)
             </button>
           </div>
 
-          <a
-            href={`https://wa.me/?text=${whatsappText}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors"
-          >
-            <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
-              <MessageCircle className="w-4 h-4 text-green-600" />
+          {loading ? (
+            <div className="flex items-center justify-center py-6">
+              <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
             </div>
-            <div>
-              <p className="text-sm font-medium text-gray-900">WhatsApp</p>
-              <p className="text-xs text-gray-500">Lien PDF + message</p>
-            </div>
-          </a>
+          ) : (
+            <>
+              <button
+                onClick={() => shareVia("whatsapp")}
+                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left"
+              >
+                <div className="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                  <MessageCircle className="w-4 h-4 text-green-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-900">WhatsApp</p>
+                  <p className="text-xs text-gray-500">Lien direct PDF</p>
+                </div>
+              </button>
 
-          <a
-            href={`mailto:?subject=${emailSubject}&body=${emailBody}`}
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors border-t border-gray-50"
-          >
-            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-              <Mail className="w-4 h-4 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-gray-900">Email</p>
-              <p className="text-xs text-gray-500">Ouvre votre messagerie</p>
-            </div>
-          </a>
+              <button
+                onClick={() => shareVia("email")}
+                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left border-t border-gray-50"
+              >
+                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                  <Mail className="w-4 h-4 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Email</p>
+                  <p className="text-xs text-gray-500">Ouvre votre messagerie</p>
+                </div>
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>

@@ -513,9 +513,9 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
             <Printer className="w-4 h-4" /> {t("printPdf")}
           </a>
           <ShareButton
+            documentId={invoice.id}
             number={invoice.number}
             clientName={invoice.account?.name}
-            pdfUrl={`/${locale}/ventes/factures/${invoice.id}/pdf`}
             type="facture"
           />
           {!isCancelled && invoice.status !== "draft" && (

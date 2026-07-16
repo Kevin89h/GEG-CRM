@@ -381,9 +381,9 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
             <Printer className="w-4 h-4" /> {t("printPdf")}
           </a>
           <ShareButton
+            documentId={order.id}
             number={order.number}
             clientName={order.account?.name}
-            pdfUrl={`/${locale}/ventes/devis/${order.id}/pdf`}
             type="devis"
           />
           {order.status === "confirmed" && (
