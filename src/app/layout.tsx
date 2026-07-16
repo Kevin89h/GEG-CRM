@@ -32,6 +32,12 @@ export const metadata: Metadata = {
     ],
     type: "website",
   },
+  twitter: {
+    card: "summary_large_image",
+    title: "GEG CRM",
+    description: "Customer Relationship Management — Global Energy Group",
+    images: ["https://crm.gegoil.com/og-image.png"],
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
