@@ -17,6 +17,7 @@ interface Line {
   unit_price: number
   discount: number
   tva_exempt?: boolean | null
+  product_id?: string | null
   product: { name: string; reference: string | null } | null
   unit?: { name: string } | null
 }
