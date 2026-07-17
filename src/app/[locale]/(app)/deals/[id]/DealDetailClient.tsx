@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import {
   ArrowLeft, MessageSquare, Mail, Phone, Users, Globe, HelpCircle,
   AlertCircle, CheckCircle2, Clock, PhoneCall, FileText, StickyNote,
-  Edit2, Plus, Calendar
+  Edit2, Plus, Calendar, User
 } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
 import type { DealStage } from "@/types"
@@ -321,7 +321,10 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
                   <FileText className="w-8 h-8 mx-auto mb-2 opacity-30" />
                   <p>Aucune activité enregistrée</p>
                 </div>
-              ) : activities.map(act => (
+              ) : activities.map(act => {
+                const logger = profiles.find(p => p.id === act.user_id)
+                const loggerName = logger ? (logger.full_name ?? logger.email) : null
+                return (
                 <div key={act.id} className="flex gap-3 px-4 py-3">
                   <div className="mt-0.5 flex-shrink-0">
                     {ACTIVITY_TYPE_ICON[act.type] ?? <FileText className="w-4 h-4 text-gray-400" />}
@@ -332,10 +335,15 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
                       {act.completed && <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />}
                     </div>
                     {act.notes && <p className="text-xs text-gray-500 mt-0.5 whitespace-pre-line">{act.notes}</p>}
-                    <div className="flex items-center gap-3 mt-1">
+                    <div className="flex items-center gap-3 mt-1 flex-wrap">
                       <span className="text-xs text-gray-400 flex items-center gap-1">
                         <Clock className="w-3 h-3" /> {formatDateTime(act.date)}
                       </span>
+                      {loggerName && (
+                        <span className="text-xs text-gray-400 flex items-center gap-1">
+                          <User className="w-3 h-3" /> {loggerName}
+                        </span>
+                      )}
                       {act.follow_up_date && (
                         <span className="text-xs text-orange-500 flex items-center gap-1">
                           <Calendar className="w-3 h-3" /> Relance : {formatDate(act.follow_up_date)}
@@ -344,7 +352,8 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
                     </div>
                   </div>
                 </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         </div>
