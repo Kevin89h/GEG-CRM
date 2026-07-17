@@ -23,6 +23,7 @@ export default async function DealDetailPage({ params }: { params: Promise<{ loc
     { data: profiles },
     { data: accounts },
     { data: assignedProfiles },
+    { data: linkedDevis },
   ] = await Promise.all([
     db.from("activities")
       .select("id, type, subject, notes, date, follow_up_date, completed, user_id")
@@ -33,6 +34,10 @@ export default async function DealDetailPage({ params }: { params: Promise<{ loc
     assignedIds.length > 0
       ? authClient.from("profiles").select("id, full_name, email").in("id", assignedIds)
       : Promise.resolve({ data: [] }),
+    db.from("sales_orders")
+      .select("id, number, status, total_ttc, currency, created_at, account:accounts(id, name)")
+      .eq("deal_id", id)
+      .order("created_at", { ascending: false }),
   ])
 
   const normalizedDeal = {
@@ -48,6 +53,7 @@ export default async function DealDetailPage({ params }: { params: Promise<{ loc
       activities={activities ?? []}
       profiles={(profiles ?? []) as { id: string; full_name: string | null; email: string }[]}
       accounts={accounts ?? []}
+      linkedDevis={(linkedDevis ?? []) as any[]}
     />
   )
 }

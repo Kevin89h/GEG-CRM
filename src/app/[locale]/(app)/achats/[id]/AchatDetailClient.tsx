@@ -11,6 +11,7 @@ import Link from "next/link"
 import { useTranslations } from "next-intl"
 import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
+import { Modal } from "@/components/ui/Modal"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import DocumentLayout from "@/components/print/DocumentLayout"
@@ -93,6 +94,13 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
   const [saving, setSaving] = useState(false)
   const [statusMsg, setStatusMsg] = useState("")
   const [tab, setTab] = useState<Tab>("produits")
+  const [editingLineId, setEditingLineId] = useState<string | null>(null)
+  const [editLineForm, setEditLineForm] = useState({ description: "", quantity: "", fob_unit_price: "" })
+  const [editLineSaving, setEditLineSaving] = useState(false)
+  const [addingLine, setAddingLine] = useState(false)
+  const [newLine, setNewLine] = useState({ description: "", quantity: "", fob_unit_price: "" })
+  const [addLineSaving, setAddLineSaving] = useState(false)
+  const [receiveConfirmOpen, setReceiveConfirmOpen] = useState(false)
   const [newCost, setNewCost] = useState({ type: "transport_maritime", label: t("costTypeTransportMaritime"), amount: "", currency: order.currency })
   const [chatMsg, setChatMsg] = useState("")
   const [attachments, setAttachments] = useState<{ name: string; url: string; size: number }[]>([])
@@ -200,6 +208,83 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
     setLines(prev => prev.map(l => l.line_id === lineId ? { ...l, warehouse_id: warehouseId } : l))
   }
 
+  function startEditLine(l: LandedLine) {
+    setEditingLineId(l.line_id)
+    setEditLineForm({ description: l.description, quantity: String(l.quantity), fob_unit_price: String(l.fob_unit_price) })
+  }
+
+  async function saveEditLine() {
+    if (!editingLineId) return
+    setEditLineSaving(true)
+    const res = await fetch(`/api/achats/${order.id}/lines/${editingLineId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        description: editLineForm.description,
+        quantity: parseFloat(editLineForm.quantity),
+        fob_unit_price: parseFloat(editLineForm.fob_unit_price),
+      }),
+    })
+    if (res.ok) {
+      const qty = parseFloat(editLineForm.quantity)
+      const price = parseFloat(editLineForm.fob_unit_price)
+      setLines(prev => prev.map(l =>
+        l.line_id === editingLineId
+          ? { ...l, description: editLineForm.description, quantity: qty, fob_unit_price: price, fob_total: qty * price }
+          : l
+      ))
+      setEditingLineId(null)
+    } else {
+      const j = await res.json()
+      setStatusMsg(j.error ?? "Erreur modification")
+    }
+    setEditLineSaving(false)
+  }
+
+  async function deleteLine(lineId: string) {
+    if (!confirm("Supprimer cette ligne ?")) return
+    const res = await fetch(`/api/achats/${order.id}/lines/${lineId}`, { method: "DELETE" })
+    if (res.ok) {
+      setLines(prev => prev.filter(l => l.line_id !== lineId))
+    } else {
+      const j = await res.json()
+      setStatusMsg(j.error ?? "Erreur suppression")
+    }
+  }
+
+  async function addLine() {
+    if (!newLine.description || !newLine.quantity || !newLine.fob_unit_price) return
+    setAddLineSaving(true)
+    const qty = parseFloat(newLine.quantity)
+    const price = parseFloat(newLine.fob_unit_price)
+    const res = await fetch(`/api/achats/${order.id}/lines`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ description: newLine.description, quantity: qty, fob_unit_price: price, position: lines.length }),
+    })
+    if (res.ok) {
+      const data = await res.json()
+      setLines(prev => [...prev, {
+        line_id: data.id,
+        product_id: data.product_id ?? null,
+        description: data.description,
+        quantity: qty,
+        fob_unit_price: price,
+        fob_total: qty * price,
+        allocated_costs: 0,
+        landed_total: qty * price,
+        landed_unit_price: price,
+        warehouse_id: null,
+      }])
+      setNewLine({ description: "", quantity: "", fob_unit_price: "" })
+      setAddingLine(false)
+    } else {
+      const j = await res.json()
+      setStatusMsg(j.error ?? "Erreur ajout")
+    }
+    setAddLineSaving(false)
+  }
+
   async function addCost() {
     if (!newCost.amount) return
     const res = await fetch(`/api/achats/${order.id}/costs`, {
@@ -231,11 +316,16 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
     }
   }
 
-  async function receive() {
+  function receive() {
     if (lines.some(l => !l.warehouse_id)) {
       setStatusMsg(t("assignWarehouseError"))
       return
     }
+    setReceiveConfirmOpen(true)
+  }
+
+  async function doReceive() {
+    setReceiveConfirmOpen(false)
     setSaving(true)
     const { supabase } = getCompanyClientBrowser()
     const { data: { user } } = await supabase.auth.getUser()
@@ -341,18 +431,20 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
       {/* ── Action buttons + Status pipeline ── */}
       <div className="bg-white border-b border-gray-200 px-6 py-2 flex items-center gap-2">
         {/* Actions */}
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
           {isDraft && (
-            <>
-              <button
-                onClick={receive}
-                disabled={saving}
-                className="px-3 py-1.5 text-xs font-semibold rounded bg-[#017e84] text-white hover:bg-[#016b70] transition disabled:opacity-50"
-              >
-                {saving ? t("receiving") : t("receive")}
-              </button>
-              {statusMsg && <p className="text-sm text-red-600 mt-2">{statusMsg}</p>}
-            </>
+            <button
+              onClick={receive}
+              disabled={saving}
+              className="px-3 py-1.5 text-xs font-semibold rounded bg-[#017e84] text-white hover:bg-[#016b70] transition disabled:opacity-50"
+            >
+              {saving ? t("receiving") : t("receive")}
+            </button>
+          )}
+          {statusMsg && (
+            <span className="text-xs font-medium text-red-600 bg-red-50 border border-red-200 px-2 py-1 rounded">
+              ⚠ {statusMsg}
+            </span>
           )}
           {isReceived && (
             <button onClick={goToNewInvoice} className="px-3 py-1.5 text-xs font-semibold rounded bg-[#017e84] text-white hover:opacity-90 transition">
@@ -401,12 +493,9 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
 
         {/* Right panel actions */}
         <div className="flex items-center gap-1 ml-4 border-l border-gray-200 pl-4">
-          <div className="flex flex-col items-start gap-1">
-            <button onClick={sendMessage} className="px-2.5 py-1.5 text-xs font-semibold rounded bg-[#7c3aed] text-white hover:bg-[#6d28d9] transition flex items-center gap-1.5">
-              <MessageSquare className="w-3.5 h-3.5" /> {t("sendMessage")}
-            </button>
-            {statusMsg && <p className="text-sm text-green-600">{statusMsg}</p>}
-          </div>
+          <button onClick={sendMessage} className="px-2.5 py-1.5 text-xs font-semibold rounded bg-[#7c3aed] text-white hover:bg-[#6d28d9] transition flex items-center gap-1.5">
+            <MessageSquare className="w-3.5 h-3.5" /> {t("sendMessage")}
+          </button>
           <button onClick={() => setChatMsg("📝 Note : ")} className="px-2.5 py-1.5 text-xs font-medium rounded border border-gray-200 text-gray-600 hover:bg-gray-50 transition">
             {t("note")}
           </button>
@@ -514,6 +603,7 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
                       <th className="text-right px-4 py-3">{t("colTaxes")}</th>
                       <th className="text-right px-4 py-3">{t("colAmount")}</th>
                       {isDraft && <th className="text-left px-4 py-3">{t("colWarehouse")}</th>}
+                      <th className="px-4 py-3 w-16"></th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -524,6 +614,63 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
                       const lineFOBNet = l.fob_total - lineDiscount
                       const allocated = orderFOBTotal > 0 ? totalExtra * (l.fob_total / orderFOBTotal) : 0
                       const landedUnit = l.quantity > 0 ? (lineFOBNet + allocated) / l.quantity : 0
+
+                      if (editingLineId === l.line_id) {
+                        return (
+                          <tr key={l.line_id} className="bg-blue-50/40">
+                            <td className="px-4 py-2" />
+                            <td className="px-4 py-2" colSpan={2}>
+                              <input
+                                autoFocus
+                                className="w-full border border-blue-300 rounded px-2 py-1 text-sm focus:outline-none"
+                                value={editLineForm.description}
+                                onChange={e => setEditLineForm(f => ({ ...f, description: e.target.value }))}
+                                placeholder="Description"
+                              />
+                            </td>
+                            <td className="px-4 py-2">
+                              <input
+                                type="number" min="0" step="any"
+                                className="w-24 border border-blue-300 rounded px-2 py-1 text-sm text-right focus:outline-none"
+                                value={editLineForm.quantity}
+                                onChange={e => setEditLineForm(f => ({ ...f, quantity: e.target.value }))}
+                              />
+                            </td>
+                            <td className="px-4 py-2 text-right text-gray-400 text-xs">—</td>
+                            <td className="px-4 py-2 text-gray-400 text-xs">{t("unitLabel")}</td>
+                            <td className="px-4 py-2">
+                              <input
+                                type="number" min="0" step="any"
+                                className="w-32 border border-blue-300 rounded px-2 py-1 text-sm text-right focus:outline-none"
+                                value={editLineForm.fob_unit_price}
+                                onChange={e => setEditLineForm(f => ({ ...f, fob_unit_price: e.target.value }))}
+                              />
+                            </td>
+                            <td className="px-4 py-2 text-right text-gray-400 text-xs">—</td>
+                            <td className="px-4 py-2 text-right font-medium text-gray-700 tabular-nums text-sm">
+                              {(parseFloat(editLineForm.quantity || "0") * parseFloat(editLineForm.fob_unit_price || "0")).toLocaleString("fr", { minimumFractionDigits: 2 })}
+                            </td>
+                            {isDraft && <td className="px-4 py-2" />}
+                            <td className="px-4 py-2">
+                              <div className="flex gap-1">
+                                <button
+                                  onClick={saveEditLine}
+                                  disabled={editLineSaving}
+                                  className="px-2 py-1 bg-[#017e84] text-white text-xs rounded hover:opacity-90 disabled:opacity-40 flex items-center gap-1"
+                                >
+                                  <Check className="w-3 h-3" /> {editLineSaving ? "…" : "OK"}
+                                </button>
+                                <button
+                                  onClick={() => setEditingLineId(null)}
+                                  className="px-2 py-1 border border-gray-300 text-gray-600 text-xs rounded hover:bg-gray-50"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      }
 
                       return (
                         <tr key={l.line_id} className="hover:bg-gray-50/50 group">
@@ -550,27 +697,111 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
                               <select
                                 value={l.warehouse_id ?? ""}
                                 onChange={e => updateWarehouse(l.line_id, e.target.value)}
-                                className="w-full px-2 py-1 text-xs border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white"
+                                className={`w-full px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white ${!l.warehouse_id ? "border-red-300 bg-red-50" : "border-gray-200"}`}
                               >
                                 <option value="">{t("chooseWarehouse")}</option>
                                 {warehouses.map(w => <option key={w.id} value={w.id}>{w.city ? `${w.name} — ${w.city}` : w.name}</option>)}
                               </select>
                             </td>
                           )}
+                          <td className="px-4 py-2.5">
+                            {!isReceived && (
+                              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={() => startEditLine(l)}
+                                  className="p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-700 transition"
+                                  title="Modifier"
+                                >
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536M9 13l-4 1 1-4 9.293-9.293a1 1 0 011.414 0l2.586 2.586a1 1 0 010 1.414L9 13z" /></svg>
+                                </button>
+                                <button
+                                  onClick={() => deleteLine(l.line_id)}
+                                  className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-500 transition"
+                                  title="Supprimer"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )}
+                          </td>
                         </tr>
                       )
                     })}
+
+                    {/* Nouvelle ligne */}
+                    {addingLine && (
+                      <tr className="bg-green-50/40">
+                        <td className="px-4 py-2" />
+                        <td className="px-4 py-2" colSpan={2}>
+                          <input
+                            autoFocus
+                            className="w-full border border-green-300 rounded px-2 py-1 text-sm focus:outline-none"
+                            value={newLine.description}
+                            onChange={e => setNewLine(f => ({ ...f, description: e.target.value }))}
+                            placeholder="Description du produit"
+                          />
+                        </td>
+                        <td className="px-4 py-2">
+                          <input
+                            type="number" min="0" step="any"
+                            className="w-24 border border-green-300 rounded px-2 py-1 text-sm text-right focus:outline-none"
+                            value={newLine.quantity}
+                            onChange={e => setNewLine(f => ({ ...f, quantity: e.target.value }))}
+                            placeholder="Qté"
+                          />
+                        </td>
+                        <td className="px-4 py-2 text-gray-400 text-xs text-right">—</td>
+                        <td className="px-4 py-2 text-gray-400 text-xs">{t("unitLabel")}</td>
+                        <td className="px-4 py-2">
+                          <input
+                            type="number" min="0" step="any"
+                            className="w-32 border border-green-300 rounded px-2 py-1 text-sm text-right focus:outline-none"
+                            value={newLine.fob_unit_price}
+                            onChange={e => setNewLine(f => ({ ...f, fob_unit_price: e.target.value }))}
+                            placeholder="Prix unitaire"
+                          />
+                        </td>
+                        <td className="px-4 py-2 text-gray-400 text-xs text-right">—</td>
+                        <td className="px-4 py-2 text-right font-medium text-gray-700 tabular-nums text-sm">
+                          {newLine.quantity && newLine.fob_unit_price
+                            ? (parseFloat(newLine.quantity) * parseFloat(newLine.fob_unit_price)).toLocaleString("fr", { minimumFractionDigits: 2 })
+                            : "—"}
+                        </td>
+                        {isDraft && <td className="px-4 py-2 text-xs text-gray-400">assigné après</td>}
+                        <td className="px-4 py-2">
+                          <div className="flex gap-1">
+                            <button
+                              onClick={addLine}
+                              disabled={addLineSaving || !newLine.description || !newLine.quantity || !newLine.fob_unit_price}
+                              className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:opacity-90 disabled:opacity-40 flex items-center gap-1"
+                            >
+                              <Check className="w-3 h-3" /> {addLineSaving ? "…" : "Ajouter"}
+                            </button>
+                            <button
+                              onClick={() => { setAddingLine(false); setNewLine({ description: "", quantity: "", fob_unit_price: "" }) }}
+                              className="px-2 py-1 border border-gray-300 text-gray-600 text-xs rounded hover:bg-gray-50"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
 
                 </div>
                 {/* Add links */}
-                <div className="px-4 py-3 flex items-center gap-4 text-xs border-t border-gray-100">
-                  <button className="text-[#7c3aed] hover:underline font-medium">{t("addProduct")}</button>
-                  <button className="text-[#7c3aed] hover:underline">{t("addSection")}</button>
-                  <button className="text-[#7c3aed] hover:underline">{t("addNote")}</button>
-                  <button className="text-[#7c3aed] hover:underline">{t("catalog")}</button>
-                </div>
+                {!isReceived && (
+                  <div className="px-4 py-3 flex items-center gap-4 text-xs border-t border-gray-100">
+                    <button
+                      onClick={() => { setAddingLine(true); setEditingLineId(null) }}
+                      className="text-[#7c3aed] hover:underline font-medium flex items-center gap-1"
+                    >
+                      <Plus className="w-3 h-3" /> {t("addProduct")}
+                    </button>
+                  </div>
+                )}
 
                 {/* Notes + Totals */}
                 <div className="flex border-t border-gray-100">
@@ -893,6 +1124,31 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
           </div>
         </div>
       </div>
+
+      {/* Confirmation réception de marchandises */}
+      <Modal open={receiveConfirmOpen} onClose={() => setReceiveConfirmOpen(false)} title="Confirmer la réception">
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 p-4 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-800">
+            <Truck className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold mb-1">Entrée de stock définitive</p>
+              <p>{lines.length} ligne(s) seront ajoutées au stock. Cette action est irréversible.</p>
+            </div>
+          </div>
+          <div className="space-y-1 text-sm">
+            {lines.map(l => (
+              <div key={l.line_id} className="flex justify-between py-1 border-b border-gray-50 last:border-0">
+                <span className="text-gray-700">{l.description}</span>
+                <span className="text-gray-500 text-xs">{l.quantity} → {warehouses.find(w => w.id === l.warehouse_id)?.name ?? "—"}</span>
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button onClick={() => setReceiveConfirmOpen(false)} className="px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50">Annuler</button>
+            <button onClick={doReceive} className="px-4 py-2 text-sm bg-[#017e84] text-white rounded-lg hover:bg-[#016b70] font-medium">Confirmer la réception</button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Print layout (hidden) */}
       <div className="print-root hidden print:block">

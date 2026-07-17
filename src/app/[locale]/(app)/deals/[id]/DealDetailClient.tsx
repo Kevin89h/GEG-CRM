@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import {
   ArrowLeft, MessageSquare, Mail, Phone, Users, Globe, HelpCircle,
   AlertCircle, CheckCircle2, Clock, PhoneCall, FileText, StickyNote,
-  Edit2, Plus, Calendar, User
+  Edit2, Plus, Calendar, User, Zap, Pencil, Trash2
 } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
 import type { DealStage } from "@/types"
@@ -48,11 +48,22 @@ interface UserProfile {
   email: string
 }
 
+type LinkedDevis = {
+  id: string
+  number: string
+  status: string
+  total_ttc: number | null
+  currency: string
+  created_at: string
+  account: { id: string; name: string } | null
+}
+
 interface Props {
   deal: Deal
   activities: Activity[]
   profiles: UserProfile[]
   accounts: { id: string; name: string }[]
+  linkedDevis: LinkedDevis[]
 }
 
 const STAGES: DealStage[] = ["lead", "qualified", "proposal", "negotiation", "won", "lost"]
@@ -98,13 +109,22 @@ const ACTIVITY_TYPE_ICON: Record<string, React.ReactNode> = {
   call: <PhoneCall className="w-4 h-4 text-blue-500" />,
   email: <Mail className="w-4 h-4 text-indigo-500" />,
   meeting: <Users className="w-4 h-4 text-purple-500" />,
+  whatsapp: <MessageSquare className="w-4 h-4 text-green-500" />,
 }
 
 const ACTIVITY_TYPES = [
   { value: "note", label: "Note", icon: <StickyNote className="w-4 h-4" /> },
   { value: "call", label: "Appel", icon: <PhoneCall className="w-4 h-4" /> },
   { value: "email", label: "Email", icon: <Mail className="w-4 h-4" /> },
+  { value: "whatsapp", label: "WhatsApp", icon: <MessageSquare className="w-4 h-4" /> },
   { value: "meeting", label: "Réunion", icon: <Users className="w-4 h-4" /> },
+]
+
+const QUICK_ACTIONS = [
+  { type: "call", label: "Appel fait", icon: <PhoneCall className="w-3.5 h-3.5" />, color: "text-blue-600 bg-blue-50 hover:bg-blue-100 border-blue-100" },
+  { type: "whatsapp", label: "WhatsApp", icon: <MessageSquare className="w-3.5 h-3.5" />, color: "text-green-600 bg-green-50 hover:bg-green-100 border-green-100" },
+  { type: "email", label: "Email envoyé", icon: <Mail className="w-3.5 h-3.5" />, color: "text-indigo-600 bg-indigo-50 hover:bg-indigo-100 border-indigo-100" },
+  { type: "note", label: "Note rapide", icon: <StickyNote className="w-3.5 h-3.5" />, color: "text-gray-600 bg-gray-50 hover:bg-gray-100 border-gray-200" },
 ]
 
 function formatDate(d: string) {
@@ -115,7 +135,7 @@ function formatDateTime(d: string) {
   return new Date(d).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
 }
 
-export default function DealDetailClient({ deal: initial, activities: initialActs, profiles, accounts }: Props) {
+export default function DealDetailClient({ deal: initial, activities: initialActs, profiles, accounts, linkedDevis: initialLinkedDevis }: Props) {
   const router = useRouter()
   const [deal, setDeal] = useState(initial)
   const [activities, setActivities] = useState(initialActs)
@@ -135,6 +155,17 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
   const [activityModal, setActivityModal] = useState(false)
   const [actForm, setActForm] = useState({ type: "note", subject: "", notes: "", date: new Date().toISOString().slice(0, 16), follow_up_date: "" })
   const [actSaving, setActSaving] = useState(false)
+  const [quickNote, setQuickNote] = useState("")
+  const [quickType, setQuickType] = useState<string | null>(null)
+  const [quickSaving, setQuickSaving] = useState(false)
+  const [linkedDevis, setLinkedDevis] = useState<LinkedDevis[]>(initialLinkedDevis)
+  const [devisPickerOpen, setDevisPickerOpen] = useState(false)
+  const [devisSearch, setDevisSearch] = useState("")
+  const [devisResults, setDevisResults] = useState<LinkedDevis[]>([])
+  const [devisLinking, setDevisLinking] = useState(false)
+  const [editingActId, setEditingActId] = useState<string | null>(null)
+  const [editActForm, setEditActForm] = useState({ subject: "", notes: "", type: "note" })
+  const [editActSaving, setEditActSaving] = useState(false)
 
   async function changeStage(newStage: DealStage) {
     if (newStage === deal.stage || stageSaving) return
@@ -180,6 +211,94 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
       setSaveError(data.error ?? "Erreur lors de l'enregistrement")
     }
     setSaving(false)
+  }
+
+  async function quickLog(type: string) {
+    const labels: Record<string, string> = { call: "Appel téléphonique", whatsapp: "Message WhatsApp", email: "Email envoyé", note: "Note" }
+    setQuickSaving(true)
+    const res = await fetch(`/api/deals/${deal.id}/activities`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type,
+        subject: labels[type] ?? type,
+        notes: quickNote || null,
+        date: new Date().toISOString().slice(0, 16),
+        follow_up_date: null,
+        deal_id: deal.id,
+      }),
+    })
+    if (res.ok) {
+      const data = await res.json()
+      setActivities(prev => [data, ...prev])
+      setQuickNote("")
+      setQuickType(null)
+    }
+    setQuickSaving(false)
+  }
+
+  function startEditAct(act: typeof activities[0]) {
+    setEditingActId(act.id)
+    setEditActForm({ subject: act.subject, notes: act.notes ?? "", type: act.type })
+  }
+
+  async function saveEditAct() {
+    if (!editingActId) return
+    setEditActSaving(true)
+    const res = await fetch(`/api/deals/${deal.id}/activities/${editingActId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(editActForm),
+    })
+    if (res.ok) {
+      const updated = await res.json()
+      setActivities(prev => prev.map(a => a.id === editingActId ? { ...a, ...updated } : a))
+      setEditingActId(null)
+    }
+    setEditActSaving(false)
+  }
+
+  async function deleteActivity(actId: string) {
+    if (!confirm("Supprimer cette activité ?")) return
+    const res = await fetch(`/api/deals/${deal.id}/activities/${actId}`, { method: "DELETE" })
+    if (res.ok) setActivities(prev => prev.filter(a => a.id !== actId))
+  }
+
+  async function searchDevis(q: string) {
+    setDevisSearch(q)
+    const res = await fetch(`/api/devis/search?q=${encodeURIComponent(q)}`)
+    if (res.ok) {
+      const data = await res.json()
+      const linkedIds = new Set(linkedDevis.map(d => d.id))
+      setDevisResults(data.filter((d: LinkedDevis) => !linkedIds.has(d.id)))
+    }
+  }
+
+  async function linkDevis(devisId: string) {
+    setDevisLinking(true)
+    const res = await fetch(`/api/deals/${deal.id}/devis`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ devis_id: devisId }),
+    })
+    if (res.ok) {
+      const data = await res.json()
+      setLinkedDevis(prev => [data, ...prev])
+      setDevisPickerOpen(false)
+      setDevisSearch("")
+      setDevisResults([])
+    }
+    setDevisLinking(false)
+  }
+
+  async function unlinkDevis(devisId: string) {
+    if (!confirm("Dissocier ce devis de l'opportunité ?")) return
+    const res = await fetch(`/api/deals/${deal.id}/devis`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ devis_id: devisId }),
+    })
+    if (res.ok) setLinkedDevis(prev => prev.filter(d => d.id !== devisId))
   }
 
   async function addActivity() {
@@ -307,13 +426,48 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
           {/* Activity journal */}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-              <h2 className="text-sm font-semibold text-gray-900">Journal d'activité</h2>
+              <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5"><Zap className="w-3.5 h-3.5 text-yellow-500" /> Journal d'activité</h2>
               <button
                 onClick={() => setActivityModal(true)}
                 className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 px-2 py-1 rounded-lg hover:bg-blue-50 transition"
               >
-                <Plus className="w-3.5 h-3.5" /> Ajouter
+                <Plus className="w-3.5 h-3.5" /> Détaillé
               </button>
+            </div>
+
+            {/* Quick actions */}
+            <div className="px-4 py-3 border-b border-gray-50 space-y-2">
+              <div className="flex gap-2 flex-wrap">
+                {QUICK_ACTIONS.map(qa => (
+                  <button
+                    key={qa.type}
+                    onClick={() => setQuickType(quickType === qa.type ? null : qa.type)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition ${quickType === qa.type ? "ring-2 ring-offset-1 ring-blue-400 " : ""}${qa.color}`}
+                  >
+                    {qa.icon} {qa.label}
+                  </button>
+                ))}
+              </div>
+              {quickType && (
+                <div className="flex gap-2 items-center">
+                  <input
+                    autoFocus
+                    className="flex-1 border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:border-blue-400"
+                    placeholder="Note optionnelle…"
+                    value={quickNote}
+                    onChange={e => setQuickNote(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") quickLog(quickType) }}
+                  />
+                  <button
+                    onClick={() => quickLog(quickType)}
+                    disabled={quickSaving}
+                    className="px-3 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-40 transition flex items-center gap-1"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" /> {quickSaving ? "…" : "Logger"}
+                  </button>
+                  <button onClick={() => { setQuickType(null); setQuickNote("") }} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
+                </div>
+              )}
             </div>
             <div className="divide-y divide-gray-50">
               {activities.length === 0 ? (
@@ -325,31 +479,89 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
                 const logger = profiles.find(p => p.id === act.user_id)
                 const loggerName = logger ? (logger.full_name ?? logger.email) : null
                 return (
-                <div key={act.id} className="flex gap-3 px-4 py-3">
+                <div key={act.id} className="group flex gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
                   <div className="mt-0.5 flex-shrink-0">
                     {ACTIVITY_TYPE_ICON[act.type] ?? <FileText className="w-4 h-4 text-gray-400" />}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-sm font-medium text-gray-900">{act.subject}</span>
-                      {act.completed && <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />}
-                    </div>
-                    {act.notes && <p className="text-xs text-gray-500 mt-0.5 whitespace-pre-line">{act.notes}</p>}
-                    <div className="flex items-center gap-3 mt-1 flex-wrap">
-                      <span className="text-xs text-gray-400 flex items-center gap-1">
-                        <Clock className="w-3 h-3" /> {formatDateTime(act.date)}
-                      </span>
-                      {loggerName && (
-                        <span className="text-xs text-gray-400 flex items-center gap-1">
-                          <User className="w-3 h-3" /> {loggerName}
-                        </span>
-                      )}
-                      {act.follow_up_date && (
-                        <span className="text-xs text-orange-500 flex items-center gap-1">
-                          <Calendar className="w-3 h-3" /> Relance : {formatDate(act.follow_up_date)}
-                        </span>
-                      )}
-                    </div>
+                    {editingActId === act.id ? (
+                      <div className="space-y-2">
+                        <select
+                          className="w-full border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-blue-400"
+                          value={editActForm.type}
+                          onChange={e => setEditActForm(f => ({ ...f, type: e.target.value }))}
+                        >
+                          {ACTIVITY_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                        </select>
+                        <input
+                          className="w-full border border-gray-200 rounded-lg px-2 py-1 text-sm focus:outline-none focus:border-blue-400"
+                          value={editActForm.subject}
+                          onChange={e => setEditActForm(f => ({ ...f, subject: e.target.value }))}
+                          placeholder="Sujet"
+                        />
+                        <textarea
+                          className="w-full border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-blue-400 resize-none"
+                          rows={2}
+                          value={editActForm.notes}
+                          onChange={e => setEditActForm(f => ({ ...f, notes: e.target.value }))}
+                          placeholder="Note…"
+                        />
+                        <div className="flex gap-2">
+                          <button
+                            onClick={saveEditAct}
+                            disabled={editActSaving}
+                            className="px-3 py-1 bg-blue-600 text-white text-xs font-medium rounded-lg hover:bg-blue-700 disabled:opacity-40"
+                          >
+                            {editActSaving ? "…" : "Enregistrer"}
+                          </button>
+                          <button
+                            onClick={() => setEditingActId(null)}
+                            className="px-3 py-1 text-xs text-gray-500 hover:text-gray-700 rounded-lg border border-gray-200"
+                          >
+                            Annuler
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-medium text-gray-900">{act.subject}</span>
+                          {act.completed && <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />}
+                          <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={() => startEditAct(act)}
+                              className="p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition"
+                              title="Modifier"
+                            >
+                              <Pencil className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => deleteActivity(act.id)}
+                              className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-500 transition"
+                              title="Supprimer"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+                        {act.notes && <p className="text-xs text-gray-500 mt-0.5 whitespace-pre-line">{act.notes}</p>}
+                        <div className="flex items-center gap-3 mt-1 flex-wrap">
+                          <span className="text-xs text-gray-400 flex items-center gap-1">
+                            <Clock className="w-3 h-3" /> {formatDateTime(act.date)}
+                          </span>
+                          {loggerName && (
+                            <span className="text-xs text-gray-400 flex items-center gap-1">
+                              <User className="w-3 h-3" /> {loggerName}
+                            </span>
+                          )}
+                          {act.follow_up_date && (
+                            <span className="text-xs text-orange-500 flex items-center gap-1">
+                              <Calendar className="w-3 h-3" /> Relance : {formatDate(act.follow_up_date)}
+                            </span>
+                          )}
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
                 )
@@ -385,8 +597,124 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
             )}
           </div>
 
+          {/* Devis liés */}
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+              <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5 text-blue-500" /> Devis liés
+                {linkedDevis.length > 0 && (
+                  <span className="ml-1 px-1.5 py-0.5 bg-blue-50 text-blue-600 text-xs rounded-full">{linkedDevis.length}</span>
+                )}
+              </h2>
+              <button
+                onClick={() => { setDevisPickerOpen(true); searchDevis("") }}
+                className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 px-2 py-1 rounded-lg hover:bg-blue-50 transition"
+              >
+                <Plus className="w-3.5 h-3.5" /> Lier
+              </button>
+            </div>
+
+            {linkedDevis.length === 0 ? (
+              <div className="text-center py-6 text-gray-400 text-xs">Aucun devis lié</div>
+            ) : (
+              <div className="divide-y divide-gray-50">
+                {linkedDevis.map(d => (
+                  <div key={d.id} className="group flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors">
+                    <div className="flex-1 min-w-0">
+                      <a
+                        href={`/fr/ventes/devis/${d.id}`}
+                        className="text-sm font-medium text-blue-600 hover:underline font-mono"
+                      >
+                        {d.number}
+                      </a>
+                      {d.account && <p className="text-xs text-gray-400">{d.account.name}</p>}
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      {d.total_ttc != null && (
+                        <p className="text-xs font-medium text-gray-700">
+                          {formatCurrency(d.total_ttc, (d.currency === "XOF" ? "EUR" : d.currency) as "USD" | "GNF" | "EUR")}
+                        </p>
+                      )}
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                        d.status === "confirmed" ? "bg-green-50 text-green-600" :
+                        d.status === "draft" ? "bg-gray-100 text-gray-500" :
+                        d.status === "invoiced" ? "bg-blue-50 text-blue-600" :
+                        "bg-red-50 text-red-500"
+                      }`}>
+                        {d.status === "draft" ? "Brouillon" : d.status === "confirmed" ? "Confirmé" : d.status === "invoiced" ? "Facturé" : "Annulé"}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => unlinkDevis(d.id)}
+                      className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-500 transition"
+                      title="Dissocier"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
         </div>
       </div>
+
+      {/* Devis picker modal */}
+      {devisPickerOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/30 backdrop-blur-sm" onClick={() => setDevisPickerOpen(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="font-semibold text-gray-900 text-sm">Lier un devis</h2>
+              <button onClick={() => setDevisPickerOpen(false)} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
+            </div>
+            <div className="p-3">
+              <input
+                autoFocus
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                placeholder="Rechercher un devis (ex: DEV-2025)…"
+                value={devisSearch}
+                onChange={e => searchDevis(e.target.value)}
+              />
+            </div>
+            <div className="max-h-72 overflow-y-auto divide-y divide-gray-50 pb-2">
+              {devisResults.length === 0 && devisSearch.length === 0 && (
+                <p className="text-xs text-gray-400 text-center py-6">Tapez pour chercher un devis</p>
+              )}
+              {devisResults.length === 0 && devisSearch.length > 0 && (
+                <p className="text-xs text-gray-400 text-center py-6">Aucun résultat</p>
+              )}
+              {devisResults.map(d => (
+                <button
+                  key={d.id}
+                  onClick={() => linkDevis(d.id)}
+                  disabled={devisLinking}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-blue-50 transition text-left disabled:opacity-40"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 font-mono">{d.number}</p>
+                    {d.account && <p className="text-xs text-gray-400">{d.account.name}</p>}
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    {d.total_ttc != null && (
+                      <p className="text-xs font-medium text-gray-600">
+                        {formatCurrency(d.total_ttc, (d.currency === "XOF" ? "EUR" : d.currency) as "USD" | "GNF" | "EUR")}
+                      </p>
+                    )}
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                      d.status === "confirmed" ? "bg-green-50 text-green-600" :
+                      d.status === "draft" ? "bg-gray-100 text-gray-500" :
+                      "bg-blue-50 text-blue-600"
+                    }`}>
+                      {d.status === "draft" ? "Brouillon" : d.status === "confirmed" ? "Confirmé" : "Facturé"}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Edit modal */}
       {editing && (

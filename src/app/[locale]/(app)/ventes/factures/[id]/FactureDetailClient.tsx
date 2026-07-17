@@ -253,13 +253,17 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
       })
       const json = await res.json()
       if (!res.ok) {
-        setError(json.error ?? "Erreur lors de la création du bon de livraison")
+        const msg = json.error ?? "Erreur lors de la création du bon de livraison"
+        setError(msg)
+        alert("Erreur BL : " + msg)
         setCreatingBL(false)
         return
       }
       router.push(`/${locale}/ventes/bons-livraison/${json.deliveryNoteId}`)
-    } catch {
-      setError("Erreur inattendue")
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erreur inattendue"
+      setError(msg)
+      alert("Erreur BL : " + msg)
       setCreatingBL(false)
     }
   }
@@ -525,6 +529,14 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
           )}
         </div>
       </div>
+
+      {/* Erreur création BL */}
+      {error && !modalOpen && !confirmModalOpen && !creditNoteModalOpen && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 flex items-center justify-between">
+          <span>{error}</span>
+          <button onClick={() => setError(null)} className="ml-4 text-red-400 hover:text-red-600">✕</button>
+        </div>
+      )}
 
       {/* Barre de progression paiement */}
       {invoice.status !== "draft" && (

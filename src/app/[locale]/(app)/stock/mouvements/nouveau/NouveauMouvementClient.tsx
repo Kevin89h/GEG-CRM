@@ -8,6 +8,7 @@ import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
+import { Modal } from "@/components/ui/Modal"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import type { Warehouse } from "@/types"
 
@@ -98,6 +99,7 @@ export default function NouveauMouvementClient({ warehouses, products, stockLeve
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   const cfg = typeConfig[type]
   const selectedProduct = products.find(p => p.id === form.product_id)
@@ -120,7 +122,7 @@ export default function NouveauMouvementClient({ warehouses, products, stockLeve
     setForm(f => ({ ...f, [key]: value }))
   }
 
-  async function handleSave() {
+  function handleSave() {
     if (!form.product_id || form.quantity === "") return
     if (cfg.needsFrom && !form.from_warehouse_id) return
     if (cfg.needsTo && !form.to_warehouse_id) return
@@ -130,15 +132,21 @@ export default function NouveauMouvementClient({ warehouses, products, stockLeve
       setError("La quantité ne peut pas être négative")
       return
     }
-
-    const { supabase } = getCompanyClientBrowser()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setError(t("errorNotAuthenticated")); setSaving(false); return }
-
     if (type !== "adjustment" && qty <= 0) {
       setError("La quantité doit être supérieure à 0")
       return
     }
+    setError(null)
+    setConfirmOpen(true)
+  }
+
+  async function doSave() {
+    setConfirmOpen(false)
+    const qty = parseFloat(form.quantity)
+
+    const { supabase } = getCompanyClientBrowser()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setError(t("errorNotAuthenticated")); return }
 
     setSaving(true)
     setError(null)
@@ -314,6 +322,53 @@ export default function NouveauMouvementClient({ warehouses, products, stockLeve
           </Button>
         </div>
       </div>
+
+      {/* Modal confirmation mouvement de stock */}
+      <Modal open={confirmOpen} onClose={() => setConfirmOpen(false)} title="Confirmer le mouvement de stock">
+        <div className="space-y-4">
+          <div className={`flex items-start gap-3 p-4 rounded-xl border text-sm ${cfg.color}`}>
+            {(() => { const Icon = cfg.icon; return <Icon className="w-4 h-4 flex-shrink-0 mt-0.5" /> })()}
+            <div>
+              <p className="font-semibold mb-1">{cfg.label}</p>
+              <p>{cfg.description}</p>
+            </div>
+          </div>
+          <div className="bg-gray-50 rounded-xl p-4 space-y-2 text-sm">
+            <div className="flex justify-between">
+              <span className="text-gray-500">Produit</span>
+              <span className="font-medium text-gray-900">{selectedProduct?.name ?? "—"}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-500">Quantité</span>
+              <span className="font-medium text-gray-900">{form.quantity} {selectedProduct?.unit?.name ?? ""}</span>
+            </div>
+            {cfg.needsFrom && form.from_warehouse_id && (
+              <div className="flex justify-between">
+                <span className="text-gray-500">De</span>
+                <span className="font-medium text-gray-900">{warehouses.find(w => w.id === form.from_warehouse_id)?.name ?? "—"}</span>
+              </div>
+            )}
+            {cfg.needsTo && form.to_warehouse_id && (
+              <div className="flex justify-between">
+                <span className="text-gray-500">Vers</span>
+                <span className="font-medium text-gray-900">{warehouses.find(w => w.id === form.to_warehouse_id)?.name ?? "—"}</span>
+              </div>
+            )}
+            {form.note && (
+              <div className="flex justify-between">
+                <span className="text-gray-500">Note</span>
+                <span className="font-medium text-gray-900 text-right max-w-xs">{form.note}</span>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="secondary" onClick={() => setConfirmOpen(false)}>Annuler</Button>
+            <Button onClick={doSave} disabled={saving}>
+              {saving ? "Enregistrement…" : "Confirmer"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }
