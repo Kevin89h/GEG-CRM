@@ -58,6 +58,7 @@ const navItems = [
   { key: "tracking", icon: Ship, path: "tracking" },
   { key: "ai", icon: Sparkles, path: "ai" },
   { key: "settings", icon: Settings, path: "parametres/taux-de-change" },
+  { key: "singapore-leads", icon: Globe, path: "singapore-leads" },
 ] as const
 
 export default function Sidebar({ locale, profile, companies, currentSchema }: Props) {
