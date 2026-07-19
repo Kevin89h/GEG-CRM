@@ -630,7 +630,12 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
                 {(deal.account as any).phone && (
                   <div className="flex items-center gap-2 text-sm">
                     <span className="text-gray-400 text-xs w-20">Téléphone</span>
-                    <a href={`tel:${(deal.account as any).phone}`} className="text-blue-600 hover:underline">{(deal.account as any).phone}</a>
+                    <a
+                      href={`https://wa.me/${(deal.account as any).phone.replace(/\D/g, "")}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-green-600 hover:underline"
+                    >{(deal.account as any).phone}</a>
                   </div>
                 )}
                 {(deal.account as any).country && (
