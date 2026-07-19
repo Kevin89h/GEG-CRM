@@ -373,7 +373,7 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
               if (!confirm("Supprimer définitivement ce lead ?")) return
               setActionLoading(true)
               const res = await fetch(`/api/deals/${deal.id}/delete`, { method: "DELETE" })
-              if (res.ok) { router.back() } else { const { error } = await res.json(); alert("Erreur : " + error) }
+              if (res.ok) { router.push("../deals"); router.refresh() } else { const { error } = await res.json(); alert("Erreur : " + error) }
               setActionLoading(false)
             }}
             className="flex items-center gap-1.5 px-3 py-2 text-sm text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition disabled:opacity-50"
