@@ -44,12 +44,13 @@ export async function POST(req: NextRequest) {
   const emailMatch = typeof email === "string" ? email.match(/<([^>]+)>/) : null
   const cleanEmail = emailMatch ? emailMatch[1] : email
 
-  if (!name || !cleanEmail) {
-    return NextResponse.json({ error: "name and email are required" }, { status: 400, headers: CORS_HEADERS })
+  if (!cleanEmail) {
+    return NextResponse.json({ error: "email is required" }, { status: 400, headers: CORS_HEADERS })
   }
+  const resolvedName = name?.trim() || cleanEmail.trim()
 
   const formLabel = form_type === "distributor" ? "Demande distributeur" : "Demande site web"
-  const dealTitle = `${formLabel} — ${name.trim()}`
+  const dealTitle = `${formLabel} — ${resolvedName}`
   const notes = [
     message ? `Message : ${message}` : null,
     source_url ? `Source : ${source_url}` : null,
@@ -60,7 +61,7 @@ export async function POST(req: NextRequest) {
   if (!isGuinee(country)) {
     const db = createAdminClient()
     const { data, error } = await db.rpc("insert_singapore_lead", {
-      p_name: name.trim(),
+      p_name: resolvedName,
       p_email: cleanEmail.trim(),
       p_phone: phone ?? null,
       p_country: country ?? null,
@@ -100,7 +101,7 @@ export async function POST(req: NextRequest) {
     const { data: newAccount, error: accountError } = await db
       .from("accounts")
       .insert([{
-        name: name.trim(),
+        name: resolvedName,
         type: "enterprise",
         email: cleanEmail.trim(),
         phone: phone ?? null,
@@ -121,7 +122,7 @@ export async function POST(req: NextRequest) {
     .insert([{
       title: dealTitle,
       account_id: accountId,
-      prospect_name: name.trim(),
+      prospect_name: resolvedName,
       stage: "lead",
       source: "website",
       source_detail: source_url ?? null,
