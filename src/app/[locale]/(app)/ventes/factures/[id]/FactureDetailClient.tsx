@@ -255,7 +255,6 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
       if (!res.ok) {
         const msg = json.error ?? "Erreur lors de la création du bon de livraison"
         setError(msg)
-        alert("Erreur BL : " + msg)
         setCreatingBL(false)
         return
       }
@@ -263,7 +262,6 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erreur inattendue"
       setError(msg)
-      alert("Erreur BL : " + msg)
       setCreatingBL(false)
     }
   }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createCompanyClient } from "@/lib/company"
+import { createAdminClient } from "@/lib/supabase/admin"
+import { getCompanySchema } from "@/lib/company"
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -9,7 +10,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     userId: string
   }
 
-  const { db } = await createCompanyClient()
+  const schema = await getCompanySchema()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = (createAdminClient() as any).schema(schema)
 
   // Save updated quantities/warehouses on delivery note lines
   for (const l of lines) {

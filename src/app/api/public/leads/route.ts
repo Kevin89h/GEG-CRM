@@ -1,17 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 
-// Pays rattachés à GEG Guinée — tout le reste va sur GEG Singapore
-const GUINEA_COUNTRIES = ["guinée", "guinee", "guinea", "gui", "gn"]
+// Tous les leads vont dans geg_guinee en attendant que le schéma Singapore soit créé
+// TODO: ajouter geg_singapore dans Supabase Settings → API → Exposed schemas, puis réactiver le routing
 const SCHEMA_GUINEE = "geg_guinee"
-const SCHEMA_SINGAPORE = "geg_singapore"
 
 const SECRET = process.env.PUBLIC_LEADS_SECRET
 
-function resolveSchema(country: string | null | undefined): string {
-  if (!country) return SCHEMA_SINGAPORE
-  const normalized = country.toLowerCase().trim()
-  return GUINEA_COUNTRIES.some(c => normalized.includes(c)) ? SCHEMA_GUINEE : SCHEMA_SINGAPORE
+function resolveSchema(_country: string | null | undefined): string {
+  return SCHEMA_GUINEE
 }
 
 export async function POST(req: NextRequest) {
