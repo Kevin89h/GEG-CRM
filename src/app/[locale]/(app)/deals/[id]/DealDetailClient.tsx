@@ -616,10 +616,30 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
               </span>
             </div>
             {deal.account && (
-              <div className="flex items-center gap-2 text-sm">
-                <span className="text-gray-400 text-xs w-20">Compte</span>
-                <span className="text-gray-700">{deal.account.name}</span>
-              </div>
+              <>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-gray-400 text-xs w-20">Compte</span>
+                  <span className="text-gray-700">{deal.account.name}</span>
+                </div>
+                {(deal.account as any).email && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-gray-400 text-xs w-20">Email</span>
+                    <a href={`mailto:${(deal.account as any).email}`} className="text-blue-600 hover:underline truncate">{(deal.account as any).email}</a>
+                  </div>
+                )}
+                {(deal.account as any).phone && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-gray-400 text-xs w-20">Téléphone</span>
+                    <a href={`tel:${(deal.account as any).phone}`} className="text-blue-600 hover:underline">{(deal.account as any).phone}</a>
+                  </div>
+                )}
+                {(deal.account as any).country && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="text-gray-400 text-xs w-20">Pays</span>
+                    <span className="text-gray-700">{(deal.account as any).country}</span>
+                  </div>
+                )}
+              </>
             )}
             {deal.prospect_name && !deal.account && (
               <div className="flex items-center gap-2 text-sm">
