@@ -1,18 +1,18 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 
-// Tous les leads vont dans geg_guinee en attendant que le schéma Singapore soit créé
-// TODO: ajouter geg_singapore dans Supabase Settings → API → Exposed schemas, puis réactiver le routing
 const SCHEMA_GUINEE = "geg_guinee"
 
 const SECRET = process.env.PUBLIC_LEADS_SECRET
 
-function resolveSchema(_country: string | null | undefined): string {
-  return SCHEMA_GUINEE
+const GUINEE_COUNTRIES = ["Guinée", "Guinee", "Guinea", "GN"]
+
+function isGuinee(country: string | null | undefined): boolean {
+  if (!country) return true
+  return GUINEE_COUNTRIES.some(c => country.trim().toLowerCase() === c.toLowerCase())
 }
 
 export async function POST(req: NextRequest) {
-  // Vérification du secret partagé
   const authHeader = req.headers.get("x-leads-secret")
   if (!SECRET || authHeader !== SECRET) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
@@ -20,25 +20,58 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json()
   const {
-    name,          // Nom complet ou nom de l'entreprise
+    name,
     email,
     phone,
     country,
     city,
-    message,       // Message ou note du formulaire
-    form_type,     // "distributor", "contact", etc.
-    source_url,    // URL de la page du formulaire
+    message,
+    form_type,
+    source_url,
   } = body
 
   if (!name || !email) {
     return NextResponse.json({ error: "name and email are required" }, { status: 400 })
   }
 
-  const schema = resolveSchema(country)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const db = (createAdminClient() as any).schema(schema)
+  const formLabel = form_type === "distributor" ? "Demande distributeur" : "Demande site web"
+  const dealTitle = `${formLabel} — ${name.trim()}`
+  const notes = [
+    message ? `Message : ${message}` : null,
+    source_url ? `Source : ${source_url}` : null,
+    form_type ? `Formulaire : ${form_type}` : null,
+  ].filter(Boolean).join("\n")
 
-  // 1. Créer ou retrouver le compte
+  // Leads non-Guinée → geg_singapore via RPC (schema non exposé directement)
+  if (!isGuinee(country)) {
+    const db = createAdminClient()
+    const { data, error } = await db.rpc("insert_singapore_lead", {
+      p_name: name.trim(),
+      p_email: email.trim(),
+      p_phone: phone ?? null,
+      p_country: country ?? null,
+      p_city: city ?? null,
+      p_deal_title: dealTitle,
+      p_notes: notes || null,
+      p_source_url: source_url ?? null,
+    })
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
+    }
+
+    return NextResponse.json({
+      success: true,
+      dealId: (data as { deal_id: string }).deal_id,
+      accountId: (data as { account_id: string }).account_id,
+      company: "geg_singapore",
+    }, { status: 201 })
+  }
+
+  // Leads Guinée → geg_guinee via schema routing
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = (createAdminClient() as any).schema(SCHEMA_GUINEE)
+
   let accountId: string | null = null
 
   const { data: existingAccount } = await db
@@ -69,16 +102,6 @@ export async function POST(req: NextRequest) {
     accountId = newAccount.id
   }
 
-  // 2. Créer l'opportunité (deal)
-  const formLabel = form_type === "distributor" ? "Demande distributeur" : "Demande site web"
-  const dealTitle = `${formLabel} — ${name.trim()}`
-
-  const notes = [
-    message ? `Message : ${message}` : null,
-    source_url ? `Source : ${source_url}` : null,
-    form_type ? `Formulaire : ${form_type}` : null,
-  ].filter(Boolean).join("\n")
-
   const { data: deal, error: dealError } = await db
     .from("deals")
     .insert([{
@@ -100,5 +123,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: dealError.message }, { status: 400 })
   }
 
-  return NextResponse.json({ success: true, dealId: deal.id, accountId, company: schema }, { status: 201 })
+  return NextResponse.json({ success: true, dealId: deal.id, accountId, company: SCHEMA_GUINEE }, { status: 201 })
 }
