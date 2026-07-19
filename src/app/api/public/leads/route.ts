@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "email is required" }, { status: 400, headers: CORS_HEADERS })
   }
 
-  const formLabel = form_type === "distributor" ? "Demande distributeur" : "Demande site web"
+  const formLabel = form_type === "distributor" ? "Demande distributeur" : form_type === "email" ? "Demande via email" : "Demande site web"
   const dealTitle = `${formLabel} — ${resolvedName}`
   const notes = [
     message ? `Message : ${message}` : null,
@@ -59,8 +59,8 @@ export async function POST(req: NextRequest) {
     form_type ? `Formulaire : ${form_type}` : null,
   ].filter(Boolean).join("\n")
 
-  // Leads non-Guinée → geg_singapore via RPC (schema non exposé directement)
-  if (!isGuinee(country)) {
+  // Leads non-Guinée ou emails entrants → geg_singapore
+  if (!isGuinee(country) || form_type === "email") {
     const db = createAdminClient()
     const { data, error } = await db.rpc("insert_singapore_lead", {
       p_name: resolvedName,
