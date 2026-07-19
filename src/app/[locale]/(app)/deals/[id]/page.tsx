@@ -1,5 +1,6 @@
 import { createCompanyClient } from "@/lib/company"
 import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { notFound } from "next/navigation"
 import DealDetailClient from "./DealDetailClient"
 
@@ -8,37 +9,52 @@ export default async function DealDetailPage({ params }: { params: Promise<{ loc
   const { db, schema } = await createCompanyClient()
   const authClient = await createClient()
 
-  const { data: deal } = await db
-    .from("deals")
-    .select("*, account:accounts(id, name, type)")
-    .eq("id", id)
-    .single()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let deal: any = null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let accounts: any[] = []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let activities: any[] = []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let linkedDevis: any[] = []
+
+  if (schema === "geg_singapore") {
+    const admin = createAdminClient()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sgDb = (admin as any).schema("geg_singapore")
+    const [{ data: sgDeal }, { data: sgAccounts }] = await Promise.all([
+      sgDb.from("deals").select("*, account:accounts(id, name, type)").eq("id", id).single(),
+      sgDb.from("accounts").select("id, name").order("name"),
+    ])
+    deal = sgDeal
+    accounts = sgAccounts ?? []
+  } else {
+    const [{ data: guDeal }, { data: guAccounts }, { data: guActivities }, { data: guDevis }] = await Promise.all([
+      db.from("deals").select("*, account:accounts(id, name, type)").eq("id", id).single(),
+      db.from("accounts").select("id, name").order("name"),
+      db.from("activities")
+        .select("id, type, subject, notes, date, follow_up_date, completed, user_id")
+        .eq("deal_id", id)
+        .order("date", { ascending: false }),
+      db.from("sales_orders")
+        .select("id, number, status, total_ttc, currency, created_at, account:accounts(id, name)")
+        .eq("deal_id", id)
+        .order("created_at", { ascending: false }),
+    ])
+    deal = guDeal
+    accounts = guAccounts ?? []
+    activities = guActivities ?? []
+    linkedDevis = guDevis ?? []
+  }
 
   if (!deal) notFound()
 
   const assignedIds: string[] = Array.isArray(deal.assigned_to) ? deal.assigned_to : deal.assigned_to ? [deal.assigned_to] : []
 
-  const [
-    { data: activities },
-    { data: profiles },
-    { data: accounts },
-    { data: assignedProfiles },
-    { data: linkedDevis },
-  ] = await Promise.all([
-    db.from("activities")
-      .select("id, type, subject, notes, date, follow_up_date, completed, user_id")
-      .eq("deal_id", id)
-      .order("date", { ascending: false }),
-    authClient.from("profiles").select("id, full_name, email").order("full_name"),
-    db.from("accounts").select("id, name").order("name"),
-    assignedIds.length > 0
-      ? authClient.from("profiles").select("id, full_name, email").in("id", assignedIds)
-      : Promise.resolve({ data: [] }),
-    db.from("sales_orders")
-      .select("id, number, status, total_ttc, currency, created_at, account:accounts(id, name)")
-      .eq("deal_id", id)
-      .order("created_at", { ascending: false }),
-  ])
+  const { data: profiles } = await authClient.from("profiles").select("id, full_name, email").order("full_name")
+  const { data: assignedProfiles } = assignedIds.length > 0
+    ? await authClient.from("profiles").select("id, full_name, email").in("id", assignedIds)
+    : { data: [] }
 
   const normalizedDeal = {
     ...deal,
@@ -50,10 +66,10 @@ export default async function DealDetailPage({ params }: { params: Promise<{ loc
   return (
     <DealDetailClient
       deal={normalizedDeal}
-      activities={activities ?? []}
+      activities={activities}
       profiles={(profiles ?? []) as { id: string; full_name: string | null; email: string }[]}
-      accounts={accounts ?? []}
-      linkedDevis={(linkedDevis ?? []) as any[]}
+      accounts={accounts}
+      linkedDevis={linkedDevis}
       schema={schema}
     />
   )
