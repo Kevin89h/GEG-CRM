@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createCompanyClient } from "@/lib/company"
+import { createAdminClient } from "@/lib/supabase/admin"
+import { getCompanySchema } from "@/lib/company"
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const { lines, userId, accountId } = await req.json()
-  const { db } = await createCompanyClient()
+  const schema = await getCompanySchema()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = (createAdminClient() as any).schema(schema)
 
   const { count } = await db.from("delivery_notes").select("id", { count: "exact", head: true })
   const year = new Date().getFullYear()
