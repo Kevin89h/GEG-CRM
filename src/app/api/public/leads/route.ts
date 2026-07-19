@@ -40,7 +40,11 @@ export async function POST(req: NextRequest) {
     source_url,
   } = body
 
-  if (!name || !email) {
+  // Normalize email — handle "Name <email@domain.com>" format from Gmail
+  const emailMatch = typeof email === "string" ? email.match(/<([^>]+)>/) : null
+  const cleanEmail = emailMatch ? emailMatch[1] : email
+
+  if (!name || !cleanEmail) {
     return NextResponse.json({ error: "name and email are required" }, { status: 400, headers: CORS_HEADERS })
   }
 
@@ -57,7 +61,7 @@ export async function POST(req: NextRequest) {
     const db = createAdminClient()
     const { data, error } = await db.rpc("insert_singapore_lead", {
       p_name: name.trim(),
-      p_email: email.trim(),
+      p_email: cleanEmail.trim(),
       p_phone: phone ?? null,
       p_country: country ?? null,
       p_city: city ?? null,
@@ -87,7 +91,7 @@ export async function POST(req: NextRequest) {
   const { data: existingAccount } = await db
     .from("accounts")
     .select("id")
-    .ilike("email", email.trim())
+    .ilike("email", cleanEmail.trim())
     .maybeSingle()
 
   if (existingAccount) {
@@ -98,7 +102,7 @@ export async function POST(req: NextRequest) {
       .insert([{
         name: name.trim(),
         type: "enterprise",
-        email: email.trim(),
+        email: cleanEmail.trim(),
         phone: phone ?? null,
         country: country ?? null,
         city: city ?? null,
