@@ -1,8 +1,18 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 
-const SCHEMA = "geg_guinee"
+// Pays rattachés à GEG Guinée — tout le reste va sur GEG Singapore
+const GUINEA_COUNTRIES = ["guinée", "guinee", "guinea", "gui", "gn"]
+const SCHEMA_GUINEE = "geg_guinee"
+const SCHEMA_SINGAPORE = "geg_singapore"
+
 const SECRET = process.env.PUBLIC_LEADS_SECRET
+
+function resolveSchema(country: string | null | undefined): string {
+  if (!country) return SCHEMA_SINGAPORE
+  const normalized = country.toLowerCase().trim()
+  return GUINEA_COUNTRIES.some(c => normalized.includes(c)) ? SCHEMA_GUINEE : SCHEMA_SINGAPORE
+}
 
 export async function POST(req: NextRequest) {
   // Vérification du secret partagé
@@ -27,8 +37,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "name and email are required" }, { status: 400 })
   }
 
+  const schema = resolveSchema(country)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const db = (createAdminClient() as any).schema(SCHEMA)
+  const db = (createAdminClient() as any).schema(schema)
 
   // 1. Créer ou retrouver le compte
   let accountId: string | null = null
@@ -92,5 +103,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: dealError.message }, { status: 400 })
   }
 
-  return NextResponse.json({ success: true, dealId: deal.id, accountId }, { status: 201 })
+  return NextResponse.json({ success: true, dealId: deal.id, accountId, company: schema }, { status: 201 })
 }
