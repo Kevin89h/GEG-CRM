@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import {
   ArrowLeft, MessageSquare, Mail, Phone, Users, Globe, HelpCircle,
   AlertCircle, CheckCircle2, Clock, PhoneCall, FileText, StickyNote,
-  Edit2, Plus, Calendar, User, Zap, Pencil, Trash2
+  Edit2, Plus, Calendar, User, Zap, Pencil, Trash2, ArrowLeftRight
 } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
 import type { DealStage } from "@/types"
@@ -64,6 +64,7 @@ interface Props {
   profiles: UserProfile[]
   accounts: { id: string; name: string }[]
   linkedDevis: LinkedDevis[]
+  schema: string
 }
 
 const STAGES: DealStage[] = ["lead", "qualified", "proposal", "negotiation", "won", "lost"]
@@ -135,7 +136,7 @@ function formatDateTime(d: string) {
   return new Date(d).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
 }
 
-export default function DealDetailClient({ deal: initial, activities: initialActs, profiles, accounts, linkedDevis: initialLinkedDevis }: Props) {
+export default function DealDetailClient({ deal: initial, activities: initialActs, profiles, accounts, linkedDevis: initialLinkedDevis, schema }: Props) {
   const router = useRouter()
   const [deal, setDeal] = useState(initial)
   const [activities, setActivities] = useState(initialActs)
@@ -166,6 +167,7 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
   const [editingActId, setEditingActId] = useState<string | null>(null)
   const [editActForm, setEditActForm] = useState({ subject: "", notes: "", type: "note" })
   const [editActSaving, setEditActSaving] = useState(false)
+  const [actionLoading, setActionLoading] = useState(false)
 
   async function changeStage(newStage: DealStage) {
     if (newStage === deal.stage || stageSaving) return
@@ -346,9 +348,39 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
           <h1 className="text-xl font-bold text-gray-900 leading-tight">{deal.title}</h1>
           <p className="text-sm text-gray-500 mt-0.5">{clientName} · Créé le {formatDate(deal.created_at)}</p>
         </div>
-        <button onClick={() => setEditing(true)} className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition flex-shrink-0">
-          <Edit2 className="w-3.5 h-3.5" /> Modifier
-        </button>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button onClick={() => setEditing(true)} className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition">
+            <Edit2 className="w-3.5 h-3.5" /> Modifier
+          </button>
+          <button
+            disabled={actionLoading}
+            onClick={async () => {
+              const target = schema === "geg_guinee" ? "Singapore" : "Guinée"
+              if (!confirm(`Transférer vers GEG ${target} ?`)) return
+              setActionLoading(true)
+              const res = await fetch(`/api/deals/${deal.id}/transfer`, { method: "POST" })
+              if (res.ok) { router.back() } else { const { error } = await res.json(); alert("Erreur : " + error) }
+              setActionLoading(false)
+            }}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition disabled:opacity-50"
+          >
+            <ArrowLeftRight className="w-3.5 h-3.5" />
+            {schema === "geg_guinee" ? "→ Singapore" : "→ Guinée"}
+          </button>
+          <button
+            disabled={actionLoading}
+            onClick={async () => {
+              if (!confirm("Supprimer définitivement ce lead ?")) return
+              setActionLoading(true)
+              const res = await fetch(`/api/deals/${deal.id}/delete`, { method: "DELETE" })
+              if (res.ok) { router.back() } else { const { error } = await res.json(); alert("Erreur : " + error) }
+              setActionLoading(false)
+            }}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition disabled:opacity-50"
+          >
+            <Trash2 className="w-3.5 h-3.5" /> Supprimer
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">

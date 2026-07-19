@@ -5,7 +5,7 @@ import DealDetailClient from "./DealDetailClient"
 
 export default async function DealDetailPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { id } = await params
-  const { db } = await createCompanyClient()
+  const { db, schema } = await createCompanyClient()
   const authClient = await createClient()
 
   const { data: deal } = await db
@@ -54,6 +54,7 @@ export default async function DealDetailPage({ params }: { params: Promise<{ loc
       profiles={(profiles ?? []) as { id: string; full_name: string | null; email: string }[]}
       accounts={accounts ?? []}
       linkedDevis={(linkedDevis ?? []) as any[]}
+      schema={schema}
     />
   )
 }

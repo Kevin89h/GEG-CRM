@@ -48,6 +48,7 @@ const navItems = [
   { key: "accounts", icon: Building2, path: "accounts" },
   { key: "contacts", icon: Users, path: "contacts" },
   { key: "deals", icon: TrendingUp, path: "deals" },
+  { key: "singapore-leads", icon: Globe, path: "singapore-leads" },
   { key: "activities", icon: CalendarCheck, path: "activities" },
   { key: "ventes", icon: ShoppingCart, path: "ventes" },
   { key: "achats", icon: ShoppingBag, path: "achats" },
