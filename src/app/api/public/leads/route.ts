@@ -7,6 +7,16 @@ const SECRET = process.env.PUBLIC_LEADS_SECRET
 
 const GUINEE_COUNTRIES = ["Guinée", "Guinee", "Guinea", "GN"]
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, x-leads-secret",
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS })
+}
+
 function isGuinee(country: string | null | undefined): boolean {
   if (!country) return true
   return GUINEE_COUNTRIES.some(c => country.trim().toLowerCase() === c.toLowerCase())
@@ -15,7 +25,7 @@ function isGuinee(country: string | null | undefined): boolean {
 export async function POST(req: NextRequest) {
   const authHeader = req.headers.get("x-leads-secret")
   if (!SECRET || authHeader !== SECRET) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: CORS_HEADERS })
   }
 
   const body = await req.json()
@@ -31,7 +41,7 @@ export async function POST(req: NextRequest) {
   } = body
 
   if (!name || !email) {
-    return NextResponse.json({ error: "name and email are required" }, { status: 400 })
+    return NextResponse.json({ error: "name and email are required" }, { status: 400, headers: CORS_HEADERS })
   }
 
   const formLabel = form_type === "distributor" ? "Demande distributeur" : "Demande site web"
@@ -57,7 +67,7 @@ export async function POST(req: NextRequest) {
     })
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
+      return NextResponse.json({ error: error.message }, { status: 400, headers: CORS_HEADERS })
     }
 
     return NextResponse.json({
@@ -65,7 +75,7 @@ export async function POST(req: NextRequest) {
       dealId: (data as { deal_id: string }).deal_id,
       accountId: (data as { account_id: string }).account_id,
       company: "geg_singapore",
-    }, { status: 201 })
+    }, { status: 201, headers: CORS_HEADERS })
   }
 
   // Leads Guinée → geg_guinee via schema routing
@@ -97,7 +107,7 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (accountError) {
-      return NextResponse.json({ error: accountError.message }, { status: 400 })
+      return NextResponse.json({ error: accountError.message }, { status: 400, headers: CORS_HEADERS })
     }
     accountId = newAccount.id
   }
@@ -120,8 +130,8 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (dealError) {
-    return NextResponse.json({ error: dealError.message }, { status: 400 })
+    return NextResponse.json({ error: dealError.message }, { status: 400, headers: CORS_HEADERS })
   }
 
-  return NextResponse.json({ success: true, dealId: deal.id, accountId, company: SCHEMA_GUINEE }, { status: 201 })
+  return NextResponse.json({ success: true, dealId: deal.id, accountId, company: SCHEMA_GUINEE }, { status: 201, headers: CORS_HEADERS })
 }
