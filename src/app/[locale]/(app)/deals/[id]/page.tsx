@@ -20,14 +20,12 @@ export default async function DealDetailPage({ params }: { params: Promise<{ loc
 
   if (schema === "geg_singapore") {
     const admin = createAdminClient()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sgDb = (admin as any).schema("geg_singapore")
     const [{ data: sgDeal }, { data: sgAccounts }] = await Promise.all([
-      sgDb.from("deals").select("*, account:accounts(id, name, type)").eq("id", id).single(),
-      sgDb.from("accounts").select("id, name").order("name"),
+      admin.rpc("get_singapore_deal", { p_id: id }),
+      admin.rpc("get_singapore_deals"),
     ])
     deal = sgDeal
-    accounts = sgAccounts ?? []
+    accounts = (sgAccounts ?? []).map((d: any) => ({ id: d.id, name: d.account_name }))
   } else {
     const [{ data: guDeal }, { data: guAccounts }, { data: guActivities }, { data: guDevis }] = await Promise.all([
       db.from("deals").select("*, account:accounts(id, name, type)").eq("id", id).single(),
