@@ -40,14 +40,16 @@ export async function POST(req: NextRequest) {
     source_url,
   } = body
 
-  // Normalize email — handle "Name <email@domain.com>" format from Gmail
-  const emailMatch = typeof email === "string" ? email.match(/<([^>]+)>/) : null
-  const cleanEmail = emailMatch ? emailMatch[1] : email
+  // Parse "Name <email@domain.com>" format (Gmail sends this in from.value / raw from field)
+  const fromRaw = typeof email === "string" ? email : ""
+  const emailMatch = fromRaw.match(/<([^>]+)>/)
+  const cleanEmail = emailMatch ? emailMatch[1].trim() : fromRaw.trim()
+  const extractedName = emailMatch ? fromRaw.slice(0, fromRaw.indexOf("<")).trim().replace(/^"|"$/g, "") : ""
+  const resolvedName = name?.trim() || extractedName || cleanEmail
 
-  if (!cleanEmail) {
+  if (!cleanEmail || !cleanEmail.includes("@")) {
     return NextResponse.json({ error: "email is required" }, { status: 400, headers: CORS_HEADERS })
   }
-  const resolvedName = name?.trim() || cleanEmail.trim()
 
   const formLabel = form_type === "distributor" ? "Demande distributeur" : "Demande site web"
   const dealTitle = `${formLabel} — ${resolvedName}`
