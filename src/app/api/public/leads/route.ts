@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { sendLeadNotification } from "@/lib/notify"
 
 const SCHEMA_GUINEE = "geg_guinee"
 
@@ -77,6 +78,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 400, headers: CORS_HEADERS })
     }
 
+    sendLeadNotification({
+      name: resolvedName,
+      email: cleanEmail,
+      phone: phone ?? null,
+      country: country ?? null,
+      message: message ?? null,
+      dealTitle,
+      company: "geg_singapore",
+      source: source_url ?? form_type ?? "website",
+    }).catch(() => {})
+
     return NextResponse.json({
       success: true,
       dealId: (data as { deal_id: string }).deal_id,
@@ -139,6 +151,17 @@ export async function POST(req: NextRequest) {
   if (dealError) {
     return NextResponse.json({ error: dealError.message }, { status: 400, headers: CORS_HEADERS })
   }
+
+  sendLeadNotification({
+    name: resolvedName,
+    email: cleanEmail,
+    phone: phone ?? null,
+    country: country ?? null,
+    message: message ?? null,
+    dealTitle,
+    company: "geg_guinee",
+    source: source_url ?? form_type ?? "website",
+  }).catch(() => {})
 
   return NextResponse.json({ success: true, dealId: deal.id, accountId, company: SCHEMA_GUINEE }, { status: 201, headers: CORS_HEADERS })
 }
