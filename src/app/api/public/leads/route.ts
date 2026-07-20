@@ -52,6 +52,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "email is required" }, { status: 400, headers: CORS_HEADERS })
   }
 
+  // Ignore internal GEG emails to prevent notification loops
+  if (cleanEmail.toLowerCase().includes("globalenergy.group")) {
+    return NextResponse.json({ skipped: true }, { status: 200, headers: CORS_HEADERS })
+  }
+
   const formLabel = form_type === "distributor" ? "Demande distributeur" : form_type === "email" ? "Demande via email" : "Demande site web"
   const dealTitle = `${formLabel} — ${resolvedName}`
   const notes = [
