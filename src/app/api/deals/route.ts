@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from "next/server"
 import { createCompanyClient } from "@/lib/company"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { sendPushToUser } from "@/lib/webpush"
+import { sendLeadNotification } from "@/lib/notify"
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
-  const { db } = await createCompanyClient()
+  const { db, schema } = await createCompanyClient()
 
   const { data, error } = await db
     .from("deals")
@@ -56,6 +57,19 @@ export async function POST(req: NextRequest) {
     } catch {
       // Non-blocking
     }
+  }
+
+  if (data) {
+    sendLeadNotification({
+      name: data.prospect_name ?? data.title ?? "—",
+      email: (data.account as any)?.email ?? "",
+      phone: null,
+      country: null,
+      message: body.notes ?? null,
+      dealTitle: data.title,
+      company: schema === "geg_singapore" ? "geg_singapore" : "geg_guinee",
+      source: body.source ?? "crm-manual",
+    }).catch(() => {})
   }
 
   return NextResponse.json(data)
