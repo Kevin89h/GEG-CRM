@@ -8,6 +8,33 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const { db, schema } = await createCompanyClient()
 
+  // Singapore schema not accessible via PostgREST — use RPC
+  if (schema === "geg_singapore") {
+    const admin = createAdminClient()
+    const { data: sgData, error: sgError } = await admin.rpc("insert_singapore_lead", {
+      p_name: body.prospect_name ?? body.title ?? "—",
+      p_email: body.email ?? "",
+      p_phone: body.phone ?? null,
+      p_country: body.country ?? null,
+      p_city: body.city ?? null,
+      p_deal_title: body.title,
+      p_notes: body.notes ?? null,
+      p_source_url: body.source_detail ?? null,
+    })
+    if (sgError) return NextResponse.json({ error: sgError.message }, { status: 400 })
+    sendLeadNotification({
+      name: body.prospect_name ?? body.title ?? "—",
+      email: body.email ?? "",
+      phone: body.phone ?? null,
+      country: body.country ?? null,
+      message: body.notes ?? null,
+      dealTitle: body.title,
+      company: "geg_singapore",
+      source: body.source ?? "crm-manual",
+    }).catch(() => {})
+    return NextResponse.json(sgData)
+  }
+
   const { data, error } = await db
     .from("deals")
     .insert([{
