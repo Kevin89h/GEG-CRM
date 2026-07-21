@@ -69,7 +69,30 @@ export default function FactureFournisseurDetailClient({
   })
 
   function setF(k: string, v: string) {
-    setForm(prev => ({ ...prev, [k]: v }))
+    setForm(prev => {
+      const next = { ...prev, [k]: v }
+      if (k === "currency") {
+        if (v === invoice.currency) {
+          next.amount = String(Math.max(invoice.balance, 0))
+          next.exchange_rate = ""
+        } else {
+          next.exchange_rate = prev.exchange_rate
+          const rate = parseFloat(prev.exchange_rate)
+          if (rate > 0) {
+            next.amount = String(Math.round(invoice.balance * rate))
+          } else {
+            next.amount = ""
+          }
+        }
+      }
+      if (k === "exchange_rate") {
+        const rate = parseFloat(v)
+        if (rate > 0 && prev.currency !== invoice.currency) {
+          next.amount = String(Math.round(invoice.balance * rate))
+        }
+      }
+      return next
+    })
   }
 
   async function deletePayment(paymentId: string, amount: number, currency: string) {
