@@ -6,7 +6,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   try {
     const { id } = await params
     const body = await req.json()
-    const { amount, currency, method, treasury_account_id, reference, notes, paid_at } = body
+    const { amount, currency, exchange_rate, method, treasury_account_id, reference, notes, paid_at } = body
 
     if (!amount || amount <= 0) return NextResponse.json({ error: "Montant invalide" }, { status: 400 })
 
@@ -26,6 +26,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         supplier_invoice_id: id,
         amount,
         currency,
+        exchange_rate: exchange_rate ? parseFloat(exchange_rate) : null,
         method,
         treasury_account_id: treasury_account_id || null,
         reference: reference || null,

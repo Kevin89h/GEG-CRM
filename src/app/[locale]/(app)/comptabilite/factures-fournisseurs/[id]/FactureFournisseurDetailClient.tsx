@@ -60,6 +60,7 @@ export default function FactureFournisseurDetailClient({
   const [form, setForm] = useState({
     amount: String(Math.max(initialInvoice.balance, 0)),
     currency: initialInvoice.currency,
+    exchange_rate: "",
     method: "bank",
     treasury_account_id: treasuryAccounts[0]?.id ?? "",
     reference: "",
@@ -361,6 +362,28 @@ export default function FactureFournisseurDetailClient({
                   <p className="text-xs text-gray-400 mt-1">Solde restant : {Number(invoice.balance).toLocaleString("fr")} {invoice.currency}</p>
                 )}
               </div>
+
+              {form.currency !== invoice.currency && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Taux de change <span className="text-gray-400 font-normal">({invoice.currency} → {form.currency})</span>
+                  </label>
+                  <input
+                    type="number"
+                    step="0.000001"
+                    min="0"
+                    value={form.exchange_rate}
+                    onChange={e => setF("exchange_rate", e.target.value)}
+                    placeholder={`1 ${invoice.currency} = ? ${form.currency}`}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {form.exchange_rate && form.amount && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      ≈ {(parseFloat(form.amount) / parseFloat(form.exchange_rate)).toLocaleString("fr", { maximumFractionDigits: 2 })} {invoice.currency}
+                    </p>
+                  )}
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Date *</label>
