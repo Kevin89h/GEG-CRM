@@ -45,6 +45,19 @@ export default function FacturesFournisseursListClient({
   const [importing, setImporting] = useState(false)
   const [importResult, setImportResult] = useState<string | null>(null)
   const [invoices, setInvoices] = useState(initial)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+
+  function toggleSelect(id: string) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  function toggleAll() {
+    setSelected(prev => prev.size === filtered.length ? new Set() : new Set(filtered.map(i => i.id)))
+  }
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc")
@@ -197,6 +210,33 @@ export default function FacturesFournisseursListClient({
         )}
       </div>
 
+      {/* Bandeau sous-total sélection */}
+      {selected.size > 0 && (() => {
+        const selInvoices = filtered.filter(i => selected.has(i.id))
+        const byCurrency = selInvoices.reduce<Record<string, number>>((acc, i) => {
+          const key = i.currency
+          acc[key] = (acc[key] ?? 0) + Number(i.balance ?? i.total_ttc)
+          return acc
+        }, {})
+        return (
+          <div className="mb-3 flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-5 py-3">
+            <span className="text-sm font-medium text-blue-700">
+              {selected.size} facture{selected.size > 1 ? "s" : ""} sélectionnée{selected.size > 1 ? "s" : ""}
+            </span>
+            <div className="flex items-center gap-4">
+              {Object.entries(byCurrency).map(([cur, total]) => (
+                <span key={cur} className="text-sm font-bold text-blue-900">
+                  {total.toLocaleString("fr")} {cur}
+                </span>
+              ))}
+              <button onClick={() => setSelected(new Set())} className="text-blue-400 hover:text-blue-700 ml-2">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Table */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         {filtered.length === 0 ? (
@@ -208,6 +248,14 @@ export default function FacturesFournisseursListClient({
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
+                <th className="px-4 py-3 w-8">
+                  <input
+                    type="checkbox"
+                    checked={selected.size === filtered.length && filtered.length > 0}
+                    onChange={toggleAll}
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                </th>
                 {([
                   ["number", "Numéro"],
                   ["supplier_name", "Fournisseur"],
@@ -228,9 +276,17 @@ export default function FacturesFournisseursListClient({
             </thead>
             <tbody className="divide-y divide-gray-50">
               {filtered.map(inv => (
-                <tr key={inv.id} className="hover:bg-gray-50 transition-colors">
+                <tr key={inv.id} onClick={() => toggleSelect(inv.id)} className={`cursor-pointer hover:bg-gray-50 transition-colors ${selected.has(inv.id) ? "bg-blue-50" : ""}`}>
+                  <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selected.has(inv.id)}
+                      onChange={() => toggleSelect(inv.id)}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                  </td>
                   <td className="px-4 py-3">
-                    <Link href={`/${locale}/comptabilite/factures-fournisseurs/${inv.id}`} className="font-medium text-blue-600 hover:underline">
+                    <Link href={`/${locale}/comptabilite/factures-fournisseurs/${inv.id}`} className="font-medium text-blue-600 hover:underline" onClick={e => e.stopPropagation()}>
                       {inv.number}
                     </Link>
                   </td>
