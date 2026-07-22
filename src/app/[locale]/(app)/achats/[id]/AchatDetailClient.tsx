@@ -166,6 +166,26 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
   const isReceived = order.status === "received"
   const cur = order.currency as "USD" | "GNF" | "EUR"
   const stepIndex = getStepIndex(order.status)
+  const [statusChanging, setStatusChanging] = useState(false)
+
+  async function changeStatus(to: string) {
+    setStatusChanging(true)
+    const { supabase } = getCompanyClientBrowser()
+    const { data: { user } } = await supabase.auth.getUser()
+    const res = await fetch(`/api/achats/${order.id}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: to, user_id: user?.id }),
+    })
+    const json = await res.json()
+    if (!res.ok) {
+      setStatusMsg(json.error ?? "Erreur changement de statut")
+      setStatusChanging(false)
+      return
+    }
+    router.refresh()
+    setStatusChanging(false)
+  }
 
   async function cancelOrder() {
     if (!confirm(t("confirmCancel"))) return
@@ -432,7 +452,35 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
       <div className="bg-white border-b border-gray-200 px-6 py-2 flex items-center gap-2">
         {/* Actions */}
         <div className="flex items-center gap-1.5 flex-wrap">
-          {isDraft && (
+          {/* Contextual status progression buttons */}
+          {order.status === "draft" && (
+            <button
+              onClick={() => changeStatus("confirmed")}
+              disabled={statusChanging}
+              className="px-3 py-1.5 text-xs font-semibold rounded bg-blue-600 text-white hover:bg-blue-700 transition disabled:opacity-50"
+            >
+              {statusChanging ? "…" : "Confirmer la commande"}
+            </button>
+          )}
+          {order.status === "confirmed" && (
+            <button
+              onClick={() => changeStatus("ordered")}
+              disabled={statusChanging}
+              className="px-3 py-1.5 text-xs font-semibold rounded bg-blue-700 text-white hover:bg-blue-800 transition disabled:opacity-50"
+            >
+              {statusChanging ? "…" : "Marquer comme commandée"}
+            </button>
+          )}
+          {order.status === "ordered" && (
+            <button
+              onClick={() => changeStatus("in_transit")}
+              disabled={statusChanging}
+              className="px-3 py-1.5 text-xs font-semibold rounded bg-orange-500 text-white hover:bg-orange-600 transition disabled:opacity-50"
+            >
+              {statusChanging ? "…" : "En transit"}
+            </button>
+          )}
+          {(order.status === "in_transit" || order.status === "partial") && (
             <button
               onClick={receive}
               disabled={saving}
@@ -457,7 +505,7 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
           <button className="px-3 py-1.5 text-xs font-medium rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition flex items-center gap-1.5">
             <MoreHorizontal className="w-3.5 h-3.5" /> ...
           </button>
-          {isDraft && (
+          {!isReceived && order.status !== "cancelled" && (
             <button onClick={cancelOrder} className="px-3 py-1.5 text-xs font-medium rounded border border-gray-300 bg-white text-red-600 hover:bg-red-50 transition flex items-center gap-1.5">
               <X className="w-3.5 h-3.5" /> {t("cancel")}
             </button>

@@ -19,6 +19,11 @@ interface InvoiceRef {
   status: string
 }
 
+interface OrderLine {
+  quantity: number
+  qty_received: number
+}
+
 interface Order {
   id: string
   number: string
@@ -30,13 +35,14 @@ interface Order {
   user_id: string | null
   total: number
   invoice: InvoiceRef | null
+  purchase_order_lines?: OrderLine[]
 }
 
 interface Props {
   orders: Order[]
 }
 
-type Tab = "all" | "draft" | "sent" | "confirmed" | "received"
+type Tab = "all" | "draft" | "pending" | "received" | "cancelled"
 
 function fmtMulti(byCur: Record<string, number>) {
   return Object.entries(byCur)
@@ -44,6 +50,8 @@ function fmtMulti(byCur: Record<string, number>) {
     .map(([cur, val]) => formatCurrency(val, cur as "GNF" | "USD" | "EUR"))
     .join(" · ") || "—"
 }
+
+const PENDING_STATUSES = new Set(["confirmed", "ordered", "in_transit", "partial"])
 
 function isOverdue(dateStr: string | null) {
   if (!dateStr) return false
@@ -58,11 +66,24 @@ export default function AchatsClient({ orders }: Props) {
   const t = useTranslations("achats")
 
   const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; dot: string }> = {
-    draft:     { label: t("statusDraft"),     bg: "bg-blue-50",    text: "text-blue-700",    dot: "bg-blue-400" },
-    sent:      { label: t("statusSent"),      bg: "bg-purple-50",  text: "text-purple-700",  dot: "bg-purple-400" },
-    confirmed: { label: t("statusConfirmed"), bg: "bg-green-50",   text: "text-green-700",   dot: "bg-green-500" },
-    received:  { label: t("statusReceived"),  bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-500" },
-    cancelled: { label: t("statusCancelled"), bg: "bg-red-50",     text: "text-red-700",     dot: "bg-red-400" },
+    draft:      { label: t("statusDraft"),      bg: "bg-gray-100",   text: "text-gray-600",    dot: "bg-gray-400" },
+    sent:       { label: t("statusSent"),       bg: "bg-purple-50",  text: "text-purple-700",  dot: "bg-purple-400" },
+    confirmed:  { label: t("statusConfirmed"),  bg: "bg-blue-50",    text: "text-blue-600",    dot: "bg-blue-400" },
+    ordered:    { label: "Commandée",           bg: "bg-blue-100",   text: "text-blue-700",    dot: "bg-blue-500" },
+    in_transit: { label: "En transit",          bg: "bg-orange-50",  text: "text-orange-700",  dot: "bg-orange-400" },
+    partial:    { label: "Partielle",           bg: "bg-amber-50",   text: "text-amber-700",   dot: "bg-amber-400" },
+    received:   { label: t("statusReceived"),   bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-500" },
+    cancelled:  { label: t("statusCancelled"),  bg: "bg-red-50",     text: "text-red-700",     dot: "bg-red-400" },
+  }
+
+  function getReceivePct(order: Order): number | null {
+    if (order.status !== "partial") return null
+    const lines = order.purchase_order_lines
+    if (!lines || lines.length === 0) return null
+    const totalQty = lines.reduce((s, l) => s + Number(l.quantity ?? 0), 0)
+    const totalRec = lines.reduce((s, l) => s + Number(l.qty_received ?? 0), 0)
+    if (totalQty === 0) return null
+    return Math.round((totalRec / totalQty) * 100)
   }
 
   function relativeDate(dateStr: string | null): { label: string; overdue: boolean } {
@@ -114,22 +135,22 @@ export default function AchatsClient({ orders }: Props) {
     }
     return {
       draft:     orders.filter(o => o.status === "draft").length,
-      sent:      orders.filter(o => o.status === "sent").length,
-      confirmed: orders.filter(o => o.status === "confirmed").length,
+      pending:   orders.filter(o => PENDING_STATUSES.has(o.status)).length,
       received:  orders.filter(o => o.status === "received").length,
+      cancelled: orders.filter(o => o.status === "cancelled").length,
       enRetard:  overdue.length,
       total:     orders.length,
       toPay,
       toPayTotal: fmtMulti(toPay),
     }
-  }, [orders])
+  }, [orders]) // PENDING_STATUSES is a module-level constant
 
   const displayed = useMemo(() => {
     let base: Order[]
     if (tab === "draft")     base = orders.filter(o => o.status === "draft")
-    else if (tab === "sent") base = orders.filter(o => o.status === "sent")
-    else if (tab === "confirmed") base = orders.filter(o => o.status === "confirmed")
+    else if (tab === "pending")   base = orders.filter(o => PENDING_STATUSES.has(o.status))
     else if (tab === "received")  base = orders.filter(o => o.status === "received")
+    else if (tab === "cancelled") base = orders.filter(o => o.status === "cancelled")
     else base = orders
 
     if (search) {
@@ -160,11 +181,11 @@ export default function AchatsClient({ orders }: Props) {
   }, [tab, search, filterCurrency, filterOverdue, sortField, sortDir, orders])
 
   const TABS: { key: Tab; label: string; count: number }[] = [
-    { key: "draft",     label: t("statusDraft"),     count: stats.draft },
-    { key: "sent",      label: t("statusSent"),      count: stats.sent },
-    { key: "confirmed", label: t("statusConfirmed"), count: stats.confirmed },
-    { key: "received",  label: t("statusReceived"),  count: stats.received },
     { key: "all",       label: t("tabAll"),          count: stats.total },
+    { key: "draft",     label: t("statusDraft"),     count: stats.draft },
+    { key: "pending",   label: "En attente",         count: stats.pending },
+    { key: "received",  label: t("statusReceived"),  count: stats.received },
+    { key: "cancelled", label: t("statusCancelled"), count: stats.cancelled },
   ]
 
   return (
@@ -260,10 +281,10 @@ export default function AchatsClient({ orders }: Props) {
       <div className="bg-white border-b border-gray-200 px-4 md:px-6 py-3">
         <div className="flex items-stretch gap-1">
           {[
-            { label: t("statusDraft"),     value: stats.draft,     color: stats.draft > 0     ? "text-blue-600"    : "text-gray-300", bg: stats.draft > 0     ? "bg-blue-50"    : "" },
-            { label: "En retard",          value: stats.enRetard,  color: stats.enRetard > 0  ? "text-red-600"     : "text-gray-300", bg: stats.enRetard > 0  ? "bg-red-50"     : "" },
-            { label: t("statusConfirmed"), value: stats.confirmed, color: stats.confirmed > 0 ? "text-green-600"   : "text-gray-300", bg: stats.confirmed > 0 ? "bg-green-50"   : "" },
-            { label: t("statusReceived"),  value: stats.received,  color: stats.received > 0  ? "text-emerald-600" : "text-gray-300", bg: stats.received > 0  ? "bg-emerald-50" : "" },
+            { label: t("statusDraft"),   value: stats.draft,     color: stats.draft > 0    ? "text-gray-600"    : "text-gray-300", bg: stats.draft > 0    ? "bg-gray-100"   : "" },
+            { label: "En retard",        value: stats.enRetard,  color: stats.enRetard > 0 ? "text-red-600"     : "text-gray-300", bg: stats.enRetard > 0 ? "bg-red-50"     : "" },
+            { label: "En attente",       value: stats.pending,   color: stats.pending > 0  ? "text-orange-600"  : "text-gray-300", bg: stats.pending > 0  ? "bg-orange-50"  : "" },
+            { label: t("statusReceived"),value: stats.received,  color: stats.received > 0 ? "text-emerald-600" : "text-gray-300", bg: stats.received > 0 ? "bg-emerald-50" : "" },
           ].map(s => (
             <div key={s.label} className={`flex-1 flex flex-col items-center py-3 px-4 rounded-lg mx-1 ${s.bg}`}>
               <span className={`text-2xl font-bold tabular-nums ${s.color}`}>{s.value}</span>
@@ -327,6 +348,7 @@ export default function AchatsClient({ orders }: Props) {
                   {displayed.map(o => {
                     const cfg = STATUS_CONFIG[o.status] ?? STATUS_CONFIG.draft
                     const date = relativeDate(o.expected_date)
+                    const pct = getReceivePct(o)
                     return (
                       <tr key={o.id} className="hover:bg-blue-50/20 transition-colors group">
                         <td className="px-4 py-3 hidden sm:table-cell">
@@ -372,6 +394,9 @@ export default function AchatsClient({ orders }: Props) {
                           <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${cfg.bg} ${cfg.text}`}>
                             <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
                             {cfg.label}
+                            {pct !== null && (
+                              <span className="ml-0.5 opacity-75">({pct}%)</span>
+                            )}
                           </span>
                         </td>
                       </tr>

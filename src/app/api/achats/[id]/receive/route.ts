@@ -76,6 +76,36 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         warehouse_id: l.warehouse_id,
       }))
     )
+
+    // Incrémenter qty_received sur chaque purchase_order_line
+    for (const l of receptionLines) {
+      if (!l.order_line_id) continue
+      const { data: pol } = await adminDb
+        .from("purchase_order_lines")
+        .select("qty_received")
+        .eq("id", l.order_line_id)
+        .single()
+      if (pol) {
+        await adminDb
+          .from("purchase_order_lines")
+          .update({ qty_received: Number(pol.qty_received ?? 0) + l.quantity })
+          .eq("id", l.order_line_id)
+      }
+    }
+  }
+
+  // 2b. Déterminer le nouveau statut (partial ou received)
+  const { data: orderLines } = await adminDb
+    .from("purchase_order_lines")
+    .select("quantity, qty_received")
+    .eq("order_id", id)
+
+  let newStatus: "partial" | "received" = "received"
+  if (orderLines && orderLines.length > 0) {
+    const allReceived = orderLines.every(
+      ol => Number(ol.qty_received ?? 0) >= Number(ol.quantity ?? 0)
+    )
+    newStatus = allReceived ? "received" : "partial"
   }
 
   // 3. Mouvements de stock
@@ -107,9 +137,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }).eq("id", u.product_id)
   }
 
-  // 5. Statut PO → received
-  const { error: orderErr } = await db.from("purchase_orders").update({ status: "received" }).eq("id", id)
+  // 5. Statut PO → partial ou received
+  const { data: currentOrder } = await db.from("purchase_orders").select("status").eq("id", id).single()
+  const { error: orderErr } = await db.from("purchase_orders").update({ status: newStatus }).eq("id", id)
   if (orderErr) return NextResponse.json({ error: `purchase_orders: ${orderErr.message}` }, { status: 400 })
+
+  // 6. Événement de réception dans l'historique
+  await adminDb.from("purchase_order_events").insert([{
+    order_id:   id,
+    event_type: "reception",
+    payload: {
+      reception_id: reception.id,
+      from:  currentOrder?.status ?? null,
+      to:    newStatus,
+      lines: receptionLines?.map(l => ({
+        order_line_id: l.order_line_id,
+        description:   l.description,
+        quantity:      l.quantity,
+      })) ?? [],
+    },
+    user_id: user?.id ?? null,
+  }])
 
   return NextResponse.json({ ok: true, receptionId: reception.id, receptionNumber, orderNumber: order?.number })
 }

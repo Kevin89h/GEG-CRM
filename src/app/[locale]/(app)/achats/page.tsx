@@ -6,8 +6,7 @@ export default async function AchatsPage() {
 
   const [{ data: orders }, { data: invoices }] = await Promise.all([
     db.from("purchase_orders")
-      .select("id, number, supplier_name, status, currency, order_date, expected_date, user_id, lines:purchase_order_lines(quantity, fob_unit_price)")
-      .neq("status", "cancelled")
+      .select("id, number, supplier_name, status, currency, order_date, expected_date, user_id, lines:purchase_order_lines(quantity, fob_unit_price, qty_received)")
       .order("created_at", { ascending: false }),
     db.from("supplier_invoices")
       .select("id, number, purchase_order_id, status")
@@ -23,7 +22,7 @@ export default async function AchatsPage() {
     order_date: string | null
     expected_date: string | null
     user_id: string | null
-    lines: { quantity: number; fob_unit_price: number }[]
+    lines: { quantity: number; fob_unit_price: number; qty_received: number }[]
   }
 
   type InvoiceRef = { id: string; number: string; purchase_order_id: string; status: string }
@@ -51,6 +50,10 @@ export default async function AchatsPage() {
       user_id: o.user_id,
       total,
       invoice,
+      purchase_order_lines: (o.lines ?? []).map(l => ({
+        quantity: l.quantity,
+        qty_received: l.qty_received ?? 0,
+      })),
     }
   })
 

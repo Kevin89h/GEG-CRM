@@ -131,7 +131,8 @@ export async function renderFacturePdf(props: Props): Promise<Buffer> {
   const balance = totalTTC - totalPaid
 
   const fmtAmt = (n: number) => `${fmt(Math.round(n))} ${cur}`
-  const relevantAccounts = bankAccounts.filter(a => a.currency === "GNF")
+  const sameCurrency = bankAccounts.filter(a => a.currency === currency)
+  const relevantAccounts = sameCurrency.length > 0 ? sameCurrency : bankAccounts
   const currencies = Array.from(new Set(relevantAccounts.map(a => a.currency)))
 
   const s = StyleSheet.create({

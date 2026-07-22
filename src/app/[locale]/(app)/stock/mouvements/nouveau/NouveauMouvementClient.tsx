@@ -87,6 +87,14 @@ export default function NouveauMouvementClient({ warehouses, products, stockLeve
     },
   }
 
+  const MOTIFS: Record<"damaged" | "lost" | "destroyed", string[]> = {
+    damaged: ["Chute", "Eau/humidité", "Accident manutention", "Détérioration transport", "Autre"],
+    lost: ["Vol", "Perte inventaire", "Erreur comptage", "Autre"],
+    destroyed: ["Périmé/expiré", "Non conforme", "Défaut qualité", "Autre"],
+  }
+
+  const LOSS_TYPES: MoveType[] = ["damaged", "lost", "destroyed"]
+
   const [type, setType] = useState<MoveType>(
     (VALID_TYPES.includes(initialType as MoveType) ? initialType : "in") as MoveType
   )
@@ -96,6 +104,8 @@ export default function NouveauMouvementClient({ warehouses, products, stockLeve
     to_warehouse_id: warehouses[0]?.id ?? "",
     quantity: "",
     note: "",
+    motif: "",
+    valeur_unitaire: "",
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -122,10 +132,26 @@ export default function NouveauMouvementClient({ warehouses, products, stockLeve
     setForm(f => ({ ...f, [key]: value }))
   }
 
+  const isLossType = LOSS_TYPES.includes(type as "damaged" | "lost" | "destroyed")
+
+  function buildNotes(): string | null {
+    if (isLossType) {
+      const payload: Record<string, unknown> = { motif: form.motif }
+      if (form.valeur_unitaire !== "") payload.valeur_unitaire = parseFloat(form.valeur_unitaire)
+      if (form.note) payload.commentaire = form.note
+      return JSON.stringify(payload)
+    }
+    return form.note || null
+  }
+
   function handleSave() {
     if (!form.product_id || form.quantity === "") return
     if (cfg.needsFrom && !form.from_warehouse_id) return
     if (cfg.needsTo && !form.to_warehouse_id) return
+    if (isLossType && !form.motif) {
+      setError("Le motif est obligatoire")
+      return
+    }
 
     const qty = parseFloat(form.quantity)
     if (isNaN(qty) || qty < 0) {
@@ -158,7 +184,7 @@ export default function NouveauMouvementClient({ warehouses, products, stockLeve
         type,
         product_id: form.product_id,
         quantity: qty,
-        notes: form.note || null,
+        notes: buildNotes(),
         from_warehouse_id: cfg.needsFrom ? form.from_warehouse_id : null,
         to_warehouse_id: cfg.needsTo ? form.to_warehouse_id : null,
         user_id: user.id,
@@ -178,7 +204,8 @@ export default function NouveauMouvementClient({ warehouses, products, stockLeve
   const isValid = form.product_id && (form.quantity !== "" && !isNaN(parseFloat(form.quantity)) && parseFloat(form.quantity) >= 0) &&
     (!cfg.needsFrom || form.from_warehouse_id) &&
     (!cfg.needsTo || form.to_warehouse_id) &&
-    (type !== "transfer" || form.from_warehouse_id !== form.to_warehouse_id)
+    (type !== "transfer" || form.from_warehouse_id !== form.to_warehouse_id) &&
+    (!isLossType || !!form.motif)
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -186,7 +213,9 @@ export default function NouveauMouvementClient({ warehouses, products, stockLeve
         <ArrowLeft className="w-4 h-4" /> {t("backToStock")}
       </Link>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">{t("pageTitle")}</h1>
+        <h1 className="text-2xl font-bold text-gray-900">
+          {isLossType ? "Enregistrer une perte / casse / rebut" : t("pageTitle")}
+        </h1>
         <p className="text-gray-500 text-sm mt-0.5">{t("pageSubtitle")}</p>
       </div>
 
@@ -297,8 +326,38 @@ export default function NouveauMouvementClient({ warehouses, products, stockLeve
           <p className="text-xs text-red-600">{t("errorSameWarehouse")}</p>
         )}
 
+        {isLossType && (
+          <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 space-y-3">
+            <p className="text-xs font-semibold text-yellow-800 uppercase tracking-wide">Détails de la perte</p>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Motif <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={form.motif}
+                onChange={e => set("motif", e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+              >
+                <option value="">-- Sélectionner un motif --</option>
+                {(MOTIFS[type as "damaged" | "lost" | "destroyed"] ?? []).map(m => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+            </div>
+            <Input
+              label="Valeur unitaire estimée (optionnel)"
+              type="number"
+              min="0"
+              step="any"
+              value={form.valeur_unitaire}
+              onChange={e => set("valeur_unitaire", e.target.value)}
+              placeholder="0.00"
+            />
+          </div>
+        )}
+
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">{t("labelNote")}</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">{isLossType ? "Commentaire (optionnel)" : t("labelNote")}</label>
           <textarea
             value={form.note}
             onChange={e => set("note", e.target.value)}
@@ -354,9 +413,21 @@ export default function NouveauMouvementClient({ warehouses, products, stockLeve
                 <span className="font-medium text-gray-900">{warehouses.find(w => w.id === form.to_warehouse_id)?.name ?? "—"}</span>
               </div>
             )}
+            {isLossType && form.motif && (
+              <div className="flex justify-between">
+                <span className="text-gray-500">Motif</span>
+                <span className="font-medium text-gray-900 text-right max-w-xs">{form.motif}</span>
+              </div>
+            )}
+            {isLossType && form.valeur_unitaire && (
+              <div className="flex justify-between">
+                <span className="text-gray-500">Valeur unitaire</span>
+                <span className="font-medium text-gray-900">{parseFloat(form.valeur_unitaire).toLocaleString("fr")} GNF</span>
+              </div>
+            )}
             {form.note && (
               <div className="flex justify-between">
-                <span className="text-gray-500">Note</span>
+                <span className="text-gray-500">{isLossType ? "Commentaire" : "Note"}</span>
                 <span className="font-medium text-gray-900 text-right max-w-xs">{form.note}</span>
               </div>
             )}
