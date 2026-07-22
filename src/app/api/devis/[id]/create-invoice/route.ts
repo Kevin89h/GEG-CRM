@@ -13,12 +13,13 @@ interface OrderLine {
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const body = await req.json()
-  const { account_id, currency, tva, lines, user_id } = body as {
+  const { account_id, currency, tva, lines, user_id, payment_terms } = body as {
     account_id: string | null
     currency: string
     tva: boolean
     lines: OrderLine[]
     user_id: string
+    payment_terms?: string | null
   }
 
   const { db } = await createCompanyClient()
@@ -31,7 +32,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const number = `FAC-${year}-${month}-${seq}`
 
   const today = now.toISOString().split("T")[0]
-  const due = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]
+
+  function dueDateFromTerms(terms: string | null | undefined): string {
+    const days =
+      !terms || terms === "immediate" || terms === "immédiat" || terms === "Immédiat" ? 0
+      : terms === "30j" ? 30
+      : terms === "60j" ? 60
+      : terms === "90j" ? 90
+      : 30
+    const d = new Date(now)
+    d.setDate(d.getDate() + days)
+    return d.toISOString().split("T")[0]
+  }
+
+  const due = dueDateFromTerms(payment_terms)
 
   const { data: invoice, error: invErr } = await db.from("invoices").insert([{
     number,

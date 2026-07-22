@@ -304,6 +304,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
         account_id: order.account?.id ?? null,
         currency: order.currency,
         tva,
+        payment_terms: order.payment_terms ?? null,
         lines: lines.map(l => ({
           description: l.description,
           quantity: l.quantity,
