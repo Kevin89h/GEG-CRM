@@ -87,6 +87,16 @@ export default function FacturesFournisseursListClient({
   const totalPending = filtered.filter(i => i.status === "pending" || i.status === "partial").reduce((s, i) => s + Number(i.balance ?? i.total_ttc), 0)
   const totalPaid = filtered.filter(i => i.status === "paid").reduce((s, i) => s + Number(i.total_ttc), 0)
 
+  const selectionTotals = useMemo(() => {
+    if (selected.size === 0) return null
+    const totals: Record<string, number> = {}
+    for (const inv of filtered) {
+      if (!selected.has(inv.id)) continue
+      totals[inv.currency] = (totals[inv.currency] ?? 0) + Number(inv.balance ?? inv.total_ttc)
+    }
+    return totals
+  }, [selected, filtered])
+
   function SortIcon({ k }: { k: SortKey }) {
     if (sortKey !== k) return <ChevronDown className="w-3 h-3 text-gray-300 inline ml-1" />
     return sortDir === "asc"
@@ -211,31 +221,23 @@ export default function FacturesFournisseursListClient({
       </div>
 
       {/* Bandeau sous-total sélection */}
-      {selected.size > 0 && (() => {
-        const selInvoices = filtered.filter(i => selected.has(i.id))
-        const byCurrency = selInvoices.reduce<Record<string, number>>((acc, i) => {
-          const key = i.currency
-          acc[key] = (acc[key] ?? 0) + Number(i.balance ?? i.total_ttc)
-          return acc
-        }, {})
-        return (
-          <div className="mb-3 flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-5 py-3">
-            <span className="text-sm font-medium text-blue-700">
-              {selected.size} facture{selected.size > 1 ? "s" : ""} sélectionnée{selected.size > 1 ? "s" : ""}
-            </span>
-            <div className="flex items-center gap-4">
-              {Object.entries(byCurrency).map(([cur, total]) => (
-                <span key={cur} className="text-sm font-bold text-blue-900">
-                  {total.toLocaleString("fr")} {cur}
-                </span>
-              ))}
-              <button onClick={() => setSelected(new Set())} className="text-blue-400 hover:text-blue-700 ml-2">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+      {selectionTotals && (
+        <div className="mb-3 flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-5 py-3">
+          <span className="text-sm font-medium text-blue-700">
+            {selected.size} facture{selected.size > 1 ? "s" : ""} sélectionnée{selected.size > 1 ? "s" : ""}
+          </span>
+          <div className="flex items-center gap-4">
+            {Object.entries(selectionTotals).map(([cur, total]) => (
+              <span key={cur} className="text-sm font-bold text-blue-900">
+                {total.toLocaleString("fr")} {cur}
+              </span>
+            ))}
+            <button onClick={() => setSelected(new Set())} className="text-blue-400 hover:text-blue-700 ml-2">
+              <X className="w-4 h-4" />
+            </button>
           </div>
-        )
-      })()}
+        </div>
+      )}
 
       {/* Table */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
