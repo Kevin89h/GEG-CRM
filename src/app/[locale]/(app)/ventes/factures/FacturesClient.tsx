@@ -74,6 +74,19 @@ export default function FacturesClient({ invoices }: Props) {
   const [filterOverdue, setFilterOverdue] = useState(false)
   const [sortField, setSortField] = useState<SortField>("issue_date")
   const [sortDir, setSortDir] = useState<SortDir>("desc")
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+
+  function toggleSelect(id: string) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  function toggleAll() {
+    setSelected(prev => prev.size === displayed.length ? new Set() : new Set(displayed.map(i => i.id)))
+  }
 
   function handleSort(field: SortField) {
     if (sortField === field) setSortDir(d => d === "asc" ? "desc" : "asc")
@@ -156,6 +169,16 @@ export default function FacturesClient({ invoices }: Props) {
   ]
 
   const showPayments = tab !== "brouillons"
+
+  const selectionTotals = useMemo(() => {
+    if (selected.size === 0) return null
+    const totals: Record<string, number> = {}
+    for (const inv of displayed) {
+      if (!selected.has(inv.id)) continue
+      totals[inv.currency] = (totals[inv.currency] ?? 0) + Number(inv.balance ?? inv.total_ht)
+    }
+    return totals
+  }, [selected, displayed])
 
   return (
     <div className="-m-6 min-h-screen bg-gray-50/50">
@@ -267,6 +290,23 @@ export default function FacturesClient({ invoices }: Props) {
         </div>
       </div>
 
+      {/* Bandeau sous-total sélection */}
+      {selectionTotals && (
+        <div className="mx-6 mt-4 flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-5 py-3">
+          <span className="text-sm font-medium text-blue-700">
+            {selected.size} facture{selected.size > 1 ? "s" : ""} sélectionnée{selected.size > 1 ? "s" : ""}
+          </span>
+          <div className="flex items-center gap-4">
+            {Object.entries(selectionTotals).map(([cur, total]) => (
+              <span key={cur} className="text-sm font-bold text-blue-900">
+                {formatCurrency(total, cur as "GNF" | "USD" | "EUR")}
+              </span>
+            ))}
+            <button onClick={() => setSelected(new Set())} className="text-blue-400 hover:text-blue-700 ml-2 text-lg leading-none">×</button>
+          </div>
+        </div>
+      )}
+
       {/* Table */}
       <div className="px-6 py-4">
         {displayed.length === 0 ? (
@@ -281,7 +321,12 @@ export default function FacturesClient({ invoices }: Props) {
               <thead className="sticky top-0 z-10">
                 <tr className="bg-gray-50 border-b border-gray-200 text-xs text-gray-500 font-medium">
                   <th className="w-8 px-4 py-3">
-                    <input type="checkbox" className="rounded border-gray-300" />
+                    <input
+                      type="checkbox"
+                      checked={selected.size === displayed.length && displayed.length > 0}
+                      onChange={toggleAll}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
                   </th>
                   <th className="text-left px-4 py-3">
                     <button onClick={() => handleSort("number")} className="flex items-center hover:text-gray-900 transition">
@@ -326,9 +371,14 @@ export default function FacturesClient({ invoices }: Props) {
                   const due = relativeDate(i.due_date)
                   const isOpen = openStatuses.includes(i.status)
                   return (
-                    <tr key={i.id} className={`hover:bg-blue-50/20 transition-colors ${due.overdue && isOpen ? "bg-red-50/20" : ""}`}>
-                      <td className="px-4 py-3">
-                        <input type="checkbox" className="rounded border-gray-300" />
+                    <tr key={i.id} onClick={() => toggleSelect(i.id)} className={`cursor-pointer hover:bg-blue-50/20 transition-colors ${selected.has(i.id) ? "bg-blue-50" : due.overdue && isOpen ? "bg-red-50/20" : ""}`}>
+                      <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={selected.has(i.id)}
+                          onChange={() => toggleSelect(i.id)}
+                          className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
                       </td>
                       <td className="px-4 py-3">
                         <Link href={`/${locale}/ventes/factures/${i.id}`} className="font-mono font-semibold text-blue-600 hover:underline text-xs">
