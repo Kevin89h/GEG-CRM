@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createCompanyClient } from "@/lib/company"
+import { createAdminClient } from "@/lib/supabase/admin"
+import { getCompanySchema } from "@/lib/company"
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const body = await req.json()
-  const { db } = await createCompanyClient()
-  const { data, error } = await db
+  const schema = await getCompanySchema()
+  const admin = createAdminClient().schema(schema)
+  const { data, error } = await admin
     .from("suppliers")
     .update({
       name: body.name,
@@ -31,8 +33,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const { db } = await createCompanyClient()
-  const { error } = await db
+  const schema = await getCompanySchema()
+  const admin = createAdminClient().schema(schema)
+  const { error } = await admin
     .from("suppliers")
     .update({ is_active: false, updated_at: new Date().toISOString() })
     .eq("id", id)

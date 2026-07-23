@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createCompanyClient } from "@/lib/company"
+import { createAdminClient } from "@/lib/supabase/admin"
+import { getCompanySchema } from "@/lib/company"
 
 export async function GET() {
-  const { db } = await createCompanyClient()
-  const { data, error } = await db
+  const schema = await getCompanySchema()
+  const admin = createAdminClient().schema(schema)
+  const { data, error } = await admin
     .from("suppliers")
     .select("id, name, email, phone, country, city, payment_terms, currency, iban, swift, bank_name, notes, is_active")
     .eq("is_active", true)
@@ -14,8 +16,9 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
-  const { db } = await createCompanyClient()
-  const { data, error } = await db
+  const schema = await getCompanySchema()
+  const admin = createAdminClient().schema(schema)
+  const { data, error } = await admin
     .from("suppliers")
     .insert([{
       name: body.name,
