@@ -162,7 +162,7 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
     { key: "confirmed", label: t("statusConfirmed") },
   ]
 
-  const isDraft = order.status === "draft"
+  const isDraft = !["received", "cancelled"].includes(order.status)
   const isReceived = order.status === "received"
   const cur = order.currency as "USD" | "GNF" | "EUR"
   const stepIndex = getStepIndex(order.status)
