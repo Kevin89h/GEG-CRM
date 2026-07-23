@@ -90,7 +90,7 @@ export async function POST(req: Request) {
     }
 
     if (pay_immediately && treasury_account_id) {
-      await db.from("treasury_transactions").insert([{
+      const { error: txErr } = await db.from("treasury_transactions").insert([{
         account_id: treasury_account_id,
         type: "debit",
         amount: total_ttc,
@@ -100,6 +100,7 @@ export async function POST(req: Request) {
         category: "achat",
         date: invoice_date,
       }])
+      if (txErr) console.error("treasury_transactions insert failed:", txErr.message)
     }
 
     return NextResponse.json({ id: invoice.id, number })

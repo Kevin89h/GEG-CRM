@@ -44,9 +44,10 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   if (orderErr || !newOrder) return NextResponse.json({ error: orderErr?.message }, { status: 400 })
 
   if (sourceLines && sourceLines.length > 0) {
-    await db.from("sales_order_lines").insert(
+    const { error: linesErr } = await db.from("sales_order_lines").insert(
       sourceLines.map(l => ({ ...l, order_id: newOrder.id }))
     )
+    if (linesErr) return NextResponse.json({ error: linesErr.message }, { status: 400 })
   }
 
   return NextResponse.json({ id: newOrder.id })

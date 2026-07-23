@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient as createAdminSupabase } from "@supabase/supabase-js"
-import { createCompanyClient } from "@/lib/company"
 import { createClient } from "@/lib/supabase/server"
 import { getCompanySchema } from "@/lib/company"
 
@@ -40,7 +39,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  const { db } = await createCompanyClient()
   const schema = await getCompanySchema()
   const adminDb = createAdminSupabase(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -48,7 +46,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   ).schema(schema)
 
   // 1. Créer le bon de réception (admin pour bypasser RLS)
-  const { data: order } = await db.from("purchase_orders").select("number").eq("id", id).single()
+  const { data: order } = await adminDb.from("purchase_orders").select("number").eq("id", id).single()
   const { count } = await adminDb.from("purchase_receptions").select("id", { count: "exact", head: true })
   const receptionNumber = `BR/${new Date().getFullYear()}/${String((count ?? 0) + 1).padStart(5, "0")}`
 
@@ -110,36 +108,37 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   // 3. Mouvements de stock
   if (stockMoves.length > 0) {
-    const { error: moveErr } = await db.from("stock_moves").insert(stockMoves)
+    const { error: moveErr } = await adminDb.from("stock_moves").insert(stockMoves)
     if (moveErr) return NextResponse.json({ error: `stock_moves: ${moveErr.message}` }, { status: 400 })
 
     for (const m of stockMoves) {
       if (!m.product_id || !m.to_warehouse_id) continue
-      const { data: level } = await db
+      const { data: level } = await adminDb
         .from("stock_levels")
         .select("quantity")
         .eq("product_id", m.product_id)
         .eq("warehouse_id", m.to_warehouse_id)
         .maybeSingle()
       const current = Number(level?.quantity ?? 0)
-      await db.from("stock_levels").upsert(
+      const { error: upsertErr } = await adminDb.from("stock_levels").upsert(
         { product_id: m.product_id, warehouse_id: m.to_warehouse_id, quantity: current + m.quantity },
         { onConflict: "product_id,warehouse_id" }
       )
+      if (upsertErr) return NextResponse.json({ error: `stock_levels: ${upsertErr.message}` }, { status: 400 })
     }
   }
 
   // 4. Mise à jour prix d'achat produits
   for (const u of productUpdates) {
-    await db.from("products").update({
+    await adminDb.from("products").update({
       buy_price: u.buy_price,
       buy_price_currency: u.buy_price_currency,
     }).eq("id", u.product_id)
   }
 
   // 5. Statut PO → partial ou received
-  const { data: currentOrder } = await db.from("purchase_orders").select("status").eq("id", id).single()
-  const { error: orderErr } = await db.from("purchase_orders").update({ status: newStatus }).eq("id", id)
+  const { data: currentOrder } = await adminDb.from("purchase_orders").select("status").eq("id", id).single()
+  const { error: orderErr } = await adminDb.from("purchase_orders").update({ status: newStatus }).eq("id", id)
   if (orderErr) return NextResponse.json({ error: `purchase_orders: ${orderErr.message}` }, { status: 400 })
 
   // 6. Événement de réception dans l'historique
