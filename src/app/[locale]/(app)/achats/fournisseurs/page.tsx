@@ -1,12 +1,15 @@
-import { createCompanyClient } from "@/lib/company"
+import { createCompanyClient, getCompanySchema } from "@/lib/company"
+import { createAdminClient } from "@/lib/supabase/admin"
 import FournisseursAchatsClient from "./FournisseursAchatsClient"
 
 export default async function FournisseursAchatsPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params
   const { db } = await createCompanyClient()
+  const schema = await getCompanySchema()
+  const admin = createAdminClient().schema(schema)
 
   const [{ data: suppliers }, { data: orderStats }] = await Promise.all([
-    db.from("suppliers").select("id, name, email, phone, country, city, payment_terms, currency, iban, swift, bank_name, notes, is_active").eq("is_active", true).order("name"),
+    admin.from("suppliers").select("id, name, email, phone, country, city, payment_terms, currency, iban, swift, bank_name, notes, is_active").eq("is_active", true).order("name"),
     db.from("purchase_orders").select("supplier_id, total").not("supplier_id", "is", null),
   ])
 

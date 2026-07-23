@@ -1,4 +1,5 @@
-import { createCompanyClient } from "@/lib/company"
+import { createCompanyClient, getCompanySchema } from "@/lib/company"
+import { createAdminClient } from "@/lib/supabase/admin"
 import NouvelleFactureFournisseurClient from "./NouvelleFactureFournisseurClient"
 
 interface PageProps {
@@ -10,10 +11,12 @@ export default async function NouvelleFactureFournisseurPage({ params, searchPar
   const { locale } = await params
   const sp = await searchParams
   const { db } = await createCompanyClient()
+  const schema = await getCompanySchema()
+  const admin = createAdminClient().schema(schema)
 
   const [{ data: treasuryAccounts }, { data: suppliersData }] = await Promise.all([
     db.from("treasury_accounts").select("id, name, type, currency").eq("is_active", true).order("name"),
-    db.from("suppliers").select("id, name, currency, payment_terms").eq("is_active", true).order("name"),
+    admin.from("suppliers").select("id, name, currency, payment_terms").eq("is_active", true).order("name"),
   ])
 
   const suppliers = (suppliersData ?? []).map(s => ({
