@@ -199,6 +199,13 @@ export default function AchatsClient({ orders }: Props) {
           <Plus className="w-3.5 h-3.5" /> {t("btnNew")}
         </Link>
 
+        <Link
+          href={`/${locale}/achats/fournisseurs`}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded border border-gray-200 text-gray-600 hover:bg-gray-50 transition"
+        >
+          Fournisseurs
+        </Link>
+
         <button
           onClick={() => exportToXls(displayed.map(o => ({
             "Numéro":     o.number,

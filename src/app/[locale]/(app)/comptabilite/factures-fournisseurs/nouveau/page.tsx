@@ -11,11 +11,17 @@ export default async function NouvelleFactureFournisseurPage({ params, searchPar
   const sp = await searchParams
   const { db } = await createCompanyClient()
 
-  const { data: treasuryAccounts } = await db
-    .from("treasury_accounts")
-    .select("id, name, type, currency")
-    .eq("is_active", true)
-    .order("name")
+  const [{ data: treasuryAccounts }, { data: suppliersData }] = await Promise.all([
+    db.from("treasury_accounts").select("id, name, type, currency").eq("is_active", true).order("name"),
+    db.from("suppliers").select("id, name, currency, payment_terms").eq("is_active", true).order("name"),
+  ])
+
+  const suppliers = (suppliersData ?? []).map(s => ({
+    id: s.id,
+    name: s.name,
+    currency: s.currency ?? "USD",
+    payment_terms: s.payment_terms ?? null,
+  }))
 
   // Pré-remplissage depuis un bon de commande
   let prefill = null
@@ -26,7 +32,7 @@ export default async function NouvelleFactureFournisseurPage({ params, searchPar
         .eq("order_id", sp.order_id)
         .order("position"),
       db.from("purchase_orders")
-        .select("global_discount_pct")
+        .select("global_discount_pct, supplier_id")
         .eq("id", sp.order_id)
         .single(),
     ])
@@ -38,6 +44,7 @@ export default async function NouvelleFactureFournisseurPage({ params, searchPar
       order_id: sp.order_id,
       reception_id: sp.reception_id ?? null,
       supplier: sp.supplier ?? "",
+      supplier_id: po?.supplier_id ?? null,
       currency: sp.currency ?? "GNF",
       reference: sp.reference ?? "",
       lines: (poLines ?? []).map(l => ({
@@ -54,6 +61,7 @@ export default async function NouvelleFactureFournisseurPage({ params, searchPar
       locale={locale}
       treasuryAccounts={treasuryAccounts ?? []}
       prefill={prefill}
+      suppliers={suppliers}
     />
   )
 }

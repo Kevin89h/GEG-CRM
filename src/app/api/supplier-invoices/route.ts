@@ -5,7 +5,7 @@ export async function POST(req: Request) {
   try {
     const body = await req.json()
     const {
-      supplier_name, currency, invoice_date, due_date, reference, notes,
+      supplier_name, supplier_id, currency, invoice_date, due_date, reference, notes,
       total_ht, tax_amount, total_ttc, status,
       lines,
       pay_immediately, treasury_account_id, payment_method,
@@ -43,6 +43,7 @@ export async function POST(req: Request) {
         .insert([{
           number,
           supplier_name: supplier_name.trim(),
+          supplier_id: supplier_id || null,
           currency,
           invoice_date,
           due_date: due_date || null,

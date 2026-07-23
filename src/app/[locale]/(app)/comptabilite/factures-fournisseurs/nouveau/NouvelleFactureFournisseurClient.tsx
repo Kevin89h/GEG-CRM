@@ -1,14 +1,15 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { Plus, Trash2, ArrowLeft, FileText } from "lucide-react"
+import { Plus, Trash2, ArrowLeft, FileText, ChevronDown, X } from "lucide-react"
 import Link from "next/link"
 
 interface TreasuryAccount { id: string; name: string; type: string; currency: string }
 interface PrefillLine { description: string; quantity: string; unit_price: string; tax_rate: string }
-interface Prefill { order_id: string; reception_id: string | null; supplier: string; currency: string; reference: string; lines?: PrefillLine[] }
-interface Props { locale: string; treasuryAccounts: TreasuryAccount[]; prefill?: Prefill | null }
+interface Prefill { order_id: string; reception_id: string | null; supplier: string; supplier_id?: string | null; currency: string; reference: string; lines?: PrefillLine[] }
+interface SupplierOption { id: string; name: string; currency: string; payment_terms: string | null }
+interface Props { locale: string; treasuryAccounts: TreasuryAccount[]; prefill?: Prefill | null; suppliers: SupplierOption[] }
 
 interface Line {
   id: number
@@ -24,11 +25,15 @@ const newLine = (): Line => ({ id: uid(), description: "", quantity: "1", unit_p
 
 type Currency = "GNF" | "USD" | "EUR"
 
-export default function NouvelleFactureFournisseurClient({ locale, treasuryAccounts, prefill }: Props) {
+const QUICK_FORM_EMPTY = { name: "", currency: "USD", payment_terms: "" }
+
+export default function NouvelleFactureFournisseurClient({ locale, treasuryAccounts, prefill, suppliers: initialSuppliers }: Props) {
   const router = useRouter()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [suppliers, setSuppliers] = useState<SupplierOption[]>(initialSuppliers)
   const [form, setForm] = useState({
+    supplier_id: prefill?.supplier_id ?? "",
     supplier_name: prefill?.supplier ?? "",
     currency: (prefill?.currency ?? "GNF") as Currency,
     invoice_date: new Date().toISOString().split("T")[0],
@@ -44,6 +49,62 @@ export default function NouvelleFactureFournisseurClient({ locale, treasuryAccou
       ? prefill.lines.map(l => ({ id: uid(), description: l.description, quantity: l.quantity, unit_price: l.unit_price, tax_rate: l.tax_rate }))
       : [newLine()]
   )
+
+  // Supplier dropdown
+  const [supplierSearch, setSupplierSearch] = useState("")
+  const [showDropdown, setShowDropdown] = useState(false)
+  const [showQuickCreate, setShowQuickCreate] = useState(false)
+  const [quickForm, setQuickForm] = useState(QUICK_FORM_EMPTY)
+  const [quickSaving, setQuickSaving] = useState(false)
+  const supplierRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (supplierRef.current && !supplierRef.current.contains(e.target as Node)) {
+        setShowDropdown(false)
+      }
+    }
+    document.addEventListener("mousedown", onClickOutside)
+    return () => document.removeEventListener("mousedown", onClickOutside)
+  }, [])
+
+  const filteredSuppliers = supplierSearch.length >= 1
+    ? suppliers.filter(s => s.name.toLowerCase().includes(supplierSearch.toLowerCase()))
+    : suppliers.slice(0, 10)
+
+  const selectedSupplier = form.supplier_id ? suppliers.find(s => s.id === form.supplier_id) : null
+
+  function selectSupplier(s: SupplierOption) {
+    setForm(f => ({ ...f, supplier_id: s.id, supplier_name: s.name, currency: (s.currency as Currency) ?? f.currency }))
+    setSupplierSearch("")
+    setShowDropdown(false)
+  }
+
+  function clearSupplier() {
+    setForm(f => ({ ...f, supplier_id: "", supplier_name: "" }))
+    setSupplierSearch("")
+  }
+
+  async function handleQuickCreate() {
+    if (!quickForm.name.trim()) return
+    setQuickSaving(true)
+    try {
+      const res = await fetch("/api/suppliers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: quickForm.name.trim(), currency: quickForm.currency, payment_terms: quickForm.payment_terms || null }),
+      })
+      const json = await res.json()
+      if (!res.ok) return
+      const newSupplier: SupplierOption = { id: json.id, name: json.name, currency: json.currency ?? "USD", payment_terms: json.payment_terms ?? null }
+      setSuppliers(list => [...list, newSupplier].sort((a, b) => a.name.localeCompare(b.name)))
+      selectSupplier(newSupplier)
+      setShowQuickCreate(false)
+      setQuickForm(QUICK_FORM_EMPTY)
+    } finally {
+      setQuickSaving(false)
+    }
+  }
 
   function setF<K extends keyof typeof form>(k: K, v: typeof form[K]) {
     setForm(f => ({ ...f, [k]: v }))
@@ -80,6 +141,7 @@ export default function NouvelleFactureFournisseurClient({ locale, treasuryAccou
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         supplier_name: form.supplier_name.trim(),
+        supplier_id: form.supplier_id || null,
         currency: form.currency,
         invoice_date: form.invoice_date,
         due_date: form.due_date || null,
@@ -129,15 +191,56 @@ export default function NouvelleFactureFournisseurClient({ locale, treasuryAccou
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
           <h2 className="font-semibold text-gray-800 mb-4">Informations fournisseur</h2>
           <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
+
+            {/* Supplier selector */}
+            <div className="col-span-2 relative" ref={supplierRef}>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Fournisseur *</label>
-              <input
-                value={form.supplier_name}
-                onChange={e => setF("supplier_name", e.target.value)}
-                placeholder="Nom du fournisseur"
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+              {selectedSupplier ? (
+                <div className="flex items-center gap-2 px-3 py-2 border border-blue-300 rounded-lg bg-blue-50">
+                  <span className="flex-1 text-sm font-medium text-blue-900">{selectedSupplier.name}</span>
+                  {selectedSupplier.payment_terms && (
+                    <span className="text-xs text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded">{selectedSupplier.payment_terms}</span>
+                  )}
+                  <button onClick={clearSupplier} className="text-blue-400 hover:text-blue-700 transition">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <div className="relative">
+                    <input
+                      value={supplierSearch}
+                      onChange={e => { setSupplierSearch(e.target.value); setShowDropdown(true) }}
+                      onFocus={() => setShowDropdown(true)}
+                      placeholder={prefill?.supplier ? prefill.supplier : "Rechercher un fournisseur…"}
+                      className="w-full px-3 py-2 pr-8 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                  </div>
+                  {showDropdown && (
+                    <ul className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+                      {filteredSuppliers.length > 0
+                        ? filteredSuppliers.map(s => (
+                          <li key={s.id}
+                            onMouseDown={() => selectSupplier(s)}
+                            className="px-3 py-2 text-sm text-gray-800 hover:bg-blue-50 cursor-pointer flex items-center justify-between">
+                            <span>{s.name}</span>
+                            <span className="text-xs text-gray-400">{s.currency}</span>
+                          </li>
+                        ))
+                        : <li className="px-3 py-2 text-xs text-gray-400">Aucun fournisseur trouvé</li>
+                      }
+                      <li
+                        onMouseDown={() => { setShowDropdown(false); setShowQuickCreate(true); setQuickForm(f => ({ ...f, name: supplierSearch })) }}
+                        className="px-3 py-2 text-sm text-[#7c3aed] hover:bg-purple-50 cursor-pointer flex items-center gap-1.5 border-t border-gray-100 font-medium">
+                        <Plus className="w-3.5 h-3.5" /> Nouveau fournisseur
+                      </li>
+                    </ul>
+                  )}
+                </div>
+              )}
             </div>
+
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Date de facturation</label>
               <input type="date" value={form.invoice_date}
@@ -297,6 +400,57 @@ export default function NouvelleFactureFournisseurClient({ locale, treasuryAccou
           </button>
         </div>
       </div>
+
+      {/* Quick-create supplier modal */}
+      {showQuickCreate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h3 className="font-semibold text-gray-900">Nouveau fournisseur</h3>
+              <button onClick={() => setShowQuickCreate(false)} className="text-gray-400 hover:text-gray-700">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Nom *</label>
+                <input value={quickForm.name} onChange={e => setQuickForm(f => ({ ...f, name: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Devise</label>
+                <select value={quickForm.currency} onChange={e => setQuickForm(f => ({ ...f, currency: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="USD">USD</option>
+                  <option value="GNF">GNF</option>
+                  <option value="EUR">EUR</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Conditions de paiement</label>
+                <select value={quickForm.payment_terms} onChange={e => setQuickForm(f => ({ ...f, payment_terms: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">— Non défini —</option>
+                  <option value="immediate">Immédiat</option>
+                  <option value="30j">30 jours</option>
+                  <option value="60j">60 jours</option>
+                  <option value="90j">90 jours</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
+              <button onClick={() => setShowQuickCreate(false)}
+                className="px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">
+                Annuler
+              </button>
+              <button onClick={handleQuickCreate} disabled={quickSaving || !quickForm.name.trim()}
+                className="px-3 py-2 text-sm bg-[#7c3aed] text-white font-medium rounded-lg hover:bg-[#6d28d9] disabled:opacity-50 transition">
+                {quickSaving ? "Création…" : "Créer"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

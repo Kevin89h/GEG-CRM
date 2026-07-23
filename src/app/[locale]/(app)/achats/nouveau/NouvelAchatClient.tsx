@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { Plus, Trash2, ArrowLeft, Info, RefreshCw } from "lucide-react"
+import { Plus, Trash2, ArrowLeft, Info, RefreshCw, ChevronDown, X } from "lucide-react"
 import Link from "next/link"
 import { useTranslations } from "next-intl"
 import { Button } from "@/components/ui/Button"
@@ -11,7 +11,8 @@ import { Select } from "@/components/ui/Select"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 
 interface Product { id: string; name: string; reference: string | null; buy_price: number | null }
-interface Props { products: Product[]; suppliers: string[]; locale: string }
+interface Supplier { id: string; name: string; currency: string; payment_terms: string | null }
+interface Props { products: Product[]; suppliers: Supplier[]; locale: string }
 
 const STORAGE_KEY = "nouvel_achat_draft"
 
@@ -27,6 +28,7 @@ let _lid = 0
 const nextId = () => ++_lid
 
 const DEFAULT_FORM = {
+  supplier_id: "",
   supplier_name: "",
   currency: "GNF" as "USD" | "GNF" | "EUR",
   incoterm: "CIF",
@@ -42,39 +44,18 @@ const DEFAULT_LINES: Line[] = [
   { id: nextId(), product_id: "", description: "", quantity: "1", unit_price: "0" },
 ]
 
-export default function NouvelAchatClient({ products: initialProducts, suppliers, locale }: Props) {
+const QUICK_FORM_EMPTY = { name: "", currency: "USD", payment_terms: "" }
+
+export default function NouvelAchatClient({ products: initialProducts, suppliers: initialSuppliers, locale }: Props) {
   const t = useTranslations("achats")
   const router = useRouter()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [products, setProducts] = useState<Product[]>(initialProducts)
+  const [suppliers, setSuppliers] = useState<Supplier[]>(initialSuppliers)
   const [refreshing, setRefreshing] = useState(false)
-  const [supplierSuggestions, setSupplierSuggestions] = useState<string[]>([])
-  const [showSuggestions, setShowSuggestions] = useState(false)
-  const supplierRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    function onClickOutside(e: MouseEvent) {
-      if (supplierRef.current && !supplierRef.current.contains(e.target as Node)) {
-        setShowSuggestions(false)
-      }
-    }
-    document.addEventListener("mousedown", onClickOutside)
-    return () => document.removeEventListener("mousedown", onClickOutside)
-  }, [])
-
-  function onSupplierInput(value: string) {
-    setForm(f => ({ ...f, supplier_name: value }))
-    if (value.length >= 1) {
-      const filtered = suppliers.filter(s => s.toLowerCase().includes(value.toLowerCase()))
-      setSupplierSuggestions(filtered)
-      setShowSuggestions(filtered.length > 0)
-    } else {
-      setShowSuggestions(false)
-    }
-  }
-
-  // Restore draft from sessionStorage
+  // Restore draft from sessionStorage — must be declared before any derived state that uses form
   const [form, setForm] = useState<typeof DEFAULT_FORM>(() => {
     if (typeof window === "undefined") return DEFAULT_FORM
     try {
@@ -92,6 +73,67 @@ export default function NouvelAchatClient({ products: initialProducts, suppliers
     return DEFAULT_LINES
   })
 
+  // Supplier dropdown state
+  const [supplierSearch, setSupplierSearch] = useState("")
+  const [showDropdown, setShowDropdown] = useState(false)
+  const [showQuickCreate, setShowQuickCreate] = useState(false)
+  const [quickForm, setQuickForm] = useState(QUICK_FORM_EMPTY)
+  const [quickSaving, setQuickSaving] = useState(false)
+  const supplierRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (supplierRef.current && !supplierRef.current.contains(e.target as Node)) {
+        setShowDropdown(false)
+      }
+    }
+    document.addEventListener("mousedown", onClickOutside)
+    return () => document.removeEventListener("mousedown", onClickOutside)
+  }, [])
+
+  const filteredSuppliers = supplierSearch.length >= 1
+    ? suppliers.filter(s => s.name.toLowerCase().includes(supplierSearch.toLowerCase()))
+    : suppliers.slice(0, 10)
+
+  const selectedSupplier = form.supplier_id ? suppliers.find(s => s.id === form.supplier_id) : null
+
+  function selectSupplier(s: Supplier) {
+    setForm(f => ({
+      ...f,
+      supplier_id: s.id,
+      supplier_name: s.name,
+      currency: (s.currency as "USD" | "GNF" | "EUR") ?? f.currency,
+    }))
+    setSupplierSearch("")
+    setShowDropdown(false)
+  }
+
+  function clearSupplier() {
+    setForm(f => ({ ...f, supplier_id: "", supplier_name: "" }))
+    setSupplierSearch("")
+  }
+
+  async function handleQuickCreate() {
+    if (!quickForm.name.trim()) return
+    setQuickSaving(true)
+    try {
+      const res = await fetch("/api/suppliers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: quickForm.name.trim(), currency: quickForm.currency, payment_terms: quickForm.payment_terms || null }),
+      })
+      const json = await res.json()
+      if (!res.ok) return
+      const newSupplier: Supplier = { id: json.id, name: json.name, currency: json.currency ?? "USD", payment_terms: json.payment_terms ?? null }
+      setSuppliers(list => [...list, newSupplier].sort((a, b) => a.name.localeCompare(b.name)))
+      selectSupplier(newSupplier)
+      setShowQuickCreate(false)
+      setQuickForm(QUICK_FORM_EMPTY)
+    } finally {
+      setQuickSaving(false)
+    }
+  }
+
   // Persist draft to sessionStorage on every change
   useEffect(() => {
     try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ form, lines })) } catch { /* ignore */ }
@@ -107,7 +149,6 @@ export default function NouvelAchatClient({ products: initialProducts, suppliers
     } finally { setRefreshing(false) }
   }, [])
 
-  // Refresh products when tab becomes visible (user returns from another tab)
   useEffect(() => {
     const onVisible = () => { if (document.visibilityState === "visible") refreshProducts() }
     document.addEventListener("visibilitychange", onVisible)
@@ -175,6 +216,7 @@ export default function NouvelAchatClient({ products: initialProducts, suppliers
       body: JSON.stringify({
         order: {
           supplier_name: form.supplier_name,
+          supplier_id: form.supplier_id || null,
           currency: form.currency,
           incoterm: form.incoterm,
           order_date: form.order_date,
@@ -217,32 +259,56 @@ export default function NouvelAchatClient({ products: initialProducts, suppliers
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
           <h2 className="font-semibold text-gray-800 mb-4">{t("sectionSupplier")}</h2>
           <div className="grid grid-cols-2 gap-4">
+
+            {/* Supplier selector */}
             <div className="relative" ref={supplierRef}>
-              <Input label={t("labelSupplierName")} value={form.supplier_name}
-                onChange={e => onSupplierInput(e.target.value)}
-                onFocus={() => {
-                  if (form.supplier_name.length >= 1 && supplierSuggestions.length > 0) setShowSuggestions(true)
-                  else if (form.supplier_name.length === 0) {
-                    setSupplierSuggestions(suppliers.slice(0, 8))
-                    setShowSuggestions(suppliers.length > 0)
-                  }
-                }}
-                placeholder="TotalEnergies, YESIL, Bridgestone…" />
-              {showSuggestions && (
-                <ul className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                  {supplierSuggestions.map(s => (
-                    <li key={s}
-                      onMouseDown={() => {
-                        setForm(f => ({ ...f, supplier_name: s }))
-                        setShowSuggestions(false)
-                      }}
-                      className="px-3 py-2 text-sm text-gray-800 hover:bg-blue-50 cursor-pointer">
-                      {s}
-                    </li>
-                  ))}
-                </ul>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">{t("labelSupplierName")}</label>
+              {selectedSupplier ? (
+                <div className="flex items-center gap-2 px-3 py-2 border border-blue-300 rounded-lg bg-blue-50">
+                  <span className="flex-1 text-sm font-medium text-blue-900">{selectedSupplier.name}</span>
+                  {selectedSupplier.payment_terms && (
+                    <span className="text-xs text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded">{selectedSupplier.payment_terms}</span>
+                  )}
+                  <button onClick={clearSupplier} className="text-blue-400 hover:text-blue-700 transition">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <div className="relative">
+                    <input
+                      value={supplierSearch}
+                      onChange={e => { setSupplierSearch(e.target.value); setShowDropdown(true) }}
+                      onFocus={() => setShowDropdown(true)}
+                      placeholder="Rechercher un fournisseur…"
+                      className="w-full px-3 py-2 pr-8 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                  </div>
+                  {showDropdown && (
+                    <ul className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+                      {filteredSuppliers.length > 0
+                        ? filteredSuppliers.map(s => (
+                          <li key={s.id}
+                            onMouseDown={() => selectSupplier(s)}
+                            className="px-3 py-2 text-sm text-gray-800 hover:bg-blue-50 cursor-pointer flex items-center justify-between">
+                            <span>{s.name}</span>
+                            <span className="text-xs text-gray-400">{s.currency}</span>
+                          </li>
+                        ))
+                        : <li className="px-3 py-2 text-xs text-gray-400">Aucun fournisseur trouvé</li>
+                      }
+                      <li
+                        onMouseDown={() => { setShowDropdown(false); setShowQuickCreate(true); setQuickForm(f => ({ ...f, name: supplierSearch })) }}
+                        className="px-3 py-2 text-sm text-[#7c3aed] hover:bg-purple-50 cursor-pointer flex items-center gap-1.5 border-t border-gray-100 font-medium">
+                        <Plus className="w-3.5 h-3.5" /> Nouveau fournisseur
+                      </li>
+                    </ul>
+                  )}
+                </div>
               )}
             </div>
+
             <Select label={t("labelCurrency")} value={form.currency}
               onChange={e => setForm(f => ({ ...f, currency: e.target.value as "USD" | "GNF" | "EUR" }))}
               options={[{ value: "GNF", label: t("currencyGNF") }, { value: "USD", label: t("currencyUSD") }, { value: "EUR", label: t("currencyEUR") }]} />
@@ -251,7 +317,7 @@ export default function NouvelAchatClient({ products: initialProducts, suppliers
             <Input label={t("labelExpectedDate")} type="date" value={form.expected_date}
               onChange={e => setForm(f => ({ ...f, expected_date: e.target.value }))} />
 
-            {/* Incoterm — prend toute la largeur */}
+            {/* Incoterm */}
             <div className="col-span-2">
               <label className="block text-xs font-medium text-gray-600 mb-1.5">{t("labelIncoterm")}</label>
               <div className="grid grid-cols-5 gap-2">
@@ -426,6 +492,57 @@ export default function NouvelAchatClient({ products: initialProducts, suppliers
           </Button>
         </div>
       </div>
+
+      {/* Quick-create supplier modal */}
+      {showQuickCreate && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h3 className="font-semibold text-gray-900">Nouveau fournisseur</h3>
+              <button onClick={() => setShowQuickCreate(false)} className="text-gray-400 hover:text-gray-700">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Nom *</label>
+                <input value={quickForm.name} onChange={e => setQuickForm(f => ({ ...f, name: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Devise</label>
+                <select value={quickForm.currency} onChange={e => setQuickForm(f => ({ ...f, currency: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="USD">USD</option>
+                  <option value="GNF">GNF</option>
+                  <option value="EUR">EUR</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Conditions de paiement</label>
+                <select value={quickForm.payment_terms} onChange={e => setQuickForm(f => ({ ...f, payment_terms: e.target.value }))}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">— Non défini —</option>
+                  <option value="immediate">Immédiat</option>
+                  <option value="30j">30 jours</option>
+                  <option value="60j">60 jours</option>
+                  <option value="90j">90 jours</option>
+                </select>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
+              <button onClick={() => setShowQuickCreate(false)}
+                className="px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">
+                Annuler
+              </button>
+              <button onClick={handleQuickCreate} disabled={quickSaving || !quickForm.name.trim()}
+                className="px-3 py-2 text-sm bg-[#7c3aed] text-white font-medium rounded-lg hover:bg-[#6d28d9] disabled:opacity-50 transition">
+                {quickSaving ? "Création…" : "Créer"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
