@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useTranslations } from "next-intl"
-import { Plus, Search, Users, Building2 } from "lucide-react"
+import { Plus, Search, Users, Building2, Briefcase } from "lucide-react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { Button } from "@/components/ui/Button"
@@ -66,6 +66,10 @@ export default function ContactsClient({ contacts: initial, accounts }: Props) {
         <Link href={`/${locale}/contacts`}
           className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-blue-600 border-b-2 border-blue-600">
           <Users className="w-4 h-4" /> Contacts
+        </Link>
+        <Link href={`/${locale}/contacts/clients`}
+          className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 border-b-2 border-transparent hover:border-gray-300 transition-colors">
+          <Briefcase className="w-4 h-4" /> Clients
         </Link>
         <Link href={`/${locale}/contacts/fournisseurs`}
           className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 border-b-2 border-transparent hover:border-gray-300 transition-colors">

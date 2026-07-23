@@ -1,30 +1,35 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Search, Building2, Phone, Mail, MapPin, Pencil, Trash2, X, Check, Users } from "lucide-react"
+import { Plus, Search, Building2, Phone, Mail, MapPin, Pencil, Trash2, Check, Users, Briefcase } from "lucide-react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { Button } from "@/components/ui/Button"
 import { Modal } from "@/components/ui/Modal"
 import { Input } from "@/components/ui/Input"
 
-interface Fournisseur {
+interface Supplier {
   id: string
   name: string
   phone: string | null
   email: string | null
   city: string | null
   country: string | null
-  supplier_currency: string | null
-  supplier_notes: string | null
+  currency: string | null
+  notes: string | null
+  payment_terms: string | null
+  iban: string | null
+  swift: string | null
+  bank_name: string | null
+  is_active: boolean
 }
 
 const EMPTY_FORM = {
-  name: "", phone: "", email: "", city: "", country: "", website: "",
-  supplier_currency: "USD", supplier_notes: "",
+  name: "", phone: "", email: "", city: "", country: "",
+  currency: "USD", notes: "", payment_terms: "", iban: "", swift: "", bank_name: "",
 }
 
-interface Props { fournisseurs: Fournisseur[] }
+interface Props { fournisseurs: Supplier[] }
 
 export default function FournisseursClient({ fournisseurs: initial }: Props) {
   const [fournisseurs, setFournisseurs] = useState(initial)
@@ -34,6 +39,8 @@ export default function FournisseursClient({ fournisseurs: initial }: Props) {
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const params = useParams()
+  const locale = params.locale as string
 
   const filtered = fournisseurs.filter(f =>
     `${f.name} ${f.city ?? ""} ${f.country ?? ""} ${f.email ?? ""}`.toLowerCase().includes(search.toLowerCase())
@@ -46,7 +53,7 @@ export default function FournisseursClient({ fournisseurs: initial }: Props) {
     setModalOpen(true)
   }
 
-  function openEdit(f: Fournisseur) {
+  function openEdit(f: Supplier) {
     setEditingId(f.id)
     setForm({
       name: f.name,
@@ -54,9 +61,12 @@ export default function FournisseursClient({ fournisseurs: initial }: Props) {
       email: f.email ?? "",
       city: f.city ?? "",
       country: f.country ?? "",
-      website: "",
-      supplier_currency: f.supplier_currency ?? "USD",
-      supplier_notes: f.supplier_notes ?? "",
+      currency: f.currency ?? "USD",
+      notes: f.notes ?? "",
+      payment_terms: f.payment_terms ?? "",
+      iban: f.iban ?? "",
+      swift: f.swift ?? "",
+      bank_name: f.bank_name ?? "",
     })
     setSaveError(null)
     setModalOpen(true)
@@ -66,7 +76,7 @@ export default function FournisseursClient({ fournisseurs: initial }: Props) {
     if (!form.name.trim()) { setSaveError("Le nom du fournisseur est requis"); return }
     setSaving(true)
     setSaveError(null)
-    const url = editingId ? `/api/fournisseurs/${editingId}` : "/api/fournisseurs"
+    const url = editingId ? `/api/suppliers/${editingId}` : "/api/suppliers"
     const method = editingId ? "PATCH" : "POST"
     const res = await fetch(url, {
       method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(form),
@@ -74,7 +84,7 @@ export default function FournisseursClient({ fournisseurs: initial }: Props) {
     const json = await res.json()
     if (!res.ok) { setSaveError(json.error ?? "Erreur"); setSaving(false); return }
     if (editingId) {
-      setFournisseurs(prev => prev.map(f => f.id === editingId ? json : f))
+      setFournisseurs(prev => prev.map(f => f.id === editingId ? { ...f, ...json } : f))
     } else {
       setFournisseurs(prev => [json, ...prev].sort((a, b) => a.name.localeCompare(b.name)))
     }
@@ -83,13 +93,10 @@ export default function FournisseursClient({ fournisseurs: initial }: Props) {
   }
 
   async function handleDelete(id: string) {
-    if (!confirm("Retirer ce fournisseur de la liste ?")) return
-    await fetch(`/api/fournisseurs/${id}`, { method: "DELETE" })
+    if (!confirm("Désactiver ce fournisseur ?")) return
+    await fetch(`/api/suppliers/${id}`, { method: "DELETE" })
     setFournisseurs(prev => prev.filter(f => f.id !== id))
   }
-
-  const params = useParams()
-  const locale = params.locale as string
 
   const currencyColors: Record<string, string> = {
     USD: "bg-green-50 text-green-700",
@@ -103,6 +110,10 @@ export default function FournisseursClient({ fournisseurs: initial }: Props) {
         <Link href={`/${locale}/contacts`}
           className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 border-b-2 border-transparent hover:border-gray-300 transition-colors">
           <Users className="w-4 h-4" /> Contacts
+        </Link>
+        <Link href={`/${locale}/contacts/clients`}
+          className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-800 border-b-2 border-transparent hover:border-gray-300 transition-colors">
+          <Briefcase className="w-4 h-4" /> Clients
         </Link>
         <Link href={`/${locale}/contacts/fournisseurs`}
           className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium text-blue-600 border-b-2 border-blue-600">
@@ -141,7 +152,7 @@ export default function FournisseursClient({ fournisseurs: initial }: Props) {
                 <th className="text-left px-4 py-3">Contact</th>
                 <th className="text-left px-4 py-3">Localisation</th>
                 <th className="text-left px-4 py-3">Devise</th>
-                <th className="text-left px-4 py-3">Notes</th>
+                <th className="text-left px-4 py-3">Conditions</th>
                 <th className="px-4 py-3 w-20"></th>
               </tr>
             </thead>
@@ -169,13 +180,13 @@ export default function FournisseursClient({ fournisseurs: initial }: Props) {
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    {f.supplier_currency && (
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${currencyColors[f.supplier_currency] ?? "bg-gray-100 text-gray-600"}`}>
-                        {f.supplier_currency}
+                    {f.currency && (
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${currencyColors[f.currency] ?? "bg-gray-100 text-gray-600"}`}>
+                        {f.currency}
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-xs text-gray-400 max-w-xs truncate">{f.supplier_notes}</td>
+                  <td className="px-4 py-3 text-xs text-gray-400">{f.payment_terms}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
                       <button onClick={() => openEdit(f)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition">
@@ -196,7 +207,7 @@ export default function FournisseursClient({ fournisseurs: initial }: Props) {
       <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editingId ? "Modifier le fournisseur" : "Nouveau fournisseur"}>
         <div className="space-y-4">
           <Input label="Nom du fournisseur *" value={form.name}
-            onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="TotalEnergies, YESIL, Bridgestone…" />
+            onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="TotalEnergies, YESIL…" />
           <div className="grid grid-cols-2 gap-3">
             <Input label="Téléphone" value={form.phone}
               onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} placeholder="+33 1 00 00 00 00" />
@@ -210,12 +221,12 @@ export default function FournisseursClient({ fournisseurs: initial }: Props) {
               onChange={e => setForm(f => ({ ...f, country: e.target.value }))} placeholder="France, UAE…" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1.5">Devise de facturation</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1.5">Devise</label>
             <div className="flex gap-2">
               {["USD", "EUR", "GNF"].map(cur => (
-                <button key={cur} onClick={() => setForm(f => ({ ...f, supplier_currency: cur }))}
+                <button key={cur} onClick={() => setForm(f => ({ ...f, currency: cur }))}
                   className={`flex-1 py-2 text-sm font-semibold rounded-lg border-2 transition ${
-                    form.supplier_currency === cur
+                    form.currency === cur
                       ? "border-blue-600 bg-blue-600 text-white"
                       : "border-gray-200 text-gray-600 hover:border-blue-300"
                   }`}>
@@ -224,10 +235,20 @@ export default function FournisseursClient({ fournisseurs: initial }: Props) {
               ))}
             </div>
           </div>
+          <Input label="Conditions de paiement" value={form.payment_terms}
+            onChange={e => setForm(f => ({ ...f, payment_terms: e.target.value }))} placeholder="30 jours, 60 jours…" />
+          <div className="grid grid-cols-2 gap-3">
+            <Input label="IBAN" value={form.iban}
+              onChange={e => setForm(f => ({ ...f, iban: e.target.value }))} />
+            <Input label="SWIFT/BIC" value={form.swift}
+              onChange={e => setForm(f => ({ ...f, swift: e.target.value }))} />
+          </div>
+          <Input label="Banque" value={form.bank_name}
+            onChange={e => setForm(f => ({ ...f, bank_name: e.target.value }))} placeholder="BNP Paribas, Société Générale…" />
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1.5">Notes internes</label>
-            <textarea rows={3} value={form.supplier_notes}
-              onChange={e => setForm(f => ({ ...f, supplier_notes: e.target.value }))}
+            <textarea rows={3} value={form.notes}
+              onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
               placeholder="Délais, conditions, contacts habituels…"
               className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
           </div>

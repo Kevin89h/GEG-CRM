@@ -1,12 +1,14 @@
-import { createCompanyClient } from "@/lib/company"
+import { createAdminClient } from "@/lib/supabase/admin"
+import { getCompanySchema } from "@/lib/company"
 import FournisseursClient from "./FournisseursClient"
 
 export default async function FournisseursPage() {
-  const { db } = await createCompanyClient()
-  const { data } = await db
-    .from("accounts")
-    .select("id, name, phone, email, city, country, supplier_currency, supplier_notes")
-    .eq("is_supplier", true)
+  const schema = await getCompanySchema()
+  const admin = createAdminClient().schema(schema)
+  const { data } = await admin
+    .from("suppliers")
+    .select("id, name, phone, email, city, country, currency, notes, payment_terms, iban, swift, bank_name, is_active")
+    .eq("is_active", true)
     .order("name")
   return <FournisseursClient fournisseurs={data ?? []} />
 }
