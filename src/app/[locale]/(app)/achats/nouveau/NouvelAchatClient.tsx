@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Plus, Trash2, ArrowLeft, Info, RefreshCw } from "lucide-react"
 import Link from "next/link"
@@ -11,7 +11,7 @@ import { Select } from "@/components/ui/Select"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 
 interface Product { id: string; name: string; reference: string | null; buy_price: number | null }
-interface Props { products: Product[]; locale: string }
+interface Props { products: Product[]; suppliers: string[]; locale: string }
 
 const STORAGE_KEY = "nouvel_achat_draft"
 
@@ -42,13 +42,37 @@ const DEFAULT_LINES: Line[] = [
   { id: nextId(), product_id: "", description: "", quantity: "1", unit_price: "0" },
 ]
 
-export default function NouvelAchatClient({ products: initialProducts, locale }: Props) {
+export default function NouvelAchatClient({ products: initialProducts, suppliers, locale }: Props) {
   const t = useTranslations("achats")
   const router = useRouter()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [products, setProducts] = useState<Product[]>(initialProducts)
   const [refreshing, setRefreshing] = useState(false)
+  const [supplierSuggestions, setSupplierSuggestions] = useState<string[]>([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const supplierRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (supplierRef.current && !supplierRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false)
+      }
+    }
+    document.addEventListener("mousedown", onClickOutside)
+    return () => document.removeEventListener("mousedown", onClickOutside)
+  }, [])
+
+  function onSupplierInput(value: string) {
+    setForm(f => ({ ...f, supplier_name: value }))
+    if (value.length >= 1) {
+      const filtered = suppliers.filter(s => s.toLowerCase().includes(value.toLowerCase()))
+      setSupplierSuggestions(filtered)
+      setShowSuggestions(filtered.length > 0)
+    } else {
+      setShowSuggestions(false)
+    }
+  }
 
   // Restore draft from sessionStorage
   const [form, setForm] = useState<typeof DEFAULT_FORM>(() => {
@@ -193,9 +217,32 @@ export default function NouvelAchatClient({ products: initialProducts, locale }:
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
           <h2 className="font-semibold text-gray-800 mb-4">{t("sectionSupplier")}</h2>
           <div className="grid grid-cols-2 gap-4">
-            <Input label={t("labelSupplierName")} value={form.supplier_name}
-              onChange={e => setForm(f => ({ ...f, supplier_name: e.target.value }))}
-              placeholder="TotalEnergies, YESIL, Bridgestone…" />
+            <div className="relative" ref={supplierRef}>
+              <Input label={t("labelSupplierName")} value={form.supplier_name}
+                onChange={e => onSupplierInput(e.target.value)}
+                onFocus={() => {
+                  if (form.supplier_name.length >= 1 && supplierSuggestions.length > 0) setShowSuggestions(true)
+                  else if (form.supplier_name.length === 0) {
+                    setSupplierSuggestions(suppliers.slice(0, 8))
+                    setShowSuggestions(suppliers.length > 0)
+                  }
+                }}
+                placeholder="TotalEnergies, YESIL, Bridgestone…" />
+              {showSuggestions && (
+                <ul className="absolute z-50 left-0 right-0 top-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {supplierSuggestions.map(s => (
+                    <li key={s}
+                      onMouseDown={() => {
+                        setForm(f => ({ ...f, supplier_name: s }))
+                        setShowSuggestions(false)
+                      }}
+                      className="px-3 py-2 text-sm text-gray-800 hover:bg-blue-50 cursor-pointer">
+                      {s}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
             <Select label={t("labelCurrency")} value={form.currency}
               onChange={e => setForm(f => ({ ...f, currency: e.target.value as "USD" | "GNF" | "EUR" }))}
               options={[{ value: "GNF", label: t("currencyGNF") }, { value: "USD", label: t("currencyUSD") }, { value: "EUR", label: t("currencyEUR") }]} />
