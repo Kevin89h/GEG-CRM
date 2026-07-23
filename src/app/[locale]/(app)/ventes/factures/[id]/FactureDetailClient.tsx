@@ -133,6 +133,27 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
   const isDraft = invoice.status === "draft"
   const canEdit = !isCancelled
 
+  const [editingDates, setEditingDates] = useState(false)
+  const [dateForm, setDateForm] = useState({
+    issue_date: invoice.issue_date?.split("T")[0] ?? "",
+    due_date: invoice.due_date?.split("T")[0] ?? "",
+  })
+  const [savingDates, setSavingDates] = useState(false)
+
+  async function saveDates() {
+    setSavingDates(true)
+    const res = await fetch(`/api/invoices/${invoice.id}/dates`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(dateForm),
+    })
+    if (res.ok) {
+      setInvoice(prev => ({ ...prev, issue_date: dateForm.issue_date, due_date: dateForm.due_date || null }))
+      setEditingDates(false)
+    }
+    setSavingDates(false)
+  }
+
   async function updateLine(lineId: string, field: keyof Line, value: string | number) {
     const numVal = ["quantity", "unit_price", "discount", "tva_rate"].includes(field as string)
       ? (typeof value === "number" ? value : parseFloat(value as string) || 0)
@@ -571,20 +592,70 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
       {/* Info facture */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 md:p-6 mb-6">
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-sm">
-          <div>
-            <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">{t("issueDate")}</p>
-            <p className="font-semibold text-gray-900">{formatDate(invoice.issue_date, locale)}</p>
-          </div>
-          <div>
-            <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">{t("dueDate")}</p>
-            <p className={`font-semibold ${invoice.due_date && new Date(invoice.due_date) < new Date() && !isPaid ? "text-red-600" : "text-gray-900"}`}>
-              {invoice.due_date ? formatDate(invoice.due_date, locale) : "—"}
-            </p>
-          </div>
-          <div>
-            <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">{t("currency")}</p>
-            <p className="font-semibold text-gray-900">{invoice.currency}</p>
-          </div>
+          {editingDates ? (
+            <>
+              <div>
+                <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">{t("issueDate")}</p>
+                <input
+                  type="date"
+                  value={dateForm.issue_date}
+                  onChange={e => setDateForm(f => ({ ...f, issue_date: e.target.value }))}
+                  className="w-full px-2 py-1 text-sm border border-blue-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">{t("dueDate")}</p>
+                <input
+                  type="date"
+                  value={dateForm.due_date}
+                  onChange={e => setDateForm(f => ({ ...f, due_date: e.target.value }))}
+                  className="w-full px-2 py-1 text-sm border border-blue-400 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="flex items-end gap-2">
+                <button
+                  onClick={saveDates}
+                  disabled={savingDates}
+                  className="px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition"
+                >
+                  {savingDates ? "…" : "Enregistrer"}
+                </button>
+                <button
+                  onClick={() => { setEditingDates(false); setDateForm({ issue_date: invoice.issue_date?.split("T")[0] ?? "", due_date: invoice.due_date?.split("T")[0] ?? "" }) }}
+                  className="px-3 py-1.5 text-sm text-gray-500 hover:text-gray-700 transition"
+                >
+                  Annuler
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div
+                className={`group ${!isCancelled ? "cursor-pointer" : ""}`}
+                onClick={() => { if (!isCancelled) { setDateForm({ issue_date: invoice.issue_date?.split("T")[0] ?? "", due_date: invoice.due_date?.split("T")[0] ?? "" }); setEditingDates(true) } }}
+              >
+                <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">{t("issueDate")}</p>
+                <p className={`font-semibold text-gray-900 ${!isCancelled ? "group-hover:text-blue-600 transition" : ""}`}>
+                  {formatDate(invoice.issue_date, locale)}
+                  {!isCancelled && <span className="ml-1 text-xs text-gray-300 group-hover:text-blue-400">✎</span>}
+                </p>
+              </div>
+              <div
+                className={`group ${!isCancelled ? "cursor-pointer" : ""}`}
+                onClick={() => { if (!isCancelled) { setDateForm({ issue_date: invoice.issue_date?.split("T")[0] ?? "", due_date: invoice.due_date?.split("T")[0] ?? "" }); setEditingDates(true) } }}
+              >
+                <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">{t("dueDate")}</p>
+                <p className={`font-semibold ${invoice.due_date && new Date(invoice.due_date) < new Date() && !isPaid ? "text-red-600" : "text-gray-900"} ${!isCancelled ? "group-hover:text-blue-600 transition" : ""}`}>
+                  {invoice.due_date ? formatDate(invoice.due_date, locale) : "—"}
+                  {!isCancelled && <span className="ml-1 text-xs text-gray-300 group-hover:text-blue-400">✎</span>}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">{t("currency")}</p>
+                <p className="font-semibold text-gray-900">{invoice.currency}</p>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
