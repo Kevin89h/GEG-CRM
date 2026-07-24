@@ -4,9 +4,10 @@ import { createAdminClient } from "@/lib/supabase/admin"
 
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get("q") ?? ""
-  const { db } = await createCompanyClient()
+  const { schema } = await createCompanyClient()
+  const db = createAdminClient().schema(schema)
 
-  let query = db.from("accounts").select("id, name").order("name").limit(100)
+  let query = db.from("accounts").select("id, name").order("name").limit(50)
   if (q) query = query.ilike("name", `%${q}%`)
 
   const { data, error } = await query

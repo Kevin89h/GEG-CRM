@@ -86,9 +86,8 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
   const [savingAccount, setSavingAccount] = useState(false)
   const [currentAccount, setCurrentAccount] = useState(order.account)
 
-  async function loadAccounts() {
-    if (accountsList.length > 0) return
-    const res = await fetch("/api/accounts")
+  async function loadAccounts(q = "") {
+    const res = await fetch(`/api/accounts?q=${encodeURIComponent(q)}`)
     if (res.ok) {
       const json = await res.json()
       setAccountsList((json.data ?? json) as { id: string; name: string }[])
@@ -505,7 +504,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                     autoFocus
                     type="text"
                     value={accountSearch}
-                    onChange={e => setAccountSearch(e.target.value)}
+                    onChange={e => { setAccountSearch(e.target.value); loadAccounts(e.target.value) }}
                     placeholder="Rechercher un client..."
                     className="w-56 text-sm border border-blue-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
@@ -524,7 +523,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
               ) : (
                 <button
                   disabled={isCancelled}
-                  onClick={() => { if (!isCancelled) { setEditingAccount(true); loadAccounts() } }}
+                  onClick={() => { if (!isCancelled) { setEditingAccount(true); loadAccounts("") } }}
                   className={`text-sm text-left group ${isCancelled ? "text-gray-400 cursor-default" : "text-gray-900 hover:text-blue-600 hover:underline cursor-pointer"}`}
                 >
                   {currentAccount?.name ?? "—"}

@@ -145,9 +145,8 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
   const [accounts, setAccounts] = useState<{ id: string; name: string }[]>([])
   const [savingAccount, setSavingAccount] = useState(false)
 
-  async function loadAccounts() {
-    if (accounts.length > 0) return
-    const res = await fetch("/api/accounts")
+  async function searchAccounts(q: string) {
+    const res = await fetch(`/api/accounts?q=${encodeURIComponent(q)}`)
     if (res.ok) {
       const json = await res.json()
       setAccounts((json.data ?? json) as { id: string; name: string }[])
@@ -165,13 +164,10 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
       setInvoice(prev => ({ ...prev, account: { name: accountName, country: prev.account?.country ?? null } }))
       setEditingAccount(false)
       setAccountSearch("")
+      setAccounts([])
     }
     setSavingAccount(false)
   }
-
-  const filteredAccounts = accounts.filter(a =>
-    a.name.toLowerCase().includes(accountSearch.toLowerCase())
-  ).slice(0, 8)
 
   async function saveDates() {
     setSavingDates(true)
@@ -568,7 +564,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
                 autoFocus
                 type="text"
                 value={accountSearch}
-                onChange={e => setAccountSearch(e.target.value)}
+                onChange={e => { setAccountSearch(e.target.value); searchAccounts(e.target.value) }}
                 placeholder="Rechercher un client..."
                 className="w-64 text-sm border border-blue-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
@@ -591,7 +587,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
           ) : (
             <button
               disabled={isCancelled}
-              onClick={() => { if (!isCancelled) { setEditingAccount(true); loadAccounts() } }}
+              onClick={() => { if (!isCancelled) { setEditingAccount(true); searchAccounts("") } }}
               className={`text-sm text-left ${isCancelled ? "text-gray-400 cursor-default" : "text-gray-500 hover:text-blue-600 hover:underline cursor-pointer"} group`}
             >
               {invoice.account?.name ?? "—"}
