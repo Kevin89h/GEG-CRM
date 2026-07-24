@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createCompanyClient } from "@/lib/company"
+import { createAdminClient } from "@/lib/supabase/admin"
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
-  const { db } = await createCompanyClient()
+  const db = createAdminClient().schema("geg_guinee")
 
   const { data, error } = await db
     .from("products")

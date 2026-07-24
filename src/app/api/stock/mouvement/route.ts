@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createCompanyClient } from "@/lib/company"
+import { createAdminClient } from "@/lib/supabase/admin"
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     user_id: string
   }
 
-  const { db } = await createCompanyClient()
+  const db = createAdminClient().schema("geg_guinee")
 
   if (type === "adjustment") {
     // For adjustment: quantity = target absolute value
