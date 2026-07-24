@@ -2,6 +2,18 @@ import { NextRequest, NextResponse } from "next/server"
 import { createCompanyClient } from "@/lib/company"
 import { createAdminClient } from "@/lib/supabase/admin"
 
+export async function GET(req: NextRequest) {
+  const q = req.nextUrl.searchParams.get("q") ?? ""
+  const { db } = await createCompanyClient()
+
+  let query = db.from("accounts").select("id, name").order("name").limit(100)
+  if (q) query = query.ilike("name", `%${q}%`)
+
+  const { data, error } = await query
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  return NextResponse.json(data ?? [])
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.json()
   const { db, schema } = await createCompanyClient()
