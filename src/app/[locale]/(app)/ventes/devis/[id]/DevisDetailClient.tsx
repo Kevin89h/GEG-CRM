@@ -80,6 +80,39 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
   const [notesSaving, setNotesSaving] = useState(false)
   const [additionalInfo, setAdditionalInfo] = useState(order.additional_info ?? "")
   const [additionalInfoSaving, setAdditionalInfoSaving] = useState(false)
+  const [editingAccount, setEditingAccount] = useState(false)
+  const [accountSearch, setAccountSearch] = useState("")
+  const [accountsList, setAccountsList] = useState<{ id: string; name: string }[]>([])
+  const [savingAccount, setSavingAccount] = useState(false)
+  const [currentAccount, setCurrentAccount] = useState(order.account)
+
+  async function loadAccounts() {
+    if (accountsList.length > 0) return
+    const res = await fetch("/api/accounts")
+    if (res.ok) {
+      const json = await res.json()
+      setAccountsList((json.data ?? json) as { id: string; name: string }[])
+    }
+  }
+
+  async function saveAccount(accountId: string, accountName: string) {
+    setSavingAccount(true)
+    const res = await fetch(`/api/devis/${order.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ account_id: accountId }),
+    })
+    if (res.ok) {
+      setCurrentAccount({ id: accountId, name: accountName, country: currentAccount?.country ?? null })
+      setEditingAccount(false)
+      setAccountSearch("")
+    }
+    setSavingAccount(false)
+  }
+
+  const filteredAccounts = accountsList.filter(a =>
+    a.name.toLowerCase().includes(accountSearch.toLowerCase())
+  ).slice(0, 8)
 
   async function saveNotes(value: string) {
     setNotesSaving(true)
@@ -464,7 +497,41 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 mb-4">
         <div className="grid grid-cols-2 gap-x-8 gap-y-4">
           <div className="space-y-4">
-            <Field label={t("fieldClient")} value={order.account?.name} />
+            <div>
+              <p className="text-xs text-gray-400 mb-0.5">{t("fieldClient")}</p>
+              {editingAccount ? (
+                <div className="relative">
+                  <input
+                    autoFocus
+                    type="text"
+                    value={accountSearch}
+                    onChange={e => setAccountSearch(e.target.value)}
+                    placeholder="Rechercher un client..."
+                    className="w-56 text-sm border border-blue-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {filteredAccounts.length > 0 && (
+                    <div className="absolute z-50 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                      {filteredAccounts.map(a => (
+                        <button key={a.id} onClick={() => saveAccount(a.id, a.name)} disabled={savingAccount}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 transition">
+                          {a.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <button onClick={() => { setEditingAccount(false); setAccountSearch("") }} className="ml-2 text-xs text-gray-400 hover:text-gray-600">Annuler</button>
+                </div>
+              ) : (
+                <button
+                  disabled={isCancelled}
+                  onClick={() => { if (!isCancelled) { setEditingAccount(true); loadAccounts() } }}
+                  className={`text-sm text-left group ${isCancelled ? "text-gray-400 cursor-default" : "text-gray-900 hover:text-blue-600 hover:underline cursor-pointer"}`}
+                >
+                  {currentAccount?.name ?? "—"}
+                  {!isCancelled && <span className="ml-1 opacity-0 group-hover:opacity-100 text-blue-400 text-xs">✎</span>}
+                </button>
+              )}
+            </div>
             {order.contact && (
               <Field label={t("fieldContact")} value={`${order.contact.first_name} ${order.contact.last_name}`} />
             )}
