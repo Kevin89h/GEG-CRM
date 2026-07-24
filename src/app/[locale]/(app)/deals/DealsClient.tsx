@@ -236,6 +236,12 @@ export default function DealsClient({ deals: initial, accounts, profiles, curren
             </button>
           </div>
           <button
+            onClick={() => router.push("deals/dashboard")}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-indigo-600 border border-indigo-200 rounded-lg hover:bg-indigo-50 transition"
+          >
+            <TrendingUp className="w-4 h-4" /> Dashboard
+          </button>
+          <button
             onClick={() => setModalOpen(true)}
             className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition"
           >

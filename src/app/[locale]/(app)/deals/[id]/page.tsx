@@ -28,7 +28,7 @@ export default async function DealDetailPage({ params }: { params: Promise<{ loc
     accounts = (sgAccounts ?? []).map((d: any) => ({ id: d.id, name: d.account_name }))
   } else {
     const [{ data: guDeal }, { data: guAccounts }, { data: guActivities }, { data: guDevis }] = await Promise.all([
-      db.from("deals").select("*, deal_date, country, original_request, contact_name, contact_role, contact_email, contact_phone, sector, preferred_channel, account:accounts(id, name, type)").eq("id", id).single(),
+      db.from("deals").select("*, deal_date, country, original_request, contact_name, contact_role, contact_email, contact_phone, sector, preferred_channel, selling_price, cost, account:accounts(id, name, type), invoice:invoices!deal_id(id, number, status, total_ht, currency)").eq("id", id).single(),
       db.from("accounts").select("id, name").order("name"),
       db.from("activities")
         .select("id, type, subject, notes, date, follow_up_date, completed, user_id")
@@ -59,6 +59,7 @@ export default async function DealDetailPage({ params }: { params: Promise<{ loc
     assigned_to: assignedIds,
     account: Array.isArray(deal.account) ? deal.account[0] ?? null : deal.account,
     assignedEmployees: (assignedProfiles ?? []) as { id: string; full_name: string | null; email: string }[],
+    invoice: Array.isArray(deal.invoice) ? deal.invoice[0] ?? null : deal.invoice ?? null,
   }
 
   return (

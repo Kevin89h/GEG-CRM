@@ -59,6 +59,8 @@ export async function POST(req: NextRequest) {
       contact_phone: body.contact_phone ?? null,
       sector: body.sector ?? [],
       preferred_channel: body.preferred_channel ?? null,
+      selling_price: body.selling_price ?? null,
+      cost: body.cost ?? null,
     }])
     .select("*, account:accounts(id, name)")
     .single()

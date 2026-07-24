@@ -49,6 +49,9 @@ interface Deal {
   contact_phone: string | null
   sector: string[] | null
   preferred_channel: string | null
+  selling_price: number | null
+  cost: number | null
+  invoice: { id: string; number: string; status: string; total_ht: number | null; currency: string } | null
 }
 
 interface UserProfile {
@@ -170,6 +173,8 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
     contact_phone: deal.contact_phone ?? "",
     sector: deal.sector ?? [] as string[],
     preferred_channel: deal.preferred_channel ?? "",
+    selling_price: deal.selling_price?.toString() ?? "",
+    cost: deal.cost?.toString() ?? "",
   })
   const [activityModal, setActivityModal] = useState(false)
   const [actForm, setActForm] = useState({ type: "note", subject: "", notes: "", date: new Date().toISOString().slice(0, 16), follow_up_date: "" })
@@ -182,6 +187,11 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
   const [devisSearch, setDevisSearch] = useState("")
   const [devisResults, setDevisResults] = useState<LinkedDevis[]>([])
   const [devisLinking, setDevisLinking] = useState(false)
+  const [linkedInvoice, setLinkedInvoice] = useState(initial.invoice ?? null)
+  const [invoicePickerOpen, setInvoicePickerOpen] = useState(false)
+  const [invoiceSearch, setInvoiceSearch] = useState("")
+  const [invoiceResults, setInvoiceResults] = useState<{ id: string; number: string; status: string; total_ht: number | null; currency: string }[]>([])
+  const [invoiceLinking, setInvoiceLinking] = useState(false)
   const [editingActId, setEditingActId] = useState<string | null>(null)
   const [editActForm, setEditActForm] = useState({ subject: "", notes: "", type: "note" })
   const [editActSaving, setEditActSaving] = useState(false)
@@ -231,6 +241,8 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
     if (showValue) {
       body.value = editForm.value ? parseFloat(editForm.value) : null
       body.currency = editForm.currency
+      body.selling_price = editForm.selling_price ? parseFloat(editForm.selling_price) : null
+      body.cost = editForm.cost ? parseFloat(editForm.cost) : null
     }
     const res = await fetch(`/api/deals/${deal.id}`, {
       method: "PATCH",
@@ -333,6 +345,44 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
       body: JSON.stringify({ devis_id: devisId }),
     })
     if (res.ok) setLinkedDevis(prev => prev.filter(d => d.id !== devisId))
+  }
+
+  async function searchInvoices(q: string) {
+    setInvoiceSearch(q)
+    if (q.length < 2) { setInvoiceResults([]); return }
+    const res = await fetch(`/api/invoices/search?q=${encodeURIComponent(q)}`)
+    if (res.ok) {
+      const data = await res.json()
+      setInvoiceResults(data)
+    }
+  }
+
+  async function linkInvoice(invoiceId: string) {
+    setInvoiceLinking(true)
+    const res = await fetch(`/api/deals/${deal.id}/invoice`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ invoice_id: invoiceId }),
+    })
+    if (res.ok) {
+      const data = await res.json()
+      setLinkedInvoice(data)
+      setInvoicePickerOpen(false)
+      setInvoiceSearch("")
+      setInvoiceResults([])
+    }
+    setInvoiceLinking(false)
+  }
+
+  async function unlinkInvoice() {
+    if (!linkedInvoice) return
+    if (!confirm("Dissocier cette facture du deal ?")) return
+    const res = await fetch(`/api/deals/${deal.id}/invoice`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ invoice_id: null }),
+    })
+    if (res.ok) setLinkedInvoice(null)
   }
 
   async function addActivity() {
@@ -516,6 +566,39 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
                 <span className="font-semibold text-blue-600">{formatCurrency(deal.value, deal.currency as "USD" | "GNF" | "EUR")}</span>
               </div>
             )}
+            {showValue && (deal.selling_price != null || deal.cost != null) && (() => {
+              const margin = (deal.selling_price ?? 0) - (deal.cost ?? 0)
+              const marginPct = deal.selling_price ? (margin / deal.selling_price) * 100 : null
+              return (
+                <>
+                  {deal.selling_price != null && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-gray-400 w-28 flex-shrink-0 text-xs">Prix de vente</span>
+                      <span className="font-medium text-gray-800">{formatCurrency(deal.selling_price, deal.currency as "USD" | "GNF" | "EUR")}</span>
+                    </div>
+                  )}
+                  {deal.cost != null && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-gray-400 w-28 flex-shrink-0 text-xs">Coût</span>
+                      <span className="font-medium text-gray-800">{formatCurrency(deal.cost, deal.currency as "USD" | "GNF" | "EUR")}</span>
+                    </div>
+                  )}
+                  {deal.selling_price != null && deal.cost != null && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-gray-400 w-28 flex-shrink-0 text-xs">Marge</span>
+                      <span className={`font-semibold ${margin >= 0 ? "text-green-600" : "text-red-600"}`}>
+                        {formatCurrency(margin, deal.currency as "USD" | "GNF" | "EUR")}
+                        {marginPct != null && (
+                          <span className={`ml-2 text-xs px-1.5 py-0.5 rounded-full font-medium ${margin >= 0 ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+                            {marginPct.toFixed(1)}%
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  )}
+                </>
+              )
+            })()}
             {deal.next_action && (
               <div className="flex items-center gap-2 text-sm">
                 <span className="text-gray-400 w-28 flex-shrink-0 text-xs">Prochaine action</span>
@@ -791,8 +874,107 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
             )}
           </div>
 
+          {/* Facture liée (deals "won") */}
+          {deal.stage === "won" && (
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5 text-green-500" /> Facture liée
+                </h2>
+                {!linkedInvoice && (
+                  <button
+                    onClick={() => setInvoicePickerOpen(true)}
+                    className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 px-2 py-1 rounded-lg hover:bg-blue-50 transition"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Lier
+                  </button>
+                )}
+              </div>
+              {linkedInvoice ? (
+                <div className="group flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
+                  <div className="flex-1 min-w-0">
+                    <a href={`/fr/ventes/factures/${linkedInvoice.id}`} className="text-sm font-medium text-blue-600 hover:underline font-mono">
+                      {linkedInvoice.number}
+                    </a>
+                    {linkedInvoice.total_ht != null && (
+                      <p className="text-xs text-gray-500 mt-0.5">{formatCurrency(linkedInvoice.total_ht, linkedInvoice.currency as "USD" | "GNF" | "EUR")}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                      linkedInvoice.status === "paid" ? "bg-green-50 text-green-600" :
+                      linkedInvoice.status === "draft" ? "bg-gray-100 text-gray-500" :
+                      linkedInvoice.status === "sent" ? "bg-blue-50 text-blue-600" :
+                      "bg-red-50 text-red-500"
+                    }`}>
+                      {linkedInvoice.status === "draft" ? "Brouillon" : linkedInvoice.status === "sent" ? "Envoyée" : linkedInvoice.status === "paid" ? "Payée" : linkedInvoice.status}
+                    </span>
+                    <button
+                      onClick={unlinkInvoice}
+                      className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-500 transition"
+                      title="Dissocier"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-6 text-gray-400 text-xs">Aucune facture liée</div>
+              )}
+            </div>
+          )}
+
         </div>
       </div>
+
+      {/* Invoice picker modal */}
+      {invoicePickerOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/30 backdrop-blur-sm" onClick={() => setInvoicePickerOpen(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+            <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="font-semibold text-gray-900 text-sm">Lier une facture</h2>
+              <button onClick={() => setInvoicePickerOpen(false)} className="text-gray-400 hover:text-gray-600 text-xl">×</button>
+            </div>
+            <div className="p-3">
+              <input
+                autoFocus
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                placeholder="Rechercher une facture (ex: FAC-2025)…"
+                value={invoiceSearch}
+                onChange={e => searchInvoices(e.target.value)}
+              />
+            </div>
+            <div className="max-h-72 overflow-y-auto divide-y divide-gray-50 pb-2">
+              {invoiceResults.length === 0 && invoiceSearch.length < 2 && (
+                <p className="text-xs text-gray-400 text-center py-6">Tapez pour chercher une facture</p>
+              )}
+              {invoiceResults.length === 0 && invoiceSearch.length >= 2 && (
+                <p className="text-xs text-gray-400 text-center py-6">Aucun résultat</p>
+              )}
+              {invoiceResults.map(inv => (
+                <button
+                  key={inv.id}
+                  onClick={() => linkInvoice(inv.id)}
+                  disabled={invoiceLinking}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-blue-50 transition text-left disabled:opacity-40"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 font-mono">{inv.number}</p>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    {inv.total_ht != null && (
+                      <p className="text-xs font-medium text-gray-600">{formatCurrency(inv.total_ht, inv.currency as "USD" | "GNF" | "EUR")}</p>
+                    )}
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full ${inv.status === "paid" ? "bg-green-50 text-green-600" : inv.status === "sent" ? "bg-blue-50 text-blue-600" : "bg-gray-100 text-gray-500"}`}>
+                      {inv.status === "draft" ? "Brouillon" : inv.status === "sent" ? "Envoyée" : inv.status === "paid" ? "Payée" : inv.status}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Devis picker modal */}
       {devisPickerOpen && (
@@ -954,20 +1136,49 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
                   </select>
                 </div>
               </div>
-              {showValue && (
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-medium text-gray-500 block mb-1">Valeur</label>
-                    <input type="number" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" value={editForm.value} onChange={e => setEditForm(f => ({ ...f, value: e.target.value }))} />
+              {showValue && (() => {
+                const sp = parseFloat(editForm.selling_price) || 0
+                const cost = parseFloat(editForm.cost) || 0
+                const margin = sp - cost
+                const marginPct = sp > 0 ? (margin / sp) * 100 : null
+                return (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-medium text-gray-500 block mb-1">Valeur estimée</label>
+                        <input type="number" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" value={editForm.value} onChange={e => setEditForm(f => ({ ...f, value: e.target.value }))} />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-gray-500 block mb-1">Devise</label>
+                        <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" value={editForm.currency} onChange={e => setEditForm(f => ({ ...f, currency: e.target.value }))}>
+                          <option>USD</option><option>GNF</option><option>EUR</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-medium text-gray-500 block mb-1">Prix de vente</label>
+                        <input type="number" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" placeholder="0" value={editForm.selling_price} onChange={e => setEditForm(f => ({ ...f, selling_price: e.target.value }))} />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-gray-500 block mb-1">Coût</label>
+                        <input type="number" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" placeholder="0" value={editForm.cost} onChange={e => setEditForm(f => ({ ...f, cost: e.target.value }))} />
+                      </div>
+                    </div>
+                    {(editForm.selling_price || editForm.cost) && (
+                      <div className={`rounded-lg px-3 py-2 text-sm flex items-center gap-2 ${margin >= 0 ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+                        <span className="text-xs font-medium">Marge :</span>
+                        <span className="font-semibold">{margin.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {editForm.currency}</span>
+                        {marginPct != null && (
+                          <span className={`ml-auto text-xs font-bold px-2 py-0.5 rounded-full ${margin >= 0 ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>
+                            {marginPct.toFixed(1)}%
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <label className="text-xs font-medium text-gray-500 block mb-1">Devise</label>
-                    <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" value={editForm.currency} onChange={e => setEditForm(f => ({ ...f, currency: e.target.value }))}>
-                      <option>USD</option><option>GNF</option><option>EUR</option>
-                    </select>
-                  </div>
-                </div>
-              )}
+                )
+              })()}
               <div>
                 <label className="text-xs font-medium text-gray-500 block mb-1">Prochaine action</label>
                 <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" placeholder="Ex: Envoyer le devis, Rappeler M. Diallo…" value={editForm.next_action} onChange={e => setEditForm(f => ({ ...f, next_action: e.target.value }))} />
