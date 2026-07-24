@@ -1,11 +1,11 @@
-import { createCompanyClient } from "@/lib/company"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
 import { notFound } from "next/navigation"
 import ProductDetailClient from "./ProductDetailClient"
 
 export default async function ProductDetailPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params
-  const { db } = await createCompanyClient()
+  const db = createAdminClient().schema("geg_guinee")
   const supabase = await createClient()
 
   const { data: { user } } = await supabase.auth.getUser()

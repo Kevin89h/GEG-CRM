@@ -1,4 +1,4 @@
-import { createCompanyClient } from "@/lib/company"
+import { createAdminClient } from "@/lib/supabase/admin"
 import StockDashboard from "./StockDashboard"
 import type { Warehouse } from "@/types"
 
@@ -23,7 +23,7 @@ function normalizeJoin<T>(val: T | T[] | null | undefined): T | null {
 }
 
 export default async function StockPage() {
-  const { db: supabase } = await createCompanyClient()
+  const supabase = createAdminClient().schema("geg_guinee")
 
   const [{ data: levels }, { data: warehouses }, { data: products }] = await Promise.all([
     supabase

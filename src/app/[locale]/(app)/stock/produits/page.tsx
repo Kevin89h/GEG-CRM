@@ -1,8 +1,8 @@
-import { createCompanyClient } from "@/lib/company"
+import { createAdminClient } from "@/lib/supabase/admin"
 import ProduitsClient from "./ProduitsClient"
 
 export default async function ProduitsPage() {
-  const { db: supabase } = await createCompanyClient()
+  const supabase = createAdminClient().schema("geg_guinee")
 
   const [{ data: products }, { data: categories }, { data: units }] = await Promise.all([
     supabase
