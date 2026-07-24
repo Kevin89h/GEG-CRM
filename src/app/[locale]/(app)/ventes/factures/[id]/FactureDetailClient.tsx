@@ -568,9 +568,9 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
                 placeholder="Rechercher un client..."
                 className="w-64 text-sm border border-blue-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
-              {filteredAccounts.length > 0 && (
+              {accounts.length > 0 && (
                 <div className="absolute z-50 mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                  {filteredAccounts.map(a => (
+                  {accounts.map(a => (
                     <button
                       key={a.id}
                       onClick={() => saveAccount(a.id, a.name)}
