@@ -132,6 +132,19 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
   const isCancelled = invoice.status === "cancelled"
   const isDraft = invoice.status === "draft"
   const canEdit = !isCancelled
+  const [duplicating, setDuplicating] = useState(false)
+
+  async function duplicateInvoice() {
+    setDuplicating(true)
+    const res = await fetch(`/api/invoices/${invoice.id}/duplicate`, { method: "POST" })
+    if (res.ok) {
+      const { id } = await res.json()
+      router.push(`/${locale}/ventes/factures/${id}`)
+    } else {
+      setError("Erreur lors de la duplication")
+    }
+    setDuplicating(false)
+  }
 
   const [editingDates, setEditingDates] = useState(false)
   const [dateForm, setDateForm] = useState({
@@ -484,6 +497,11 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
           {["sent", "partial", "paid", "cancelled"].includes(invoice.status) && (
             <Button variant="secondary" onClick={resetToDraft} disabled={saving}>
               <RotateCcw className="w-4 h-4" /> {t("resetToDraft")}
+            </Button>
+          )}
+          {isCancelled && (
+            <Button variant="secondary" onClick={duplicateInvoice} disabled={duplicating}>
+              <Plus className="w-4 h-4" /> {duplicating ? "Duplication..." : "Dupliquer"}
             </Button>
           )}
           {["draft", "sent", "partial"].includes(invoice.status) && (

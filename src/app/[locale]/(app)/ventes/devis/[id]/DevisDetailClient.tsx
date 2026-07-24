@@ -522,12 +522,11 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                 </div>
               ) : (
                 <button
-                  disabled={isCancelled}
-                  onClick={() => { if (!isCancelled) { setEditingAccount(true); loadAccounts("") } }}
-                  className={`text-sm text-left group ${isCancelled ? "text-gray-400 cursor-default" : "text-gray-900 hover:text-blue-600 hover:underline cursor-pointer"}`}
+                  onClick={() => { setEditingAccount(true); loadAccounts("") }}
+                  className="text-sm text-left group text-gray-900 hover:text-blue-600 hover:underline cursor-pointer"
                 >
                   {currentAccount?.name ?? "—"}
-                  {!isCancelled && <span className="ml-1 opacity-0 group-hover:opacity-100 text-blue-400 text-xs">✎</span>}
+                  <span className="ml-1 opacity-0 group-hover:opacity-100 text-blue-400 text-xs">✎</span>
                 </button>
               )}
             </div>
