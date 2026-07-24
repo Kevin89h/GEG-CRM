@@ -28,7 +28,7 @@ export default async function DealDetailPage({ params }: { params: Promise<{ loc
     accounts = (sgAccounts ?? []).map((d: any) => ({ id: d.id, name: d.account_name }))
   } else {
     const [{ data: guDeal }, { data: guAccounts }, { data: guActivities }, { data: guDevis }] = await Promise.all([
-      db.from("deals").select("*, account:accounts(id, name, type)").eq("id", id).single(),
+      db.from("deals").select("*, deal_date, country, original_request, contact_name, contact_role, contact_email, contact_phone, sector, preferred_channel, account:accounts(id, name, type)").eq("id", id).single(),
       db.from("accounts").select("id, name").order("name"),
       db.from("activities")
         .select("id, type, subject, notes, date, follow_up_date, completed, user_id")

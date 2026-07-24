@@ -19,6 +19,15 @@ interface DealRow {
   prospect_name: string | null
   products_requested: string | null
   account: { id: string; name: string } | null
+  deal_date: string | null
+  country: string | null
+  original_request: string | null
+  contact_name: string | null
+  contact_role: string | null
+  contact_email: string | null
+  contact_phone: string | null
+  sector: string[] | null
+  preferred_channel: string | null
 }
 
 interface UserProfile {
@@ -81,6 +90,14 @@ const SOURCE_LABELS: Record<string, string> = {
   other: "Autre",
 }
 
+const SECTORS = ["Mines", "Construction", "Transport", "Industrie", "Agriculture", "Marine", "Gouvernement", "Autre"]
+
+const CHANNEL_OPTIONS = [
+  { value: "whatsapp", label: "WhatsApp", icon: <MessageSquare className="w-3.5 h-3.5" /> },
+  { value: "email", label: "Email", icon: <Mail className="w-3.5 h-3.5" /> },
+  { value: "phone", label: "Téléphone", icon: <Phone className="w-3.5 h-3.5" /> },
+]
+
 function initials(name: string) {
   return name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2)
 }
@@ -91,6 +108,31 @@ function EmptyColumn() {
   )
 }
 
+function todayISO() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+const INITIAL_FORM = {
+  title: "",
+  account_id: "",
+  prospect_name: "",
+  stage: "lead" as DealStage,
+  source: "whatsapp",
+  source_detail: "",
+  products_requested: "",
+  assigned_to: [] as string[],
+  priority: "normal",
+  deal_date: todayISO(),
+  country: "",
+  original_request: "",
+  contact_name: "",
+  contact_role: "",
+  contact_email: "",
+  contact_phone: "",
+  sector: [] as string[],
+  preferred_channel: "",
+}
+
 export default function DealsClient({ deals: initial, accounts, profiles, currentUserId }: Props) {
   const router = useRouter()
   const [deals, setDeals] = useState(initial)
@@ -99,27 +141,22 @@ export default function DealsClient({ deals: initial, accounts, profiles, curren
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [clientType, setClientType] = useState<"existing" | "new">("existing")
-  const [form, setForm] = useState({
-    title: "",
-    account_id: "",
-    prospect_name: "",
-    stage: "lead" as DealStage,
-    source: "whatsapp",
-    source_detail: "",
-    products_requested: "",
-    assigned_to: [] as string[],
-    priority: "normal",
-    value: "",
-    currency: "USD",
-  })
+  const [form, setForm] = useState(INITIAL_FORM)
 
   function f<K extends keyof typeof form>(k: K, v: (typeof form)[K]) {
     setForm(p => ({ ...p, [k]: v }))
   }
 
   function resetForm() {
-    setForm({ title: "", account_id: "", prospect_name: "", stage: "lead", source: "whatsapp", source_detail: "", products_requested: "", assigned_to: [], priority: "normal", value: "", currency: "USD" })
+    setForm({ ...INITIAL_FORM, deal_date: todayISO() })
     setClientType("existing")
+  }
+
+  function toggleSector(s: string) {
+    setForm(p => ({
+      ...p,
+      sector: p.sector.includes(s) ? p.sector.filter(x => x !== s) : [...p.sector, s],
+    }))
   }
 
   async function handleSave() {
@@ -136,8 +173,15 @@ export default function DealsClient({ deals: initial, accounts, profiles, curren
       products_requested: form.products_requested || null,
       assigned_to: form.assigned_to.length > 0 ? form.assigned_to : null,
       priority: form.priority,
-      value: form.value ? parseFloat(form.value) : null,
-      currency: form.currency,
+      deal_date: form.deal_date || null,
+      country: form.country || null,
+      original_request: form.original_request || null,
+      contact_name: form.contact_name || null,
+      contact_role: form.contact_role || null,
+      contact_email: form.contact_email || null,
+      contact_phone: form.contact_phone || null,
+      sector: form.sector,
+      preferred_channel: form.preferred_channel || null,
     }
     const res = await fetch("/api/deals", {
       method: "POST",
@@ -360,6 +404,28 @@ export default function DealsClient({ deals: initial, accounts, profiles, curren
                 </div>
               </div>
 
+              {/* Date + Pays */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-gray-500 block mb-1">Date</label>
+                  <input
+                    type="date"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                    value={form.deal_date}
+                    onChange={e => f("deal_date", e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500 block mb-1">Pays</label>
+                  <input
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                    placeholder="Ex: Guinée, Sénégal…"
+                    value={form.country}
+                    onChange={e => f("country", e.target.value)}
+                  />
+                </div>
+              </div>
+
               {/* Title */}
               <div>
                 <label className="text-xs font-medium text-gray-500 block mb-1">Objet de la demande *</label>
@@ -372,6 +438,18 @@ export default function DealsClient({ deals: initial, accounts, profiles, curren
                 />
               </div>
 
+              {/* Demande originale */}
+              <div>
+                <label className="text-xs font-medium text-gray-500 block mb-1">Demande originale</label>
+                <textarea
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 resize-none"
+                  placeholder="Coller ici la demande originale du client..."
+                  rows={5}
+                  value={form.original_request}
+                  onChange={e => f("original_request", e.target.value)}
+                />
+              </div>
+
               {/* Products requested */}
               <div>
                 <label className="text-xs font-medium text-gray-500 block mb-1">Produits / services demandés</label>
@@ -381,17 +459,6 @@ export default function DealsClient({ deals: initial, accounts, profiles, curren
                   rows={3}
                   value={form.products_requested}
                   onChange={e => f("products_requested", e.target.value)}
-                />
-              </div>
-
-              {/* Source detail */}
-              <div>
-                <label className="text-xs font-medium text-gray-500 block mb-1">Contexte / détail</label>
-                <input
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-                  placeholder="Ex: Message reçu le 15/07 de M. Diallo — besoin urgent avant fin de mois"
-                  value={form.source_detail}
-                  onChange={e => f("source_detail", e.target.value)}
                 />
               </div>
 
@@ -431,6 +498,75 @@ export default function DealsClient({ deals: initial, accounts, profiles, curren
                 )}
               </div>
 
+              {/* Contact principal */}
+              <div>
+                <label className="text-xs font-medium text-gray-500 block mb-1.5">Contact principal</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                    placeholder="Nom"
+                    value={form.contact_name}
+                    onChange={e => f("contact_name", e.target.value)}
+                  />
+                  <input
+                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                    placeholder="Fonction"
+                    value={form.contact_role}
+                    onChange={e => f("contact_role", e.target.value)}
+                  />
+                  <input
+                    type="email"
+                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                    placeholder="Email"
+                    value={form.contact_email}
+                    onChange={e => f("contact_email", e.target.value)}
+                  />
+                  <input
+                    type="tel"
+                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
+                    placeholder="Téléphone"
+                    value={form.contact_phone}
+                    onChange={e => f("contact_phone", e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Secteur d'activité */}
+              <div>
+                <label className="text-xs font-medium text-gray-500 block mb-1.5">Secteur d&apos;activité</label>
+                <div className="flex flex-wrap gap-2">
+                  {SECTORS.map(s => (
+                    <label key={s} className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={form.sector.includes(s)}
+                        onChange={() => toggleSector(s)}
+                        className="rounded"
+                      />
+                      <span className="text-sm text-gray-700">{s}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Canal préféré */}
+              <div>
+                <label className="text-xs font-medium text-gray-500 block mb-1.5">Canal préféré</label>
+                <div className="flex gap-2">
+                  {CHANNEL_OPTIONS.map(ch => (
+                    <button
+                      key={ch.value}
+                      onClick={() => f("preferred_channel", form.preferred_channel === ch.value ? "" : ch.value)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition ${
+                        form.preferred_channel === ch.value ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200 hover:border-blue-300"
+                      }`}
+                    >
+                      {ch.icon} {ch.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs font-medium text-gray-500 block mb-1">Assigné à</label>
@@ -466,30 +602,6 @@ export default function DealsClient({ deals: initial, accounts, profiles, curren
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-medium text-gray-500 block mb-1">Valeur estimée</label>
-                  <input
-                    type="number"
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-                    placeholder="0"
-                    value={form.value}
-                    onChange={e => f("value", e.target.value)}
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-medium text-gray-500 block mb-1">Devise</label>
-                  <select
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500"
-                    value={form.currency}
-                    onChange={e => f("currency", e.target.value)}
-                  >
-                    <option>USD</option>
-                    <option>GNF</option>
-                    <option>EUR</option>
-                  </select>
-                </div>
-              </div>
             </div>
             <div className="px-6 py-4 border-t border-gray-100 sticky bottom-0 bg-white rounded-b-2xl">
               {saveError && (

@@ -50,6 +50,15 @@ export async function POST(req: NextRequest) {
       value: body.value ?? null,
       currency: body.currency ?? "USD",
       notes: body.notes ?? null,
+      deal_date: body.deal_date ?? null,
+      country: body.country ?? null,
+      original_request: body.original_request ?? null,
+      contact_name: body.contact_name ?? null,
+      contact_role: body.contact_role ?? null,
+      contact_email: body.contact_email ?? null,
+      contact_phone: body.contact_phone ?? null,
+      sector: body.sector ?? [],
+      preferred_channel: body.preferred_channel ?? null,
     }])
     .select("*, account:accounts(id, name)")
     .single()

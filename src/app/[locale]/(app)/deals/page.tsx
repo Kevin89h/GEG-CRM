@@ -30,7 +30,7 @@ export default async function DealsPage() {
     accounts = sgAccounts ?? []
   } else {
     const [{ data: guDeals }, { data: guAccounts }] = await Promise.all([
-      db.from("deals").select("*, account:accounts(id, name, type)").order("created_at", { ascending: false }),
+      db.from("deals").select("*, deal_date, country, original_request, contact_name, contact_role, contact_email, contact_phone, sector, preferred_channel, account:accounts(id, name, type)").order("created_at", { ascending: false }),
       db.from("accounts").select("id, name").order("name"),
     ])
     deals = guDeals ?? []

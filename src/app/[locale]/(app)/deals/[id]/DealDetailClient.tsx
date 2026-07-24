@@ -40,6 +40,15 @@ interface Deal {
   created_at: string
   account: { id: string; name: string; type: string } | null
   assignedEmployees: { id: string; full_name: string | null; email: string }[]
+  deal_date: string | null
+  country: string | null
+  original_request: string | null
+  contact_name: string | null
+  contact_role: string | null
+  contact_email: string | null
+  contact_phone: string | null
+  sector: string[] | null
+  preferred_channel: string | null
 }
 
 interface UserProfile {
@@ -152,6 +161,15 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
     priority: deal.priority,
     value: deal.value?.toString() ?? "",
     currency: deal.currency,
+    deal_date: deal.deal_date ?? "",
+    country: deal.country ?? "",
+    original_request: deal.original_request ?? "",
+    contact_name: deal.contact_name ?? "",
+    contact_role: deal.contact_role ?? "",
+    contact_email: deal.contact_email ?? "",
+    contact_phone: deal.contact_phone ?? "",
+    sector: deal.sector ?? [] as string[],
+    preferred_channel: deal.preferred_channel ?? "",
   })
   const [activityModal, setActivityModal] = useState(false)
   const [actForm, setActForm] = useState({ type: "note", subject: "", notes: "", date: new Date().toISOString().slice(0, 16), follow_up_date: "" })
@@ -186,10 +204,13 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
+  const VALUE_STAGES: DealStage[] = ["qualified", "proposal", "negotiation", "won", "lost"]
+  const showValue = VALUE_STAGES.includes(deal.stage)
+
   async function saveEdit() {
     setSaveError(null)
     setSaving(true)
-    const body = {
+    const body: Record<string, unknown> = {
       title: editForm.title,
       products_requested: editForm.products_requested || null,
       notes: editForm.notes || null,
@@ -197,8 +218,19 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
       next_action_date: editForm.next_action_date || null,
       assigned_to: editForm.assigned_to,
       priority: editForm.priority,
-      value: editForm.value ? parseFloat(editForm.value) : null,
-      currency: editForm.currency,
+      deal_date: editForm.deal_date || null,
+      country: editForm.country || null,
+      original_request: editForm.original_request || null,
+      contact_name: editForm.contact_name || null,
+      contact_role: editForm.contact_role || null,
+      contact_email: editForm.contact_email || null,
+      contact_phone: editForm.contact_phone || null,
+      sector: editForm.sector,
+      preferred_channel: editForm.preferred_channel || null,
+    }
+    if (showValue) {
+      body.value = editForm.value ? parseFloat(editForm.value) : null
+      body.currency = editForm.currency
     }
     const res = await fetch(`/api/deals/${deal.id}`, {
       method: "PATCH",
@@ -417,6 +449,18 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
             <div className="flex items-center justify-between mb-1">
               <h2 className="text-sm font-semibold text-gray-900">Informations</h2>
             </div>
+            {deal.deal_date && (
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-gray-400 w-28 flex-shrink-0 text-xs">Date de demande</span>
+                <span className="text-gray-700">{formatDate(deal.deal_date)}</span>
+              </div>
+            )}
+            {deal.country && (
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-gray-400 w-28 flex-shrink-0 text-xs">Pays</span>
+                <span className="text-gray-700">{deal.country}</span>
+              </div>
+            )}
             {deal.source && (
               <div className="flex items-center gap-2 text-sm">
                 <span className="text-gray-400 w-28 flex-shrink-0 text-xs">Source</span>
@@ -427,13 +471,46 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
                 </span>
               </div>
             )}
+            {deal.preferred_channel && (
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-gray-400 w-28 flex-shrink-0 text-xs">Canal préféré</span>
+                <span className="text-gray-700 capitalize">{deal.preferred_channel === "phone" ? "Téléphone" : deal.preferred_channel === "email" ? "Email" : "WhatsApp"}</span>
+              </div>
+            )}
+            {deal.original_request && (
+              <div className="flex gap-2 text-sm">
+                <span className="text-gray-400 w-28 flex-shrink-0 text-xs">Demande originale</span>
+                <span className="text-gray-700 whitespace-pre-line">{deal.original_request}</span>
+              </div>
+            )}
             {deal.products_requested && (
               <div className="flex gap-2 text-sm">
                 <span className="text-gray-400 w-28 flex-shrink-0 text-xs">Produits demandés</span>
                 <span className="text-gray-700">{deal.products_requested}</span>
               </div>
             )}
-            {deal.value && (
+            {(deal.sector && deal.sector.length > 0) && (
+              <div className="flex gap-2 text-sm">
+                <span className="text-gray-400 w-28 flex-shrink-0 text-xs">Secteur</span>
+                <div className="flex flex-wrap gap-1">
+                  {deal.sector.map(s => (
+                    <span key={s} className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full">{s}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {/* Contact principal */}
+            {(deal.contact_name || deal.contact_email || deal.contact_phone) && (
+              <div className="flex gap-2 text-sm">
+                <span className="text-gray-400 w-28 flex-shrink-0 text-xs">Contact</span>
+                <div className="space-y-0.5">
+                  {deal.contact_name && <p className="text-gray-900 font-medium">{deal.contact_name}{deal.contact_role && <span className="text-gray-400 font-normal ml-1">— {deal.contact_role}</span>}</p>}
+                  {deal.contact_email && <a href={`mailto:${deal.contact_email}`} className="text-blue-600 hover:underline block text-xs">{deal.contact_email}</a>}
+                  {deal.contact_phone && <a href={`https://wa.me/${deal.contact_phone.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline block text-xs">{deal.contact_phone}</a>}
+                </div>
+              </div>
+            )}
+            {showValue && deal.value && (
               <div className="flex items-center gap-2 text-sm">
                 <span className="text-gray-400 w-28 flex-shrink-0 text-xs">Valeur estimée</span>
                 <span className="font-semibold text-blue-600">{formatCurrency(deal.value, deal.currency as "USD" | "GNF" | "EUR")}</span>
@@ -786,9 +863,66 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
                 <label className="text-xs font-medium text-gray-500 block mb-1">Titre</label>
                 <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" value={editForm.title} onChange={e => setEditForm(f => ({ ...f, title: e.target.value }))} />
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-gray-500 block mb-1">Date de demande</label>
+                  <input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" value={editForm.deal_date} onChange={e => setEditForm(f => ({ ...f, deal_date: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500 block mb-1">Pays</label>
+                  <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" placeholder="Ex: Guinée…" value={editForm.country} onChange={e => setEditForm(f => ({ ...f, country: e.target.value }))} />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-500 block mb-1">Demande originale</label>
+                <textarea className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 resize-none" rows={4} value={editForm.original_request} onChange={e => setEditForm(f => ({ ...f, original_request: e.target.value }))} placeholder="Demande originale du client…" />
+              </div>
               <div>
                 <label className="text-xs font-medium text-gray-500 block mb-1">Produits / services demandés</label>
                 <textarea className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 resize-none" rows={3} value={editForm.products_requested} onChange={e => setEditForm(f => ({ ...f, products_requested: e.target.value }))} />
+              </div>
+              {/* Contact principal */}
+              <div>
+                <label className="text-xs font-medium text-gray-500 block mb-1.5">Contact principal</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <input className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" placeholder="Nom" value={editForm.contact_name} onChange={e => setEditForm(f => ({ ...f, contact_name: e.target.value }))} />
+                  <input className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" placeholder="Fonction" value={editForm.contact_role} onChange={e => setEditForm(f => ({ ...f, contact_role: e.target.value }))} />
+                  <input type="email" className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" placeholder="Email" value={editForm.contact_email} onChange={e => setEditForm(f => ({ ...f, contact_email: e.target.value }))} />
+                  <input type="tel" className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" placeholder="Téléphone" value={editForm.contact_phone} onChange={e => setEditForm(f => ({ ...f, contact_phone: e.target.value }))} />
+                </div>
+              </div>
+              {/* Secteur */}
+              <div>
+                <label className="text-xs font-medium text-gray-500 block mb-1.5">Secteur d&apos;activité</label>
+                <div className="flex flex-wrap gap-2">
+                  {["Mines", "Construction", "Transport", "Industrie", "Agriculture", "Marine", "Gouvernement", "Autre"].map(s => (
+                    <label key={s} className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editForm.sector.includes(s)}
+                        onChange={e => setEditForm(f => ({ ...f, sector: e.target.checked ? [...f.sector, s] : f.sector.filter(x => x !== s) }))}
+                        className="rounded"
+                      />
+                      <span className="text-sm text-gray-700">{s}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              {/* Canal préféré */}
+              <div>
+                <label className="text-xs font-medium text-gray-500 block mb-1.5">Canal préféré</label>
+                <div className="flex gap-2">
+                  {[{ value: "whatsapp", label: "WhatsApp" }, { value: "email", label: "Email" }, { value: "phone", label: "Téléphone" }].map(ch => (
+                    <button
+                      key={ch.value}
+                      type="button"
+                      onClick={() => setEditForm(f => ({ ...f, preferred_channel: f.preferred_channel === ch.value ? "" : ch.value }))}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition ${editForm.preferred_channel === ch.value ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-200 hover:border-blue-300"}`}
+                    >
+                      {ch.label}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -820,18 +954,20 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-medium text-gray-500 block mb-1">Valeur</label>
-                  <input type="number" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" value={editForm.value} onChange={e => setEditForm(f => ({ ...f, value: e.target.value }))} />
+              {showValue && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 block mb-1">Valeur</label>
+                    <input type="number" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" value={editForm.value} onChange={e => setEditForm(f => ({ ...f, value: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 block mb-1">Devise</label>
+                    <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" value={editForm.currency} onChange={e => setEditForm(f => ({ ...f, currency: e.target.value }))}>
+                      <option>USD</option><option>GNF</option><option>EUR</option>
+                    </select>
+                  </div>
                 </div>
-                <div>
-                  <label className="text-xs font-medium text-gray-500 block mb-1">Devise</label>
-                  <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" value={editForm.currency} onChange={e => setEditForm(f => ({ ...f, currency: e.target.value }))}>
-                    <option>USD</option><option>GNF</option><option>EUR</option>
-                  </select>
-                </div>
-              </div>
+              )}
               <div>
                 <label className="text-xs font-medium text-gray-500 block mb-1">Prochaine action</label>
                 <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" placeholder="Ex: Envoyer le devis, Rappeler M. Diallo…" value={editForm.next_action} onChange={e => setEditForm(f => ({ ...f, next_action: e.target.value }))} />

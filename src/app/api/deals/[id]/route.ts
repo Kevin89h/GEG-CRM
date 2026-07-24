@@ -26,6 +26,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     "title", "stage", "value", "currency", "probability", "close_date",
     "notes", "priority", "products_requested", "source", "source_detail",
     "assigned_to", "next_action", "next_action_date", "account_id", "prospect_name",
+    "deal_date", "country", "original_request", "contact_name", "contact_role",
+    "contact_email", "contact_phone", "sector", "preferred_channel",
   ]
   const patch: Record<string, unknown> = {}
   let nextAssignedIds: string[] = []
