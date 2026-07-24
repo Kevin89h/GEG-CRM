@@ -85,6 +85,9 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
   const [accountsList, setAccountsList] = useState<{ id: string; name: string }[]>([])
   const [savingAccount, setSavingAccount] = useState(false)
   const [currentAccount, setCurrentAccount] = useState(order.account)
+  const [creatingAccount, setCreatingAccount] = useState(false)
+  const [newAccountName, setNewAccountName] = useState("")
+  const [savingNewAccount, setSavingNewAccount] = useState(false)
 
   async function loadAccounts(q = "") {
     const res = await fetch(`/api/accounts?q=${encodeURIComponent(q)}`)
@@ -92,6 +95,24 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
       const json = await res.json()
       setAccountsList((json.data ?? json) as { id: string; name: string }[])
     }
+  }
+
+  async function createAndSelectAccount() {
+    if (!newAccountName.trim()) return
+    setSavingNewAccount(true)
+    const res = await fetch("/api/accounts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newAccountName.trim(), type: "enterprise" }),
+    })
+    if (res.ok) {
+      const created = await res.json()
+      const id = created.id ?? created.data?.id
+      if (id) await saveAccount(id, newAccountName.trim())
+    }
+    setCreatingAccount(false)
+    setNewAccountName("")
+    setSavingNewAccount(false)
   }
 
   async function saveAccount(accountId: string, accountName: string) {
@@ -508,17 +529,41 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                     placeholder="Rechercher un client..."
                     className="w-56 text-sm border border-blue-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
-                  {filteredAccounts.length > 0 && (
-                    <div className="absolute z-50 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                      {filteredAccounts.map(a => (
-                        <button key={a.id} onClick={() => saveAccount(a.id, a.name)} disabled={savingAccount}
-                          className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 transition">
-                          {a.name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  <button onClick={() => { setEditingAccount(false); setAccountSearch("") }} className="ml-2 text-xs text-gray-400 hover:text-gray-600">Annuler</button>
+                  <div className="absolute z-50 mt-1 w-56 bg-white border border-gray-200 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+                    {filteredAccounts.map(a => (
+                      <button key={a.id} onClick={() => saveAccount(a.id, a.name)} disabled={savingAccount}
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 transition">
+                        {a.name}
+                      </button>
+                    ))}
+                    {creatingAccount ? (
+                      <div className="px-3 py-2 border-t border-gray-100">
+                        <input
+                          autoFocus
+                          type="text"
+                          value={newAccountName}
+                          onChange={e => setNewAccountName(e.target.value)}
+                          onKeyDown={e => { if (e.key === "Enter") createAndSelectAccount(); if (e.key === "Escape") setCreatingAccount(false) }}
+                          placeholder="Nom du client..."
+                          className="w-full text-sm border border-blue-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                        <div className="flex gap-2 mt-1.5">
+                          <button onClick={createAndSelectAccount} disabled={savingNewAccount || !newAccountName.trim()}
+                            className="text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50">
+                            {savingNewAccount ? "..." : "Créer"}
+                          </button>
+                          <button onClick={() => { setCreatingAccount(false); setNewAccountName("") }}
+                            className="text-xs text-gray-400 hover:text-gray-600">Annuler</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button onClick={() => setCreatingAccount(true)}
+                        className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 border-t border-gray-100 flex items-center gap-1.5 transition">
+                        <span className="font-bold">+</span> Nouveau client
+                      </button>
+                    )}
+                  </div>
+                  <button onClick={() => { setEditingAccount(false); setAccountSearch(""); setCreatingAccount(false) }} className="ml-2 text-xs text-gray-400 hover:text-gray-600">Annuler</button>
                 </div>
               ) : (
                 <button
