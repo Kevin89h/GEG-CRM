@@ -22,7 +22,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     payment_terms?: string | null
   }
 
-  const { db } = await createCompanyClient()
+  const { db, schema } = await createCompanyClient()
+
+  if (schema === "geg_singapore") {
+    return NextResponse.json({ error: "Les factures ne sont pas disponibles pour le bureau de Singapour." }, { status: 400 })
+  }
 
   const now = new Date()
   const year = now.getFullYear()

@@ -2,7 +2,7 @@ import { createCompanyClient } from "@/lib/company"
 import DevisClient from "./DevisClient"
 
 export default async function DevisListPage() {
-  const { db } = await createCompanyClient()
+  const { db, schema } = await createCompanyClient()
 
   const [
     { data: orders },
@@ -41,5 +41,5 @@ export default async function DevisListPage() {
     salesperson_name: o.salesperson_id ? (employeeMap[o.salesperson_id] ?? "—") : "—",
   }))
 
-  return <DevisClient orders={list} />
+  return <DevisClient orders={list} schema={schema} />
 }

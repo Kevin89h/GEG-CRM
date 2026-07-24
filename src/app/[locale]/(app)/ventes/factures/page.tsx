@@ -2,7 +2,7 @@ import { createCompanyClient } from "@/lib/company"
 import FacturesClient from "./FacturesClient"
 
 export default async function FacturesPage() {
-  const { db } = await createCompanyClient()
+  const { db, schema } = await createCompanyClient()
 
   const [{ data: invoices }, { data: accounts }] = await Promise.all([
     db.from("invoice_totals")
@@ -34,5 +34,5 @@ export default async function FacturesPage() {
     client_name: i.account_id ? (accountMap[i.account_id] ?? "—") : "—",
   }))
 
-  return <FacturesClient invoices={list} />
+  return <FacturesClient invoices={list} schema={schema} />
 }
