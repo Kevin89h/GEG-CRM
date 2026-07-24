@@ -140,6 +140,39 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
   })
   const [savingDates, setSavingDates] = useState(false)
 
+  const [editingAccount, setEditingAccount] = useState(false)
+  const [accountSearch, setAccountSearch] = useState("")
+  const [accounts, setAccounts] = useState<{ id: string; name: string }[]>([])
+  const [savingAccount, setSavingAccount] = useState(false)
+
+  async function loadAccounts() {
+    if (accounts.length > 0) return
+    const res = await fetch("/api/accounts")
+    if (res.ok) {
+      const json = await res.json()
+      setAccounts((json.data ?? json) as { id: string; name: string }[])
+    }
+  }
+
+  async function saveAccount(accountId: string, accountName: string) {
+    setSavingAccount(true)
+    const res = await fetch(`/api/invoices/${invoice.id}/account`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ account_id: accountId }),
+    })
+    if (res.ok) {
+      setInvoice(prev => ({ ...prev, account: { name: accountName, country: prev.account?.country ?? null } }))
+      setEditingAccount(false)
+      setAccountSearch("")
+    }
+    setSavingAccount(false)
+  }
+
+  const filteredAccounts = accounts.filter(a =>
+    a.name.toLowerCase().includes(accountSearch.toLowerCase())
+  ).slice(0, 8)
+
   async function saveDates() {
     setSavingDates(true)
     const res = await fetch(`/api/invoices/${invoice.id}/dates`, {
@@ -529,7 +562,42 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
       <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-gray-900 font-mono mb-0.5">{invoice.number}</h1>
-          <p className="text-gray-500 text-sm">{invoice.account?.name ?? "—"}</p>
+          {editingAccount ? (
+            <div className="relative mt-1">
+              <input
+                autoFocus
+                type="text"
+                value={accountSearch}
+                onChange={e => setAccountSearch(e.target.value)}
+                placeholder="Rechercher un client..."
+                className="w-64 text-sm border border-blue-300 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              {filteredAccounts.length > 0 && (
+                <div className="absolute z-50 mt-1 w-64 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {filteredAccounts.map(a => (
+                    <button
+                      key={a.id}
+                      onClick={() => saveAccount(a.id, a.name)}
+                      disabled={savingAccount}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 transition"
+                    >
+                      {a.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <button onClick={() => { setEditingAccount(false); setAccountSearch("") }} className="ml-2 text-xs text-gray-400 hover:text-gray-600">Annuler</button>
+            </div>
+          ) : (
+            <button
+              disabled={isCancelled}
+              onClick={() => { if (!isCancelled) { setEditingAccount(true); loadAccounts() } }}
+              className={`text-sm text-left ${isCancelled ? "text-gray-400 cursor-default" : "text-gray-500 hover:text-blue-600 hover:underline cursor-pointer"} group`}
+            >
+              {invoice.account?.name ?? "—"}
+              {!isCancelled && <span className="ml-1 opacity-0 group-hover:opacity-100 text-blue-400 text-xs">✎</span>}
+            </button>
+          )}
         </div>
         <div className="flex gap-2">
           <a href={`/${locale}/ventes/factures/${invoice.id}/pdf`} target="_blank" className="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">
