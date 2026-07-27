@@ -28,9 +28,18 @@ export async function POST(req: NextRequest) {
   const now = new Date()
   const year = now.getFullYear()
   const month = String(now.getMonth() + 1).padStart(2, "0")
-  const { count } = await db.from("sales_orders").select("*", { count: "exact", head: true })
-  const seq = String((count ?? 0) + 1).padStart(4, "0")
-  const number = `DEV-${year}-${month}-${seq}`
+  const prefix = `DEV-${year}-${month}-`
+  const { data: lastRows } = await db
+    .from("sales_orders")
+    .select("number")
+    .ilike("number", `${prefix}%`)
+    .order("number", { ascending: false })
+    .limit(1)
+  const lastSeq = lastRows?.[0]?.number
+    ? parseInt(lastRows[0].number.replace(prefix, ""), 10)
+    : 0
+  const seq = String(lastSeq + 1).padStart(4, "0")
+  const number = `${prefix}${seq}`
 
   const { data: order, error: orderErr } = await db.from("sales_orders").insert([{
     ...orderData,
