@@ -29,16 +29,17 @@ export async function POST(req: NextRequest) {
   const year = now.getFullYear()
   const month = String(now.getMonth() + 1).padStart(2, "0")
   const prefix = `DEV-${year}-${month}-`
-  const { data: lastRows } = await db
+  // Cherche le max global sur tous les devis pour éviter tout conflit
+  const { data: allOrders } = await db
     .from("sales_orders")
     .select("number")
-    .ilike("number", `${prefix}%`)
-    .order("number", { ascending: false })
-    .limit(1)
-  const lastSeq = lastRows?.[0]?.number
-    ? parseInt(lastRows[0].number.replace(prefix, ""), 10)
-    : 0
-  const seq = String(lastSeq + 1).padStart(4, "0")
+    .ilike("number", "DEV-%")
+  const maxSeq = (allOrders ?? []).reduce((max, row) => {
+    const parts = (row.number as string).split("-")
+    const num = parseInt(parts[parts.length - 1], 10)
+    return isNaN(num) ? max : Math.max(max, num)
+  }, 0)
+  const seq = String(maxSeq + 1).padStart(4, "0")
   const number = `${prefix}${seq}`
 
   const { data: order, error: orderErr } = await db.from("sales_orders").insert([{
