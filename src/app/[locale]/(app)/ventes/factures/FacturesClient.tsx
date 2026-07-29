@@ -32,6 +32,14 @@ interface Props {
 
 type Tab = "ouvertes" | "payees" | "brouillons" | "tout"
 
+const CLIENT_STATUS_LABELS: Record<string, string> = {
+  draft:     "Brouillon",
+  sent:      "Envoyée",
+  partial:   "Partielle",
+  paid:      "Payée",
+  cancelled: "Annulée",
+}
+
 function fmtMulti(byCur: Record<string, number>) {
   return Object.entries(byCur)
     .filter(([, v]) => v > 0)
@@ -70,6 +78,7 @@ export default function FacturesClient({ invoices, schema }: Props) {
   type SortDir = "asc" | "desc"
 
   const [tab, setTab] = useState<Tab>("ouvertes")
+  const [statusFilters, setStatusFilters] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState("")
   const [filterCurrency, setFilterCurrency] = useState<string>("all")
   const [filterOverdue, setFilterOverdue] = useState(false)
@@ -127,12 +136,22 @@ export default function FacturesClient({ invoices, schema }: Props) {
     }
   }, [invoices])
 
+  function toggleStatus(s: string) {
+    setStatusFilters(prev => {
+      const next = new Set(prev)
+      if (next.has(s)) next.delete(s); else next.add(s)
+      return next
+    })
+  }
+
   const displayed = useMemo(() => {
     let base: Invoice[]
     if (tab === "ouvertes") base = invoices.filter(i => openStatuses.includes(i.status))
     else if (tab === "payees") base = invoices.filter(i => i.status === "paid")
     else if (tab === "brouillons") base = invoices.filter(i => i.status === "draft")
     else base = invoices
+
+    if (statusFilters.size > 0) base = base.filter(i => statusFilters.has(i.status))
 
     if (search) {
       const q = search.toLowerCase()
@@ -160,7 +179,7 @@ export default function FacturesClient({ invoices, schema }: Props) {
       }
     })
     return base
-  }, [tab, search, filterCurrency, filterOverdue, sortField, sortDir, invoices])
+  }, [tab, statusFilters, search, filterCurrency, filterOverdue, sortField, sortDir, invoices])
 
   const TABS: { key: Tab; label: string; count: number }[] = [
     { key: "ouvertes",   label: t("tabOpen"),    count: stats.ouvertes },
@@ -230,6 +249,29 @@ export default function FacturesClient({ invoices, schema }: Props) {
               <span className="ml-1.5 text-xs text-gray-400">({tab.count})</span>
             </button>
           ))}
+        </div>
+
+        {/* Status multi-select chips */}
+        <div className="flex items-center gap-1 border-l border-gray-200 pl-3 ml-1">
+          {Object.entries(CLIENT_STATUS_LABELS).map(([k, v]) => {
+            const cfg = STATUS_CONFIG[k]
+            return (
+              <button
+                key={k}
+                onClick={() => toggleStatus(k)}
+                className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                  statusFilters.has(k)
+                    ? `${cfg?.bg ?? "bg-gray-50"} ${cfg?.text ?? "text-gray-600"} border-transparent`
+                    : "border-gray-200 text-gray-500 hover:border-gray-300 bg-white"
+                }`}
+              >
+                {v}
+              </button>
+            )
+          })}
+          {statusFilters.size > 0 && (
+            <button onClick={() => setStatusFilters(new Set())} className="ml-1 text-gray-400 hover:text-gray-600 text-xs">✕</button>
+          )}
         </div>
 
         <div className="flex items-center gap-2 ml-auto">

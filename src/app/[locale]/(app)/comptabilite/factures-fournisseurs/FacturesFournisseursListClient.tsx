@@ -36,7 +36,7 @@ export default function FacturesFournisseursListClient({
   const fileRef = useRef<HTMLInputElement>(null)
 
   const [search, setSearch] = useState("")
-  const [statusFilter, setStatusFilter] = useState("")
+  const [statusFilters, setStatusFilters] = useState<Set<string>>(new Set())
   const [dateFrom, setDateFrom] = useState("")
   const [dateTo, setDateTo] = useState("")
   const [sortKey, setSortKey] = useState<SortKey>("invoice_date")
@@ -64,9 +64,17 @@ export default function FacturesFournisseursListClient({
     else { setSortKey(key); setSortDir("asc") }
   }
 
+  function toggleStatus(s: string) {
+    setStatusFilters(prev => {
+      const next = new Set(prev)
+      if (next.has(s)) next.delete(s); else next.add(s)
+      return next
+    })
+  }
+
   const filtered = useMemo(() => {
     let list = invoices.filter(inv => {
-      if (statusFilter && inv.status !== statusFilter) return false
+      if (statusFilters.size > 0 && !statusFilters.has(inv.status)) return false
       if (dateFrom && inv.invoice_date < dateFrom) return false
       if (dateTo && inv.invoice_date > dateTo) return false
       if (search) {
@@ -82,7 +90,7 @@ export default function FacturesFournisseursListClient({
       return sortDir === "asc" ? cmp : -cmp
     })
     return list
-  }, [invoices, search, statusFilter, dateFrom, dateTo, sortKey, sortDir])
+  }, [invoices, search, statusFilters, dateFrom, dateTo, sortKey, sortDir])
 
   const totalPending = filtered.filter(i => i.status === "pending" || i.status === "partial").reduce((s, i) => s + Number(i.balance ?? i.total_ttc), 0)
   const totalPaid = filtered.filter(i => i.status === "paid").reduce((s, i) => s + Number(i.total_ttc), 0)
@@ -105,7 +113,7 @@ export default function FacturesFournisseursListClient({
   }
 
   function clearFilters() {
-    setSearch(""); setStatusFilter(""); setDateFrom(""); setDateTo("")
+    setSearch(""); setStatusFilters(new Set()); setDateFrom(""); setDateTo("")
   }
 
   async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
@@ -197,14 +205,21 @@ export default function FacturesFournisseursListClient({
             className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
-        <select
-          value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value)}
-          className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-700"
-        >
-          <option value="">Tous les statuts</option>
-          {Object.entries(STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </select>
+        <div className="flex flex-wrap gap-1.5">
+          {Object.entries(STATUS_LABEL).map(([k, v]) => (
+            <button
+              key={k}
+              onClick={() => toggleStatus(k)}
+              className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                statusFilters.has(k)
+                  ? `${STATUS_COLOR[k]} border-transparent`
+                  : "border-gray-200 text-gray-500 hover:border-gray-300 bg-white"
+              }`}
+            >
+              {v}
+            </button>
+          ))}
+        </div>
         <div className="flex items-center gap-2 text-sm text-gray-500">
           <span>Du</span>
           <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
@@ -213,7 +228,7 @@ export default function FacturesFournisseursListClient({
           <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
             className="border border-gray-200 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
-        {(search || statusFilter || dateFrom || dateTo) && (
+        {(search || statusFilters.size > 0 || dateFrom || dateTo) && (
           <button onClick={clearFilters} className="flex items-center gap-1 text-sm text-gray-400 hover:text-gray-700">
             <X className="w-4 h-4" /> Effacer
           </button>
