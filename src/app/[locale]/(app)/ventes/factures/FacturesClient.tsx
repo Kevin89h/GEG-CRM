@@ -281,29 +281,6 @@ export default function FacturesClient({ invoices, schema }: Props) {
           ))}
         </div>
 
-        {/* Status multi-select chips */}
-        <div className="flex items-center gap-1 border-l border-gray-200 pl-3 ml-1">
-          {Object.entries(CLIENT_STATUS_LABELS).map(([k, v]) => {
-            const cfg = STATUS_CONFIG[k]
-            return (
-              <button
-                key={k}
-                onClick={() => toggleStatus(k)}
-                className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
-                  statusFilters.has(k)
-                    ? `${cfg?.bg ?? "bg-gray-50"} ${cfg?.text ?? "text-gray-600"} border-transparent`
-                    : "border-gray-200 text-gray-500 hover:border-gray-300 bg-white"
-                }`}
-              >
-                {v}
-              </button>
-            )
-          })}
-          {statusFilters.size > 0 && (
-            <button onClick={() => setStatusFilters(new Set())} className="ml-1 text-gray-400 hover:text-gray-600 text-xs">✕</button>
-          )}
-        </div>
-
         <div className="flex items-center gap-2 ml-auto">
           {/* Currency filter */}
           {currencies.length > 1 && (
@@ -346,6 +323,30 @@ export default function FacturesClient({ invoices, schema }: Props) {
           <button className="p-1.5 rounded bg-gray-100 text-gray-700"><LayoutList className="w-3.5 h-3.5" /></button>
           <button className="p-1.5 rounded text-gray-400 hover:bg-gray-50"><LayoutGrid className="w-3.5 h-3.5" /></button>
         </div>
+      </div>
+
+      {/* Status multi-select chips — second row */}
+      <div className="bg-white border-b border-gray-100 px-6 py-2 flex items-center gap-1.5">
+        <span className="text-xs text-gray-400 mr-1">Statut :</span>
+        {Object.entries(CLIENT_STATUS_LABELS).map(([k, v]) => {
+          const cfg = STATUS_CONFIG[k]
+          return (
+            <button
+              key={k}
+              onClick={() => toggleStatus(k)}
+              className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                statusFilters.has(k)
+                  ? `${cfg?.bg ?? "bg-gray-50"} ${cfg?.text ?? "text-gray-600"} border-transparent`
+                  : "border-gray-200 text-gray-500 hover:border-gray-300 bg-white"
+              }`}
+            >
+              {v}
+            </button>
+          )
+        })}
+        {statusFilters.size > 0 && (
+          <button onClick={() => setStatusFilters(new Set())} className="ml-1 text-gray-400 hover:text-gray-600 text-xs">✕ Effacer</button>
+        )}
       </div>
 
       {/* Stats bar */}
