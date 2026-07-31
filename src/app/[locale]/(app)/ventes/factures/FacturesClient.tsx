@@ -6,7 +6,7 @@ import { useParams } from "next/navigation"
 import { useTranslations } from "next-intl"
 import {
   Plus, Search, ChevronLeft, ChevronRight, LayoutList, LayoutGrid,
-  Receipt, Clock, ChevronUp, ChevronDown, ChevronsUpDown, AlertTriangle, Download,
+  Receipt, Clock, ChevronUp, ChevronDown, ChevronsUpDown, AlertTriangle, Download, CreditCard, X,
 } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { exportToXls } from "@/lib/exportXls"
@@ -85,6 +85,34 @@ export default function FacturesClient({ invoices, schema }: Props) {
   const [sortField, setSortField] = useState<SortField>("issue_date")
   const [sortDir, setSortDir] = useState<SortDir>("desc")
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkPayOpen, setBulkPayOpen] = useState(false)
+  const [bulkPayForm, setBulkPayForm] = useState({ amount: "", currency: "GNF", method: "bank", paid_at: new Date().toISOString().split("T")[0], reference: "" })
+  const [bulkPayLoading, setBulkPayLoading] = useState(false)
+  const [bulkPayResult, setBulkPayResult] = useState<string | null>(null)
+
+  async function submitBulkPayment() {
+    setBulkPayLoading(true)
+    setBulkPayResult(null)
+    const res = await fetch("/api/invoices/bulk-payment", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        invoice_ids: Array.from(selected),
+        amount: parseFloat(bulkPayForm.amount),
+        currency: bulkPayForm.currency,
+        method: bulkPayForm.method,
+        paid_at: bulkPayForm.paid_at,
+        reference: bulkPayForm.reference,
+      }),
+    })
+    const json = await res.json()
+    setBulkPayLoading(false)
+    if (!res.ok) { setBulkPayResult(`Erreur : ${json.error}`); return }
+    const ok = (json.results ?? []).filter((r: { error?: string }) => !r.error).length
+    setBulkPayResult(`✓ Paiement enregistré sur ${ok} facture(s)`)
+    setSelected(new Set())
+    setTimeout(() => { setBulkPayOpen(false); setBulkPayResult(null); window.location.reload() }, 1500)
+  }
 
   function toggleSelect(id: string) {
     setSelected(prev => {
@@ -189,6 +217,8 @@ export default function FacturesClient({ invoices, schema }: Props) {
   ]
 
   const showPayments = tab !== "brouillons"
+
+  const bulkPayTotal = displayed.filter(i => selected.has(i.id)).reduce((s, i) => s + Number(i.balance), 0)
 
   const selectionTotals = useMemo(() => {
     if (selected.size === 0) return null
@@ -352,7 +382,13 @@ export default function FacturesClient({ invoices, schema }: Props) {
                 {formatCurrency(total, cur as "GNF" | "USD" | "EUR")}
               </span>
             ))}
-            <button onClick={() => setSelected(new Set())} className="text-blue-400 hover:text-blue-700 ml-2 text-lg leading-none">×</button>
+            <button
+              onClick={() => { setBulkPayForm(f => ({ ...f, amount: String(bulkPayTotal) })); setBulkPayOpen(true) }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+            >
+              <CreditCard className="w-3.5 h-3.5" /> Enregistrer un paiement
+            </button>
+            <button onClick={() => setSelected(new Set())} className="text-blue-400 hover:text-blue-700 ml-1 text-lg leading-none">×</button>
           </div>
         </div>
       )}
@@ -502,6 +538,77 @@ export default function FacturesClient({ invoices, schema }: Props) {
           </div>
         )}
       </div>
+
+      {bulkPayOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-lg font-semibold text-gray-900">Paiement groupé — {selected.size} facture{selected.size > 1 ? "s" : ""}</h2>
+              <button onClick={() => { setBulkPayOpen(false); setBulkPayResult(null) }} className="text-gray-400 hover:text-gray-700"><X className="w-5 h-5" /></button>
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 mb-4 text-sm text-blue-800">
+              Total restant dû : <strong>{formatCurrency(bulkPayTotal, bulkPayForm.currency as "GNF" | "USD" | "EUR")}</strong> — réparti de la plus ancienne à la plus récente
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Montant</label>
+                  <input type="number" value={bulkPayForm.amount} onChange={e => setBulkPayForm(f => ({ ...f, amount: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Devise</label>
+                  <select value={bulkPayForm.currency} onChange={e => setBulkPayForm(f => ({ ...f, currency: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="GNF">GNF</option>
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Mode de paiement</label>
+                  <select value={bulkPayForm.method} onChange={e => setBulkPayForm(f => ({ ...f, method: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="bank">Virement</option>
+                    <option value="cash">Espèces</option>
+                    <option value="cheque">Chèque</option>
+                    <option value="mobile">Mobile</option>
+                    <option value="other">Autre</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 mb-1">Date</label>
+                  <input type="date" value={bulkPayForm.paid_at} onChange={e => setBulkPayForm(f => ({ ...f, paid_at: e.target.value }))}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Référence (optionnel)</label>
+                <input type="text" value={bulkPayForm.reference} onChange={e => setBulkPayForm(f => ({ ...f, reference: e.target.value }))}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+            </div>
+
+            {bulkPayResult && (
+              <div className={`mt-4 p-3 rounded-lg text-sm ${bulkPayResult.startsWith("✓") ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
+                {bulkPayResult}
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button onClick={() => { setBulkPayOpen(false); setBulkPayResult(null) }} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900">Annuler</button>
+              <button onClick={submitBulkPayment} disabled={bulkPayLoading || !bulkPayForm.amount}
+                className="px-5 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition">
+                {bulkPayLoading ? "En cours…" : "Enregistrer"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
