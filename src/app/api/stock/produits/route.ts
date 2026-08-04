@@ -5,6 +5,9 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const db = createAdminClient().schema("geg_guinee")
 
+  const ALLOWED_CURRENCIES = ["GNF", "USD", "EUR"]
+  const normalizeCurrency = (c: string) => ALLOWED_CURRENCIES.includes(c) ? c : "GNF"
+
   const { data, error } = await db
     .from("products")
     .insert([{
@@ -14,9 +17,9 @@ export async function POST(req: NextRequest) {
       category_id: body.category_id ?? null,
       unit_id: body.unit_id ?? null,
       buy_price: body.buy_price ?? null,
-      buy_price_currency: body.buy_price_currency ?? "GNF",
+      buy_price_currency: normalizeCurrency(body.buy_price_currency ?? "GNF"),
       sell_price: body.sell_price ?? null,
-      currency: body.currency ?? "GNF",
+      currency: normalizeCurrency(body.currency ?? "GNF"),
     }])
     .select("*, category:product_categories(id, name, color), unit:units(id, name, type)")
     .single()
