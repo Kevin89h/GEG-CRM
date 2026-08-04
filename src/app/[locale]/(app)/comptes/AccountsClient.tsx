@@ -134,7 +134,7 @@ export default function AccountsClient({ accounts: initial, employees }: Props) 
                 return (
                   <tr
                     key={account.id}
-                    onClick={() => router.push(`/${locale}/accounts/${account.id}`)}
+                    onClick={() => router.push(`/${locale}/comptes/${account.id}`)}
                     className="hover:bg-blue-50/40 cursor-pointer transition-colors"
                   >
                     <td className="px-4 py-3">

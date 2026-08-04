@@ -144,7 +144,7 @@ export default function AccountDetailClient({ account, orders, invoices, payment
       setDeleteError(error.message)
       setDeleting(false)
     } else {
-      router.push(`/${locale}/accounts`)
+      router.push(`/${locale}/comptes`)
     }
   }
 
