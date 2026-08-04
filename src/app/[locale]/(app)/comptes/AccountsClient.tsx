@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useTranslations } from "next-intl"
-import { Plus, Search, Building2, Landmark, Briefcase } from "lucide-react"
+import { Plus, Search, Building2, Landmark, Briefcase, GitMerge } from "lucide-react"
 import { useRouter, useParams } from "next/navigation"
 import { Button } from "@/components/ui/Button"
 import { Badge } from "@/components/ui/Badge"
@@ -75,10 +75,19 @@ export default function AccountsClient({ accounts: initial, employees }: Props) 
           <h1 className="text-2xl font-bold text-gray-900">{t("title")}</h1>
           <p className="text-gray-500 text-sm mt-0.5">{filtered.length} compte{filtered.length !== 1 ? "s" : ""}</p>
         </div>
-        <Button onClick={() => setModalOpen(true)}>
-          <Plus className="w-4 h-4" />
-          {t("new")}
-        </Button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => router.push(`/${locale}/comptes/doublons`)}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50"
+          >
+            <GitMerge className="w-4 h-4" />
+            Doublons
+          </button>
+          <Button onClick={() => setModalOpen(true)}>
+            <Plus className="w-4 h-4" />
+            {t("new")}
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}
