@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import {
   ArrowLeft, Receipt, ShoppingCart, Landmark, Clock,
   TrendingUp, ExternalLink, Trash2, AlertTriangle, CheckCircle2,
-  FileText, CreditCard, AlertCircle,
+  FileText, CreditCard, AlertCircle, Pencil, Check, X,
 } from "lucide-react"
 import { Badge } from "@/components/ui/Badge"
 import { formatCurrency, formatDate } from "@/lib/utils"
@@ -116,6 +116,22 @@ export default function AccountDetailClient({ account, orders, invoices, payment
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState("")
+  const [editingName, setEditingName] = useState(false)
+  const [editName, setEditName] = useState(account.name)
+  const [savingName, setSavingName] = useState(false)
+
+  async function handleSaveName() {
+    if (!editName.trim() || editName.trim() === account.name) { setEditingName(false); return }
+    setSavingName(true)
+    await fetch(`/api/accounts/${account.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: editName.trim() }),
+    })
+    setSavingName(false)
+    setEditingName(false)
+    router.refresh()
+  }
 
   const hasOpenInvoices = invoices.some(i => i.status !== "paid" && i.status !== "cancelled")
   const hasActiveOrders = orders.some(o => o.status !== "cancelled")
@@ -245,7 +261,30 @@ export default function AccountDetailClient({ account, orders, invoices, payment
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{account.name}</h1>
+            {editingName ? (
+              <div className="flex items-center gap-2">
+                <input
+                  autoFocus
+                  value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                  onKeyDown={e => { if (e.key === "Enter") handleSaveName(); if (e.key === "Escape") { setEditingName(false); setEditName(account.name) } }}
+                  className="text-2xl font-bold text-gray-900 border-b-2 border-blue-500 outline-none bg-transparent w-72"
+                />
+                <button onClick={handleSaveName} disabled={savingName} className="text-green-600 hover:text-green-700">
+                  <Check className="w-5 h-5" />
+                </button>
+                <button onClick={() => { setEditingName(false); setEditName(account.name) }} className="text-gray-400 hover:text-gray-600">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 group">
+                <h1 className="text-2xl font-bold text-gray-900">{editName}</h1>
+                <button onClick={() => setEditingName(true)} className="opacity-0 group-hover:opacity-100 transition text-gray-400 hover:text-gray-600">
+                  <Pencil className="w-4 h-4" />
+                </button>
+              </div>
+            )}
             <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
               <span>{account.type === "government" ? "Gouvernement" : account.type === "enterprise" ? "Entreprise" : "PME"}</span>
               {account.industry && <span>· {account.industry}</span>}
