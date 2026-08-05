@@ -64,6 +64,7 @@ interface Props {
   notes: string | null
   sourceRef: string | null
   accountName: string
+  accountAddress: string | null
   accountCity: string | null
   accountCountry: string | null
   accountPhone: string | null
@@ -77,7 +78,7 @@ interface Props {
 
 export default function FacturePrintPage({
   id, number, status, currency, issueDate, dueDate, notes, sourceRef,
-  accountName, accountCity, accountCountry, accountPhone,
+  accountName, accountAddress, accountCity, accountCountry, accountPhone,
   lines, payments, locale, docSettings, bankAccounts = [],
 }: Props) {
   const [showImages, setShowImages] = useState(true)
@@ -353,6 +354,7 @@ export default function FacturePrintPage({
             <div>
               <div className="bill-to-label">Facturé à</div>
               <div className="bill-to-name">{accountName}</div>
+              {accountAddress && <div className="bill-to-detail">{accountAddress}</div>}
               {(accountCity || accountCountry) && (
                 <div className="bill-to-detail">
                   {[accountCity, accountCountry].filter(Boolean).join(", ")}

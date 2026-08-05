@@ -36,7 +36,7 @@ export default function AccountsClient({ accounts: initial, employees }: Props) 
   const [saveError, setSaveError] = useState<string | null>(null)
   const [form, setForm] = useState({
     name: "", type: "enterprise" as AccountType, industry: "",
-    country: "Guinée", city: "", phone: "", email: "", website: "", notes: "",
+    country: "Guinée", city: "", address: "", phone: "", email: "", website: "", notes: "",
     salesperson_id: "",
   })
 
@@ -63,7 +63,7 @@ export default function AccountsClient({ accounts: initial, employees }: Props) 
     }
     setAccounts(prev => [json, ...prev])
     setModalOpen(false)
-    setForm({ name: "", type: "enterprise", industry: "", country: "Guinée", city: "", phone: "", email: "", website: "", notes: "", salesperson_id: "" })
+    setForm({ name: "", type: "enterprise", industry: "", country: "Guinée", city: "", address: "", phone: "", email: "", website: "", notes: "", salesperson_id: "" })
     setSaving(false)
   }
 
@@ -192,6 +192,12 @@ export default function AccountsClient({ accounts: initial, employees }: Props) 
             label={t("industry")}
             value={form.industry}
             onChange={e => setForm(f => ({ ...f, industry: e.target.value }))}
+          />
+          <Input
+            label="Adresse"
+            value={form.address}
+            onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
+            placeholder="Rue, quartier, BP…"
           />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input

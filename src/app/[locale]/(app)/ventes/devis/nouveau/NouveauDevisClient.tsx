@@ -249,7 +249,7 @@ export default function NouveauDevisClient({
 
   /* Modal client */
   const [showClientModal, setShowClientModal] = useState(false)
-  const [cForm, setCForm] = useState({ name: "", type: "prospect" as "prospect" | "client", phone: "", email: "", country: "Guinée" })
+  const [cForm, setCForm] = useState({ name: "", type: "prospect" as "prospect" | "client", phone: "", email: "", country: "Guinée", city: "", address: "" })
   const [cSaving, setCSaving] = useState(false)
   const [cError,  setCError]  = useState<string | null>(null)
 
@@ -321,18 +321,23 @@ export default function NouveauDevisClient({
   async function handleCreateClient() {
     if (!cForm.name.trim()) { setCError(t("erreurNomRequis")); return }
     setCSaving(true); setCError(null)
-    const res = await fetch("/api/accounts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: cForm.name.trim(), type: cForm.type, phone: cForm.phone || null, email: cForm.email || null, country: cForm.country || null, is_active: true }),
-    })
-    const json = await res.json()
-    if (!res.ok) { setCError(json.error ?? t("erreur")); setCSaving(false); return }
-    setAccounts(prev => [...prev, json].sort((a, b) => a.name.localeCompare(b.name)))
-    onAccountChange(json.id)
-    setShowClientModal(false)
-    setCForm({ name: "", type: "prospect", phone: "", email: "", country: "Guinée" })
-    setCSaving(false)
+    try {
+      const res = await fetch("/api/accounts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: cForm.name.trim(), type: cForm.type, phone: cForm.phone || null, email: cForm.email || null, country: cForm.country || null, city: cForm.city || null, address: cForm.address || null }),
+      })
+      const json = await res.json()
+      if (!res.ok) { setCError(json.error ?? t("erreur")); return }
+      setAccounts(prev => [...prev, json].sort((a, b) => a.name.localeCompare(b.name)))
+      onAccountChange(json.id)
+      setShowClientModal(false)
+      setCForm({ name: "", type: "prospect", phone: "", email: "", country: "Guinée", city: "", address: "" })
+    } catch {
+      setCError(t("erreur"))
+    } finally {
+      setCSaving(false)
+    }
   }
 
   /* -- Création produit -- */
@@ -803,21 +808,25 @@ export default function NouveauDevisClient({
           <div className="space-y-4">
             <LabeledInput label={t("nomLabel")} value={cForm.name} onChange={v => setCForm(f => ({ ...f, name: v }))} placeholder={t("nomPlaceholder")} autoFocus />
             <div>
-              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">{t("typeLabel")}</label>
-              <select
-                value={cForm.type}
-                onChange={e => setCForm(f => ({ ...f, type: e.target.value as "prospect" | "client" }))}
-                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="prospect">Prospect</option>
-                <option value="client">Client</option>
-              </select>
+              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">{t("typeLabel")}</label>
+              <div className="grid grid-cols-2 gap-2">
+                {([{ v: "prospect", l: "Prospect" }, { v: "client", l: "Client" }] as const).map(({ v, l }) => (
+                  <button key={v} type="button"
+                    onClick={() => setCForm(f => ({ ...f, type: v }))}
+                    className={`py-2 text-sm font-medium rounded-lg border transition-colors ${cForm.type === v ? "bg-blue-600 border-blue-600 text-white" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+                  >{l}</button>
+                ))}
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <LabeledInput label={t("telephoneLabel")} value={cForm.phone} onChange={v => setCForm(f => ({ ...f, phone: v }))} placeholder="+224 6xx xxx xxx" />
+              <LabeledInput label="Email" type="email" value={cForm.email} onChange={v => setCForm(f => ({ ...f, email: v }))} placeholder="contact@entreprise.com" />
+            </div>
+            <LabeledInput label="Adresse" value={cForm.address} onChange={v => setCForm(f => ({ ...f, address: v }))} placeholder="Rue, quartier, BP…" />
+            <div className="grid grid-cols-2 gap-3">
+              <LabeledInput label="Ville" value={cForm.city} onChange={v => setCForm(f => ({ ...f, city: v }))} placeholder="Conakry" />
               <LabeledInput label={t("paysLabel")} value={cForm.country} onChange={v => setCForm(f => ({ ...f, country: v }))} />
             </div>
-            <LabeledInput label={t("emailLabel")} type="email" value={cForm.email} onChange={v => setCForm(f => ({ ...f, email: v }))} placeholder="contact@entreprise.com" />
             {cError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg">{cError}</p>}
             <div className="flex gap-3 pt-2">
               <button onClick={() => setShowClientModal(false)} className="flex-1 py-2 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">{t("annuler")}</button>

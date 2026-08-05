@@ -45,6 +45,7 @@ export async function POST(req: NextRequest) {
       industry: body.industry ?? null,
       country: body.country ?? null,
       city: body.city ?? null,
+      address: body.address ?? null,
       phone: body.phone ?? null,
       email: body.email ?? null,
       website: body.website ?? null,
