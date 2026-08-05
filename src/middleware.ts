@@ -6,6 +6,15 @@ import { updateSession } from "@/lib/supabase/middleware"
 const intlMiddleware = createMiddleware(routing)
 
 export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl
+  // Redirect legacy /accounts routes to /comptes
+  const accountsMatch = pathname.match(/^(\/[a-z]{2})(\/accounts)(\/.*)?$/)
+  if (accountsMatch) {
+    const url = request.nextUrl.clone()
+    url.pathname = `${accountsMatch[1]}/comptes${accountsMatch[3] ?? ""}`
+    return NextResponse.redirect(url, { status: 301 })
+  }
+
   const intlResponse = intlMiddleware(request)
   if (intlResponse.status !== 200) return intlResponse
 
