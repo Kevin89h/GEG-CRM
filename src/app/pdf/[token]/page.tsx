@@ -58,7 +58,7 @@ export default async function PublicPdfPage({ params }: { params: Promise<{ toke
     const { data: invoice } = await db
       .from("invoices")
       .select(`id, number, status, currency, issue_date, due_date, notes, order_id,
-        account:accounts(id, name, city, country, phone),
+        account:accounts(id, name, address, city, country, phone),
         lines:invoice_lines(id, description, quantity, unit_price, discount, position, tva_rate, product:products(id, name, reference))`)
       .eq("id", id)
       .single()
@@ -95,7 +95,8 @@ export default async function PublicPdfPage({ params }: { params: Promise<{ toke
         dueDate={invoice.due_date ? String(invoice.due_date) : null}
         notes={invoice.notes ? String(invoice.notes) : null}
         sourceRef={invoice.order_id ? String(invoice.order_id) : null}
-        accountName={account?.name ?? "—"} accountCity={account?.city ?? null}
+        accountName={account?.name ?? "—"} accountAddress={account?.address ?? null}
+        accountCity={account?.city ?? null}
         accountCountry={account?.country ?? null} accountPhone={account?.phone ?? null}
         lines={lines} payments={paymentList} qrSvg={qrSvg} locale="fr"
         docSettings={docSettings ?? null} bankAccounts={banks}
