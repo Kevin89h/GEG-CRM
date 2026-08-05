@@ -37,11 +37,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(data)
   }
 
+  const validTypes = ["government", "enterprise", "sme", "client", "prospect"]
+  const rawType = (body.type ?? "enterprise").toLowerCase()
+  const accountType = validTypes.includes(rawType) ? rawType : "enterprise"
+
   const { data, error } = await db
     .from("accounts")
     .insert([{
       name: body.name,
-      type: body.type ?? "enterprise",
+      type: accountType,
       industry: body.industry ?? null,
       country: body.country ?? null,
       city: body.city ?? null,
