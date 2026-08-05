@@ -20,8 +20,8 @@ const nextConfig: NextConfig = {
 
   async redirects() {
     return [
-      { source: "/:locale/accounts", destination: "/:locale/comptes", permanent: true },
-      { source: "/:locale/accounts/:path*", destination: "/:locale/comptes/:path*", permanent: true },
+      { source: "/:locale(fr|en)/accounts", destination: "/:locale/comptes", permanent: true },
+      { source: "/:locale(fr|en)/accounts/:path*", destination: "/:locale/comptes/:path*", permanent: true },
     ]
   },
 
