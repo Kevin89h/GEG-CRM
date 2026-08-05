@@ -48,10 +48,13 @@ interface Account {
   name: string
   type: string
   industry: string | null
-  country: string
+  country: string | null
   city: string | null
+  address: string | null
   phone: string | null
   email: string | null
+  website: string | null
+  notes: string | null
   salesperson?: { full_name: string } | null
 }
 
@@ -120,6 +123,21 @@ export default function AccountDetailClient({ account, orders, invoices, payment
   const [editName, setEditName] = useState(account.name)
   const [savingName, setSavingName] = useState(false)
 
+  const [showInfoEdit, setShowInfoEdit] = useState(false)
+  const [infoForm, setInfoForm] = useState({
+    type: account.type,
+    industry: account.industry ?? "",
+    address: account.address ?? "",
+    city: account.city ?? "",
+    country: account.country ?? "",
+    phone: account.phone ?? "",
+    email: account.email ?? "",
+    website: account.website ?? "",
+    notes: account.notes ?? "",
+  })
+  const [infoSaving, setInfoSaving] = useState(false)
+  const [infoError, setInfoError] = useState<string | null>(null)
+
   async function handleSaveName() {
     if (!editName.trim() || editName.trim() === account.name) { setEditingName(false); return }
     setSavingName(true)
@@ -131,6 +149,36 @@ export default function AccountDetailClient({ account, orders, invoices, payment
     setSavingName(false)
     setEditingName(false)
     router.refresh()
+  }
+
+  async function handleSaveInfo() {
+    setInfoSaving(true); setInfoError(null)
+    const validTypes = ["government", "enterprise", "sme", "client", "prospect"]
+    const payload = {
+      type: validTypes.includes(infoForm.type) ? infoForm.type : "enterprise",
+      industry: infoForm.industry || null,
+      address: infoForm.address || null,
+      city: infoForm.city || null,
+      country: infoForm.country || null,
+      phone: infoForm.phone || null,
+      email: infoForm.email || null,
+      website: infoForm.website || null,
+      notes: infoForm.notes || null,
+    }
+    try {
+      const res = await fetch(`/api/accounts/${account.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) { const d = await res.json(); setInfoError(d.error ?? "Erreur"); return }
+      setShowInfoEdit(false)
+      router.refresh()
+    } catch {
+      setInfoError("Erreur réseau")
+    } finally {
+      setInfoSaving(false)
+    }
   }
 
   const hasOpenInvoices = invoices.some(i => i.status !== "paid" && i.status !== "cancelled")
@@ -300,11 +348,85 @@ export default function AccountDetailClient({ account, orders, invoices, payment
             )}
           </div>
         </div>
-        <button onClick={() => setShowDeleteModal(true)}
-          className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 border border-red-200 rounded-xl hover:bg-red-50 transition">
-          <Trash2 className="w-4 h-4" /> Supprimer
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowInfoEdit(v => !v)}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition">
+            <Pencil className="w-4 h-4" /> Modifier
+          </button>
+          <button onClick={() => setShowDeleteModal(true)}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 border border-red-200 rounded-xl hover:bg-red-50 transition">
+            <Trash2 className="w-4 h-4" /> Supprimer
+          </button>
+        </div>
       </div>
+
+      {/* Info edit panel */}
+      {showInfoEdit && (
+        <div className="bg-white border border-gray-200 rounded-2xl p-5 mb-4 shadow-sm">
+          <h3 className="text-sm font-semibold text-gray-700 mb-4">Informations du compte</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Type</label>
+              <select value={infoForm.type} onChange={e => setInfoForm(f => ({ ...f, type: e.target.value }))}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="enterprise">Entreprise</option>
+                <option value="government">Gouvernement</option>
+                <option value="sme">PME</option>
+                <option value="client">Client</option>
+                <option value="prospect">Prospect</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Secteur d&apos;activité</label>
+              <input value={infoForm.industry} onChange={e => setInfoForm(f => ({ ...f, industry: e.target.value }))}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Énergie, BTP…" />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-500 mb-1">Adresse</label>
+              <input value={infoForm.address} onChange={e => setInfoForm(f => ({ ...f, address: e.target.value }))}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Rue, quartier, BP…" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Ville</label>
+              <input value={infoForm.city} onChange={e => setInfoForm(f => ({ ...f, city: e.target.value }))}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Conakry" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Pays</label>
+              <input value={infoForm.country} onChange={e => setInfoForm(f => ({ ...f, country: e.target.value }))}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Guinée" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Téléphone</label>
+              <input value={infoForm.phone} onChange={e => setInfoForm(f => ({ ...f, phone: e.target.value }))}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="+224 6xx xxx xxx" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 mb-1">Email</label>
+              <input type="email" value={infoForm.email} onChange={e => setInfoForm(f => ({ ...f, email: e.target.value }))}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="contact@entreprise.com" />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-500 mb-1">Site web</label>
+              <input value={infoForm.website} onChange={e => setInfoForm(f => ({ ...f, website: e.target.value }))}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="www.entreprise.com" />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-500 mb-1">Notes internes</label>
+              <textarea value={infoForm.notes} onChange={e => setInfoForm(f => ({ ...f, notes: e.target.value }))} rows={2}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder="Informations complémentaires…" />
+            </div>
+          </div>
+          {infoError && <p className="text-xs text-red-600 mt-2">{infoError}</p>}
+          <div className="flex justify-end gap-2 mt-4">
+            <button onClick={() => setShowInfoEdit(false)} className="px-4 py-2 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">Annuler</button>
+            <button onClick={handleSaveInfo} disabled={infoSaving}
+              className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50">
+              {infoSaving ? "Sauvegarde…" : "Enregistrer"}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Solde en temps réel — bannière */}
       {hasDebt ? (

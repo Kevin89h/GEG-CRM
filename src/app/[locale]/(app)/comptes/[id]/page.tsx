@@ -9,7 +9,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
   const [{ data: account }, { data: orders }, { data: invoices }] = await Promise.all([
     supabase
       .from("accounts")
-      .select("id, name, type, industry, country, city, phone, email, salesperson:employees(full_name)")
+      .select("id, name, type, industry, country, city, address, phone, email, website, notes, salesperson:employees(full_name)")
       .eq("id", id)
       .single(),
     supabase
@@ -89,10 +89,13 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
         name: acct.name as string,
         type: acct.type as string,
         industry: acct.industry as string | null,
-        country: acct.country as string,
+        country: acct.country as string | null,
         city: acct.city as string | null,
+        address: acct.address as string | null,
         phone: acct.phone as string | null,
         email: acct.email as string | null,
+        website: acct.website as string | null,
+        notes: acct.notes as string | null,
         salesperson: sp as { full_name: string } | null,
       }}
       orders={ordersWithTotal}
