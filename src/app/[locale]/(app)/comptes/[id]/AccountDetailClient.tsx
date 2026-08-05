@@ -55,6 +55,7 @@ interface Account {
   email: string | null
   website: string | null
   notes: string | null
+  nif: string | null
   salesperson?: { full_name: string } | null
 }
 
@@ -134,6 +135,7 @@ export default function AccountDetailClient({ account, orders, invoices, payment
     email: account.email ?? "",
     website: account.website ?? "",
     notes: account.notes ?? "",
+    nif: account.nif ?? "",
   })
   const [infoSaving, setInfoSaving] = useState(false)
   const [infoError, setInfoError] = useState<string | null>(null)
@@ -164,6 +166,7 @@ export default function AccountDetailClient({ account, orders, invoices, payment
       email: infoForm.email || null,
       website: infoForm.website || null,
       notes: infoForm.notes || null,
+      nif: infoForm.nif || null,
     }
     try {
       const res = await fetch(`/api/accounts/${account.id}`, {
@@ -419,6 +422,11 @@ export default function AccountDetailClient({ account, orders, invoices, payment
               <label className="block text-xs font-medium text-gray-500 mb-1">Site web</label>
               <input value={infoForm.website} onChange={e => setInfoForm(f => ({ ...f, website: e.target.value }))}
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="www.entreprise.com" />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-500 mb-1">NIF</label>
+              <input value={infoForm.nif} onChange={e => setInfoForm(f => ({ ...f, nif: e.target.value }))}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Numéro d'identification fiscale" />
             </div>
             <div className="col-span-2">
               <label className="block text-xs font-medium text-gray-500 mb-1">Notes internes</label>

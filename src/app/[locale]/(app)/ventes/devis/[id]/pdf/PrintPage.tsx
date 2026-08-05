@@ -60,6 +60,7 @@ interface Props {
   notes: string | null
   accountName: string
   accountCountry: string | null
+  accountNif: string | null
   salespersonName: string | null
   deliveryAddress?: string | null
   paymentTerms?: string | null
@@ -72,7 +73,7 @@ interface Props {
 
 export default function PrintPage({
   id, number, status, currency, createdAt, validUntil, notes,
-  accountName, accountCountry, salespersonName, deliveryAddress, paymentTerms,
+  accountName, accountCountry, accountNif, salespersonName, deliveryAddress, paymentTerms,
   lines, locale, docType, docSettings, bankAccounts = [],
 }: Props) {
   const [showImages, setShowImages] = useState(true)
@@ -268,6 +269,7 @@ export default function PrintPage({
                   <div className="bill-to-label">Adressé à</div>
                   <div className="bill-to-name">{accountName}</div>
                   {accountCountry && <div className="bill-to-detail">{accountCountry}</div>}
+                  {accountNif && <div className="bill-to-detail">NIF : {accountNif}</div>}
                 </div>
                 <div className="doc-info">
                   <div className="doc-label-text">{docLabel}</div>

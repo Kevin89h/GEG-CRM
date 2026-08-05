@@ -21,7 +21,7 @@ export default async function FacturePdfPage({ params }: { params: Promise<{ loc
   // image_url is fetched separately so a missing column on products never breaks the invoice load.
   const INVOICE_SELECT = `
     id, number, status, currency, issue_date, due_date, notes, order_id,
-    account:accounts(id, name, address, city, country, phone),
+    account:accounts(id, name, address, city, country, phone, nif),
     lines:invoice_lines(id, description, quantity, unit_price, discount, position, tva_rate, product:products(id, name, reference))
   `
 
@@ -156,6 +156,7 @@ export default async function FacturePdfPage({ params }: { params: Promise<{ loc
       accountCity={acc?.city ?? null}
       accountCountry={acc?.country ?? null}
       accountPhone={acc?.phone ?? null}
+      accountNif={acc?.nif ?? null}
       lines={lines}
       payments={paymentList}
       qrSvg={qrSvg}

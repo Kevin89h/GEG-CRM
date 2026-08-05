@@ -58,7 +58,7 @@ export default async function PublicPdfPage({ params }: { params: Promise<{ toke
     const { data: invoice } = await db
       .from("invoices")
       .select(`id, number, status, currency, issue_date, due_date, notes, order_id,
-        account:accounts(id, name, address, city, country, phone),
+        account:accounts(id, name, address, city, country, phone, nif),
         lines:invoice_lines(id, description, quantity, unit_price, discount, position, tva_rate, product:products(id, name, reference))`)
       .eq("id", id)
       .single()
@@ -98,6 +98,7 @@ export default async function PublicPdfPage({ params }: { params: Promise<{ toke
         accountName={account?.name ?? "—"} accountAddress={account?.address ?? null}
         accountCity={account?.city ?? null}
         accountCountry={account?.country ?? null} accountPhone={account?.phone ?? null}
+        accountNif={account?.nif ?? null}
         lines={lines} payments={paymentList} qrSvg={qrSvg} locale="fr"
         docSettings={docSettings ?? null} bankAccounts={banks}
       />
@@ -115,7 +116,7 @@ export default async function PublicPdfPage({ params }: { params: Promise<{ toke
     if (!order) notFound()
 
     const [{ data: account }, { data: rawLines }] = await Promise.all([
-      order.account_id ? db.from("accounts").select("id, name, country").eq("id", order.account_id).single() : Promise.resolve({ data: null }),
+      order.account_id ? db.from("accounts").select("id, name, country, nif").eq("id", order.account_id).single() : Promise.resolve({ data: null }),
       db.from("sales_order_lines").select("id, description, quantity, unit_price, discount, position, tva_exempt").eq("order_id", id).order("position"),
     ])
 
@@ -140,6 +141,7 @@ export default async function PublicPdfPage({ params }: { params: Promise<{ toke
         deliveryAddress={null} paymentTerms={order.payment_terms ? String(order.payment_terms) : null}
         accountName={(account as Record<string, string> | null)?.name ?? "—"}
         accountCountry={(account as Record<string, string> | null)?.country ?? null}
+        accountNif={(account as Record<string, string> | null)?.nif ?? null}
         salespersonName={null} lines={lines} locale="fr" docType="devis"
         docSettings={docSettings ?? null} bankAccounts={banks}
       />

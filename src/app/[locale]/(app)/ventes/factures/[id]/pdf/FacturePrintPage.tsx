@@ -68,6 +68,7 @@ interface Props {
   accountCity: string | null
   accountCountry: string | null
   accountPhone: string | null
+  accountNif: string | null
   lines: Line[]
   payments: { amount: number; paid_at: string }[]
   qrSvg: string
@@ -78,7 +79,7 @@ interface Props {
 
 export default function FacturePrintPage({
   id, number, status, currency, issueDate, dueDate, notes, sourceRef,
-  accountName, accountAddress, accountCity, accountCountry, accountPhone,
+  accountName, accountAddress, accountCity, accountCountry, accountPhone, accountNif,
   lines, payments, locale, docSettings, bankAccounts = [],
 }: Props) {
   const [showImages, setShowImages] = useState(true)
@@ -361,6 +362,7 @@ export default function FacturePrintPage({
                 </div>
               )}
               {accountPhone && <div className="bill-to-detail">{accountPhone}</div>}
+              {accountNif && <div className="bill-to-detail">NIF : {accountNif}</div>}
             </div>
             <div className="doc-info">
               <div className="doc-label">Facture</div>
