@@ -171,11 +171,20 @@ export default function AccountDetailClient({ account, orders, invoices, payment
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       })
-      if (!res.ok) { const d = await res.json(); setInfoError(d.error ?? "Erreur"); return }
+      const text = await res.text()
+      if (!res.ok) {
+        try {
+          const d = JSON.parse(text)
+          setInfoError(d.error ?? `Erreur ${res.status}`)
+        } catch {
+          setInfoError(`Erreur ${res.status}: ${text.slice(0, 200)}`)
+        }
+        return
+      }
       setShowInfoEdit(false)
       router.refresh()
-    } catch {
-      setInfoError("Erreur réseau")
+    } catch (err) {
+      setInfoError(`Erreur: ${String(err)}`)
     } finally {
       setInfoSaving(false)
     }
