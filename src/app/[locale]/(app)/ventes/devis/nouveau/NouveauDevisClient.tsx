@@ -803,15 +803,15 @@ export default function NouveauDevisClient({
           <div className="space-y-4">
             <LabeledInput label={t("nomLabel")} value={cForm.name} onChange={v => setCForm(f => ({ ...f, name: v }))} placeholder={t("nomPlaceholder")} autoFocus />
             <div>
-              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">{t("typeLabel")}</label>
-              <div className="flex gap-2">
-                {[{ v: "prospect", l: "Prospect" }, { v: "client", l: "Client" }].map(({ v, l }) => (
-                  <button key={v} type="button"
-                    onClick={() => setCForm(f => ({ ...f, type: v as "prospect" | "client" }))}
-                    className={`flex-1 py-2 text-sm font-medium rounded-lg border transition-colors ${cForm.type === v ? "bg-blue-600 border-blue-600 text-white" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
-                  >{l}</button>
-                ))}
-              </div>
+              <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">{t("typeLabel")}</label>
+              <select
+                value={cForm.type}
+                onChange={e => setCForm(f => ({ ...f, type: e.target.value as "prospect" | "client" }))}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="prospect">Prospect</option>
+                <option value="client">Client</option>
+              </select>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <LabeledInput label={t("telephoneLabel")} value={cForm.phone} onChange={v => setCForm(f => ({ ...f, phone: v }))} placeholder="+224 6xx xxx xxx" />
