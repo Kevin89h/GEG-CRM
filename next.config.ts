@@ -18,6 +18,13 @@ const nextConfig: NextConfig = {
   // Keep @anthropic-ai/sdk server-side only — never in client bundle
   serverExternalPackages: ["@anthropic-ai/sdk"],
 
+  async redirects() {
+    return [
+      { source: "/:locale/accounts", destination: "/:locale/comptes", permanent: true },
+      { source: "/:locale/accounts/:path*", destination: "/:locale/comptes/:path*", permanent: true },
+    ]
+  },
+
   async headers() {
     return [
       {
