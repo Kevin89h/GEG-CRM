@@ -7,8 +7,7 @@ export const maxDuration = 60
 export const runtime = "nodejs"
 
 export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  req: NextRequest, { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
   const isBL = req.nextUrl.searchParams.get("type") === "bon-livraison"

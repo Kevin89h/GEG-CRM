@@ -1,14 +1,19 @@
 import { NextResponse } from "next/server"
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url)
-  const carrier = searchParams.get("carrier") ?? ""
-  const number = searchParams.get("number") ?? ""
+export async function GET(req: Request)  {
+  try {
+    const { searchParams } = new URL(req.url)
+    const carrier = searchParams.get("carrier") ?? ""
+    const number = searchParams.get("number") ?? ""
 
-  if (!number) return NextResponse.json({ error: "number requis" }, { status: 400 })
+    if (!number) return NextResponse.json({ error: "number requis" }, { status: 400 })
 
-  const result = await track17(number, carrier)
-  return NextResponse.json(result)
+    const result = await track17(number, carrier)
+    return NextResponse.json(result)
+
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 })
+  }
 }
 
 async function track17(number: string, carrier: string) {

@@ -18,116 +18,126 @@ async function getClients() {
 }
 
 // GET /api/chat?action=rooms|messages&room_id=xxx
-export async function GET(req: Request) {
-  const { db, user } = await getClients()
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 })
+export async function GET(req: Request)  {
+  try {
+    const { db, user } = await getClients()
+    if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 })
 
-  const { searchParams } = new URL(req.url)
-  const action = searchParams.get("action")
+    const { searchParams } = new URL(req.url)
+    const action = searchParams.get("action")
 
-  if (action === "rooms") {
-    const { data: rooms } = await db.from("chat_rooms").select("*").order("created_at")
+    if (action === "rooms") {
+      const { data: rooms } = await db.from("chat_rooms").select("*").order("created_at")
 
-    // Get unread counts per room
-    const { data: receipts } = await db
-      .from("chat_read_receipts")
-      .select("room_id, last_read_at")
-      .eq("user_id", user.id)
+      // Get unread counts per room
+      const { data: receipts } = await db
+        .from("chat_read_receipts")
+        .select("room_id, last_read_at")
+        .eq("user_id", user.id)
 
-    const lastRead: Record<string, string> = {}
-    for (const r of receipts ?? []) lastRead[r.room_id] = r.last_read_at
+      const lastRead: Record<string, string> = {}
+      for (const r of receipts ?? []) lastRead[r.room_id] = r.last_read_at
 
-    const unreadCounts: Record<string, number> = {}
-    for (const room of rooms ?? []) {
-      const since = lastRead[room.id]
-      const query = db.from("chat_messages").select("id", { count: "exact", head: true }).eq("room_id", room.id).neq("user_id", user.id)
-      const { count } = since ? await query.gt("created_at", since) : await query
-      unreadCounts[room.id] = count ?? 0
+      const unreadCounts: Record<string, number> = {}
+      for (const room of rooms ?? []) {
+        const since = lastRead[room.id]
+        const query = db.from("chat_messages").select("id", { count: "exact", head: true }).eq("room_id", room.id).neq("user_id", user.id)
+        const { count } = since ? await query.gt("created_at", since) : await query
+        unreadCounts[room.id] = count ?? 0
+      }
+
+      return NextResponse.json({ rooms: rooms ?? [], unreadCounts })
     }
 
-    return NextResponse.json({ rooms: rooms ?? [], unreadCounts })
+    if (action === "messages") {
+      const roomId = searchParams.get("room_id")
+      if (!roomId) return NextResponse.json({ error: "room_id requis" }, { status: 400 })
+
+      const { data: messages } = await db
+        .from("chat_messages")
+        .select("id, user_id, user_name, content, created_at")
+        .eq("room_id", roomId)
+        .order("created_at", { ascending: true })
+        .limit(100)
+
+      return NextResponse.json({ messages: messages ?? [] })
+    }
+
+    if (action === "users") {
+      const supabase = await createClient()
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .neq("id", user.id)
+      return NextResponse.json({ users: profiles ?? [] })
+    }
+
+    return NextResponse.json({ error: "action invalide" }, { status: 400 })
+
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 })
   }
-
-  if (action === "messages") {
-    const roomId = searchParams.get("room_id")
-    if (!roomId) return NextResponse.json({ error: "room_id requis" }, { status: 400 })
-
-    const { data: messages } = await db
-      .from("chat_messages")
-      .select("id, user_id, user_name, content, created_at")
-      .eq("room_id", roomId)
-      .order("created_at", { ascending: true })
-      .limit(100)
-
-    return NextResponse.json({ messages: messages ?? [] })
-  }
-
-  if (action === "users") {
-    const supabase = await createClient()
-    const { data: profiles } = await supabase
-      .from("profiles")
-      .select("id, full_name, email")
-      .neq("id", user.id)
-    return NextResponse.json({ users: profiles ?? [] })
-  }
-
-  return NextResponse.json({ error: "action invalide" }, { status: 400 })
 }
 
 // POST /api/chat
-export async function POST(req: Request) {
-  const { db, user } = await getClients()
-  if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 })
+export async function POST(req: Request)  {
+  try {
+    const { db, user } = await getClients()
+    if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 })
 
-  const body = await req.json()
-  const { action } = body
+    const body = await req.json()
+    const { action } = body
 
-  if (action === "send") {
-    const { room_id, content, user_name } = body
-    if (!room_id || !content?.trim()) return NextResponse.json({ error: "Données manquantes" }, { status: 400 })
+    if (action === "send") {
+      const { room_id, content, user_name } = body
+      if (!room_id || !content?.trim()) return NextResponse.json({ error: "Données manquantes" }, { status: 400 })
 
-    const { data: msg, error } = await db.from("chat_messages").insert([{
-      room_id, user_id: user.id, user_name: user_name || user.email, content: content.trim(),
-    }]).select("id, user_id, user_name, content, created_at").single()
+      const { data: msg, error } = await db.from("chat_messages").insert([{
+        room_id, user_id: user.id, user_name: user_name || user.email, content: content.trim(),
+      }]).select("id, user_id, user_name, content, created_at").single()
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-    // Auto mark as read for sender
-    await db.from("chat_read_receipts").upsert({
-      user_id: user.id, room_id, last_read_at: new Date().toISOString(),
-    }, { onConflict: "user_id,room_id" })
+      // Auto mark as read for sender
+      await db.from("chat_read_receipts").upsert({
+        user_id: user.id, room_id, last_read_at: new Date().toISOString(),
+      }, { onConflict: "user_id,room_id" })
 
-    return NextResponse.json({ message: msg })
-  }
+      return NextResponse.json({ message: msg })
+    }
 
-  if (action === "mark_read") {
-    const { room_id } = body
-    if (!room_id) return NextResponse.json({ error: "room_id requis" }, { status: 400 })
+    if (action === "mark_read") {
+      const { room_id } = body
+      if (!room_id) return NextResponse.json({ error: "room_id requis" }, { status: 400 })
 
-    await db.from("chat_read_receipts").upsert({
-      user_id: user.id, room_id, last_read_at: new Date().toISOString(),
-    }, { onConflict: "user_id,room_id" })
+      await db.from("chat_read_receipts").upsert({
+        user_id: user.id, room_id, last_read_at: new Date().toISOString(),
+      }, { onConflict: "user_id,room_id" })
 
-    return NextResponse.json({ ok: true })
-  }
+      return NextResponse.json({ ok: true })
+    }
 
-  if (action === "get_or_create_room") {
-    const { type, reference_id, name } = body
-    if (!type || !name) return NextResponse.json({ error: "type et name requis" }, { status: 400 })
+    if (action === "get_or_create_room") {
+      const { type, reference_id, name } = body
+      if (!type || !name) return NextResponse.json({ error: "type et name requis" }, { status: 400 })
 
-    if (type === "global") {
-      const { data: room } = await db.from("chat_rooms").select("*").eq("type", "global").single()
+      if (type === "global") {
+        const { data: room } = await db.from("chat_rooms").select("*").eq("type", "global").single()
+        return NextResponse.json({ room })
+      }
+
+      const { data: existing } = await db.from("chat_rooms").select("*").eq("type", type).eq("reference_id", reference_id).maybeSingle()
+      if (existing) return NextResponse.json({ room: existing })
+
+      const { data: room, error } = await db.from("chat_rooms").insert([{ type, reference_id, name }]).select("*").single()
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
       return NextResponse.json({ room })
     }
 
-    const { data: existing } = await db.from("chat_rooms").select("*").eq("type", type).eq("reference_id", reference_id).maybeSingle()
-    if (existing) return NextResponse.json({ room: existing })
+    return NextResponse.json({ error: "action invalide" }, { status: 400 })
 
-    const { data: room, error } = await db.from("chat_rooms").insert([{ type, reference_id, name }]).select("*").single()
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-    return NextResponse.json({ room })
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 })
   }
-
-  return NextResponse.json({ error: "action invalide" }, { status: 400 })
 }
