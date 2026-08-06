@@ -1,19 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
-
-function adminDb() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ).schema("geg_guinee") as any
-}
+import { createAdminClient } from "@/lib/supabase/admin"
+import { getCompanySchema } from "@/lib/company"
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const body = await req.json()
+    const schema = await getCompanySchema()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = (createAdminClient() as any).schema(schema)
 
     const patch: Record<string, unknown> = {}
     const allowed = ["name", "type", "industry", "country", "city", "address", "phone", "email", "website", "notes", "salesperson_id", "nif"]
@@ -25,7 +20,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       return NextResponse.json({ error: "No fields to update" }, { status: 400 })
     }
 
-    const { data, error } = await adminDb()
+    const { data, error } = await admin
       .from("accounts")
       .update(patch)
       .eq("id", id)
@@ -42,7 +37,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const { error } = await adminDb().from("accounts").delete().eq("id", id)
+    const schema = await getCompanySchema()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = (createAdminClient() as any).schema(schema)
+    const { error } = await admin.from("accounts").delete().eq("id", id)
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
     return NextResponse.json({ success: true })
   } catch (err) {

@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@supabase/supabase-js"
-
-function adminDb() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } }).schema("geg_guinee") as any
-}
+import { createAdminClient } from "@/lib/supabase/admin"
+import { getCompanySchema } from "@/lib/company"
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const body = await req.json()
-    const { data, error } = await adminDb()
+    const schema = await getCompanySchema()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = (createAdminClient() as any).schema(schema)
+    const { data, error } = await admin
       .from("suppliers")
       .update({
         name: body.name,
@@ -40,7 +39,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const { error } = await adminDb()
+    const schema = await getCompanySchema()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const admin = (createAdminClient() as any).schema(schema)
+    const { error } = await admin
       .from("suppliers")
       .update({ is_active: false, updated_at: new Date().toISOString() })
       .eq("id", id)
