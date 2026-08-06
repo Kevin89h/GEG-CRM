@@ -78,11 +78,18 @@ export default function FournisseursClient({ fournisseurs: initial }: Props) {
     setSaveError(null)
     const url = editingId ? `/api/suppliers/${editingId}` : "/api/suppliers"
     const method = editingId ? "PATCH" : "POST"
-    const res = await fetch(url, {
-      method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(form),
-    })
-    const json = await res.json()
-    if (!res.ok) { setSaveError(json.error ?? "Erreur"); setSaving(false); return }
+    let res: Response
+    let json: Record<string, unknown>
+    try {
+      res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) })
+      const text = await res.text()
+      json = JSON.parse(text)
+    } catch (e) {
+      setSaveError("Erreur réseau : " + String(e))
+      setSaving(false)
+      return
+    }
+    if (!res.ok) { setSaveError((json.error as string) ?? `Erreur ${res.status}`); setSaving(false); return }
     if (editingId) {
       setFournisseurs(prev => prev.map(f => f.id === editingId ? { ...f, ...json } : f))
     } else {
