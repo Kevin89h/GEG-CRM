@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createCompanyClient } from "@/lib/company"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getSchemaFromRequest } from "@/lib/company"
+import { createSchemaClient, createAdminClient } from "@/lib/supabase/admin"
 import { sendPushToUser } from "@/lib/webpush"
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const { db } = await createCompanyClient()
+  const db = createSchemaClient(getSchemaFromRequest(req))
 
   const { data, error } = await db
     .from("deals")
@@ -20,7 +20,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const body = await req.json()
-  const { db } = await createCompanyClient()
+  const db = createSchemaClient(getSchemaFromRequest(req))
 
   const allowedFields = [
     "title", "stage", "value", "currency", "probability", "close_date",
@@ -42,7 +42,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   }
 
-  // Fetch previous assigned_to before update
   const { data: before } = await db.from("deals").select("assigned_to, title").eq("id", id).single()
 
   const { data, error } = await db

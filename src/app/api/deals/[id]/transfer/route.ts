@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
-import { createCompanyClient } from "@/lib/company"
+import { createAdminClient, createSchemaClient } from "@/lib/supabase/admin"
+import { getSchemaFromRequest } from "@/lib/company"
 
 // Transfer Guinée → Singapore
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const { db, schema } = await createCompanyClient()
+  const schema = getSchemaFromRequest(req)
+  const db = createSchemaClient(schema)
 
   if (schema === "geg_guinee") {
     // Lire le deal depuis Guinée

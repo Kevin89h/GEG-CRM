@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
-import { getCompanySchema } from "@/lib/company"
+import { createSchemaClient } from "@/lib/supabase/admin"
+import { getSchemaFromRequest } from "@/lib/company"
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const body = await req.json()
-    const schema = await getCompanySchema()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const admin = (createAdminClient() as any).schema(schema)
+    const admin = createSchemaClient(getSchemaFromRequest(req))
 
     const patch: Record<string, unknown> = {}
     const allowed = ["name", "type", "industry", "country", "city", "address", "phone", "email", "website", "notes", "salesperson_id", "nif"]
@@ -34,12 +32,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const schema = await getCompanySchema()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const admin = (createAdminClient() as any).schema(schema)
+    const admin = createSchemaClient(getSchemaFromRequest(req))
     const { error } = await admin.from("accounts").delete().eq("id", id)
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
     return NextResponse.json({ success: true })

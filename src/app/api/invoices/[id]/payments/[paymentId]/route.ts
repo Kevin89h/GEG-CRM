@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createCompanyClient, getCompanySchema } from "@/lib/company"
-import { createClient as createAdminClient } from "@supabase/supabase-js"
+import { createSchemaClient } from "@/lib/supabase/admin"
+import { getSchemaFromRequest } from "@/lib/company"
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string; paymentId: string }> }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string; paymentId: string }> }) {
   const { id, paymentId } = await params
-  const { db } = await createCompanyClient()
+  const schema = getSchemaFromRequest(req)
+  const db = createSchemaClient(schema)
 
   // Récupérer le paiement avant suppression pour nettoyer la trésorerie
   const { data: payment } = await db
@@ -19,14 +20,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
 
   // Supprimer la transaction trésorerie correspondante
   if (payment?.treasury_account_id) {
-    const schema = await getCompanySchema()
-    const adminRaw = createAdminClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const adminDb = (adminRaw as any).schema(schema) as typeof adminRaw
-    await adminDb
+    await createSchemaClient(schema)
       .from("treasury_transactions")
       .delete()
       .eq("account_id", payment.treasury_account_id)

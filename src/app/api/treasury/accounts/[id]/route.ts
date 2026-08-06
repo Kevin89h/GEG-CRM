@@ -1,22 +1,11 @@
-import { createClient as createAdminClient } from "@supabase/supabase-js"
+import { NextRequest, NextResponse } from "next/server"
+import { createSchemaClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
-import { cookies } from "next/headers"
-import { NextResponse } from "next/server"
+import { getSchemaFromRequest } from "@/lib/company"
 
 const SUPER_ADMIN_EMAIL = "kevin@globalenergy.group"
 
-async function getAdminDb() {
-  const cookieStore = await cookies()
-  const schema = cookieStore.get("geg_company")?.value ?? "geg_guinee"
-  const admin = createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return { db: (admin as any).schema(schema) as typeof admin, schema }
-}
-
-export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const body = await req.json()
@@ -24,7 +13,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     if (!name) return NextResponse.json({ error: "Nom requis" }, { status: 400 })
 
-    const { db } = await getAdminDb()
+    const db = createSchemaClient(getSchemaFromRequest(req))
     const updates: Record<string, unknown> = {
       name, type,
       institution: institution || null,
@@ -57,12 +46,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
 // DELETE ?action=reset  → vider les transactions + remettre à 0
 // DELETE ?action=purge  → supprimer le compte entier (super admin uniquement)
-export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const { searchParams } = new URL(req.url)
     const action = searchParams.get("action") ?? "reset"
-    const { db } = await getAdminDb()
+    const db = createSchemaClient(getSchemaFromRequest(req))
 
     if (action === "purge") {
       // Vérifier que l'appelant est super admin

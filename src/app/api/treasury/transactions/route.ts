@@ -1,22 +1,11 @@
-import { createClient as createAdminClient } from "@supabase/supabase-js"
+import { NextRequest, NextResponse } from "next/server"
+import { createSchemaClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
-import { cookies } from "next/headers"
-import { NextResponse } from "next/server"
+import { getSchemaFromRequest } from "@/lib/company"
 
-async function getAdminDb() {
-  const cookieStore = await cookies()
-  const schema = cookieStore.get("geg_company")?.value ?? "geg_guinee"
-  const admin = createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (admin as any).schema(schema) as typeof admin
-}
-
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const db = await getAdminDb()
+    const db = createSchemaClient(getSchemaFromRequest(req))
     const { data, error } = await db
       .from("treasury_transactions")
       .select("id, account_id, type, amount, currency, description, reference, category, date")
@@ -30,7 +19,7 @@ export async function GET() {
   }
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const { account_id, type, amount, currency, description, reference, transfer_account_id, date, category } = body
@@ -44,7 +33,7 @@ export async function POST(req: Request) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 })
 
-    const db = await getAdminDb()
+    const db = createSchemaClient(getSchemaFromRequest(req))
     const isTransfer = type === "transfer_out"
 
     const rows = [{

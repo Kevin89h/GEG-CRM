@@ -1,21 +1,10 @@
-import { createClient as createAdminClient } from "@supabase/supabase-js"
-import { cookies } from "next/headers"
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
+import { createSchemaClient } from "@/lib/supabase/admin"
+import { getSchemaFromRequest } from "@/lib/company"
 
-async function getAdminDb() {
-  const cookieStore = await cookies()
-  const schema = cookieStore.get("geg_company")?.value ?? "geg_guinee"
-  const admin = createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (admin as any).schema(schema) as typeof admin
-}
-
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    const db = await getAdminDb()
+    const db = createSchemaClient(getSchemaFromRequest(req))
     const { data, error } = await db
       .from("treasury_accounts")
       .select("id, name, institution, account_number, swift, iban, currency, type, is_active")
@@ -30,14 +19,14 @@ export async function GET() {
   }
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const { name, type, institution, account_number, swift, iban, currency, initial_balance, color } = body
 
     if (!name) return NextResponse.json({ error: "Nom requis" }, { status: 400 })
 
-    const db = await getAdminDb()
+    const db = createSchemaClient(getSchemaFromRequest(req))
     const { data, error } = await db.from("treasury_accounts").insert([{
       name,
       type: type ?? "bank",

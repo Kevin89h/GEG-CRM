@@ -1,11 +1,10 @@
 import { createClient } from "@/lib/supabase/server"
-import { createClient as createAdminClient } from "@supabase/supabase-js"
-import { createCompanyClient } from "@/lib/company"
-import { getCompanySchema } from "@/lib/company"
+import { createSchemaClient } from "@/lib/supabase/admin"
+import { getSchemaFromRequest } from "@/lib/company"
 import { logActivity } from "@/lib/activity-logger"
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 
-export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const body = await req.json()
@@ -24,7 +23,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       if (perm && !perm.create) return NextResponse.json({ error: "Accès refusé" }, { status: 403 })
     }
 
-    const { db } = await createCompanyClient()
+    const schema = getSchemaFromRequest(req)
+    const db = createSchemaClient(schema)
 
     const { data: payment, error: payErr } = await db
       .from("payments")
@@ -68,14 +68,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     // Créer une transaction trésorerie (crédit) via le client admin (bypass RLS)
     if (treasury_account_id) {
       const { data: invoice } = await db.from("invoices").select("number").eq("id", id).single()
-      const schema = await getCompanySchema()
-      const adminRaw = createAdminClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-      )
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const adminDb = (adminRaw as any).schema(schema) as typeof adminRaw
-      const { error: txErr } = await adminDb.from("treasury_transactions").insert([{
+      const { error: txErr } = await createSchemaClient(schema).from("treasury_transactions").insert([{
         account_id: treasury_account_id,
         type: "credit",
         amount,

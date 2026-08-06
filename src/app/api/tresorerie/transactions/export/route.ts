@@ -1,15 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getCompanySchema } from "@/lib/company"
-import { createClient as createAdminClient } from "@supabase/supabase-js"
+import { createSchemaClient } from "@/lib/supabase/admin"
+import { getSchemaFromRequest } from "@/lib/company"
 
-async function fetchTransactions(accountId: string | null) {
-  const schema = await getCompanySchema()
-  const raw = createAdminClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  )
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const db = (raw as any).schema(schema) as typeof raw
+async function fetchTransactions(req: NextRequest, accountId: string | null) {
+  const db = createSchemaClient(getSchemaFromRequest(req))
 
   let query = db
     .from("treasury_transactions")
@@ -29,7 +23,7 @@ export async function GET(req: NextRequest)  {
     const accountId = searchParams.get("account_id") ?? null
     const accountName = searchParams.get("account_name") ?? "tresorerie"
 
-    const rows = await fetchTransactions(accountId)
+    const rows = await fetchTransactions(req, accountId)
 
     const TYPE_LABEL: Record<string, string> = {
       credit: "Entrée", debit: "Sortie", transfer_in: "Virement reçu", transfer_out: "Virement émis",

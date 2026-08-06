@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createCompanyClient } from "@/lib/company"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getSchemaFromRequest } from "@/lib/company"
+import { createSchemaClient, createAdminClient } from "@/lib/supabase/admin"
 import { sendPushToUser } from "@/lib/webpush"
 import { sendLeadNotification } from "@/lib/notify"
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
-  const { db, schema } = await createCompanyClient()
+  const schema = getSchemaFromRequest(req)
+  const db = createSchemaClient(schema)
 
   // Singapore schema not accessible via PostgREST — use RPC
   if (schema === "geg_singapore") {

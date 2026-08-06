@@ -1,14 +1,36 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
-import { getCompanySchema } from "@/lib/company"
+import { createSchemaClient, createAdminClient } from "@/lib/supabase/admin"
+import { getSchemaFromRequest } from "@/lib/company"
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const body = await req.json()
-    const schema = await getCompanySchema()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const admin = (createAdminClient() as any).schema(schema)
+    const schema = getSchemaFromRequest(req)
+
+    if (schema === "geg_singapore") {
+      const admin = createAdminClient()
+      const { data, error } = await admin.rpc("update_singapore_supplier", {
+        p_id: id,
+        p_name: body.name,
+        p_email: body.email ?? null,
+        p_phone: body.phone ?? null,
+        p_country: body.country ?? null,
+        p_city: body.city ?? null,
+        p_address: body.address ?? null,
+        p_payment_terms: body.payment_terms ?? null,
+        p_currency: body.currency ?? "USD",
+        p_iban: body.iban ?? null,
+        p_swift: body.swift ?? null,
+        p_bank_name: body.bank_name ?? null,
+        p_notes: body.notes ?? null,
+      })
+      if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+      const row = Array.isArray(data) ? data[0] : data
+      return NextResponse.json(row)
+    }
+
+    const admin = createSchemaClient(schema)
     const { data, error } = await admin
       .from("suppliers")
       .update({
@@ -36,12 +58,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 }
 
-export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const schema = await getCompanySchema()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const admin = (createAdminClient() as any).schema(schema)
+    const schema = getSchemaFromRequest(req)
+
+    if (schema === "geg_singapore") {
+      const admin = createAdminClient()
+      const { error } = await admin.rpc("delete_singapore_supplier", { p_id: id })
+      if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+      return NextResponse.json({ ok: true })
+    }
+
+    const admin = createSchemaClient(schema)
     const { error } = await admin
       .from("suppliers")
       .update({ is_active: false, updated_at: new Date().toISOString() })

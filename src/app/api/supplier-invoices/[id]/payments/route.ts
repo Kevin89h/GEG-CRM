@@ -1,8 +1,8 @@
-import { createCompanyClient, getCompanySchema } from "@/lib/company"
-import { createClient as createAdminClient } from "@supabase/supabase-js"
-import { NextResponse } from "next/server"
+import { createSchemaClient } from "@/lib/supabase/admin"
+import { getSchemaFromRequest } from "@/lib/company"
+import { NextRequest, NextResponse } from "next/server"
 
-export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const body = await req.json()
@@ -10,7 +10,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     if (!amount || amount <= 0) return NextResponse.json({ error: "Montant invalide" }, { status: 400 })
 
-    const { db } = await createCompanyClient()
+    const schema = getSchemaFromRequest(req)
+    const db = createSchemaClient(schema)
 
     const { data: invoice } = await db
       .from("supplier_invoices")
@@ -49,14 +50,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     await db.from("supplier_invoices").update({ status: newStatus }).eq("id", id)
 
     if (treasury_account_id) {
-      const schema = await getCompanySchema()
-      const adminRaw = createAdminClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.SUPABASE_SERVICE_ROLE_KEY!
-      )
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const adminDb = (adminRaw as any).schema(schema) as typeof adminRaw
-      const { error: txErr } = await adminDb.from("treasury_transactions").insert([{
+      const { error: txErr } = await createSchemaClient(schema).from("treasury_transactions").insert([{
         account_id: treasury_account_id,
         type: "debit",
         amount,
@@ -76,9 +70,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 }
 
-export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const { db } = await createCompanyClient()
+  const db = createSchemaClient(getSchemaFromRequest(req))
   const { data: payments } = await db
     .from("supplier_payments")
     .select("*")
