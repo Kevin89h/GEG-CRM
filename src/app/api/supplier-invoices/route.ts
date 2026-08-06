@@ -1,7 +1,8 @@
-import { createCompanyClient } from "@/lib/company"
-import { NextResponse } from "next/server"
+import { createSchemaClient } from "@/lib/supabase/admin"
+import { getSchemaFromRequest } from "@/lib/company"
+import { NextRequest, NextResponse } from "next/server"
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const {
@@ -16,7 +17,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Le nom du fournisseur est requis" }, { status: 400 })
     }
 
-    const { db } = await createCompanyClient()
+    const db = createSchemaClient(getSchemaFromRequest(req))
 
     const now = new Date()
     const year = now.getFullYear()
