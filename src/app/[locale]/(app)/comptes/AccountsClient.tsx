@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useTranslations } from "next-intl"
-import { Plus, Search, Building2, Landmark, Briefcase, GitMerge } from "lucide-react"
+import { Plus, Search, Building2, Landmark, Briefcase, GitMerge, UserSearch } from "lucide-react"
 import { useRouter, useParams } from "next/navigation"
 import { Button } from "@/components/ui/Button"
 import { Badge } from "@/components/ui/Badge"
@@ -17,11 +17,13 @@ interface Props {
   employees: Employee[]
 }
 
-const typeConfig: Record<AccountType, { label: string; color: "blue" | "purple" | "green"; Icon: React.ElementType }> = {
+const typeConfig: Record<string, { label: string; color: "blue" | "purple" | "green"; Icon: React.ElementType }> = {
   government: { label: "", color: "blue", Icon: Landmark },
   enterprise: { label: "", color: "purple", Icon: Briefcase },
   sme: { label: "", color: "green", Icon: Building2 },
+  prospect: { label: "", color: "blue", Icon: UserSearch },
 }
+const defaultTypeConfig = { label: "", color: "green" as const, Icon: Building2 }
 
 export default function AccountsClient({ accounts: initial, employees }: Props) {
   const t = useTranslations("accounts")
@@ -30,7 +32,7 @@ export default function AccountsClient({ accounts: initial, employees }: Props) 
   const locale = (params.locale as string) ?? "fr"
   const [accounts, setAccounts] = useState(initial)
   const [search, setSearch] = useState("")
-  const [filterType, setFilterType] = useState<AccountType | "all">("all")
+  const [filterType, setFilterType] = useState<string>("all")
   const [modalOpen, setModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -102,7 +104,7 @@ export default function AccountsClient({ accounts: initial, employees }: Props) 
           />
         </div>
         <div className="flex gap-2">
-          {(["all", "government", "enterprise", "sme"] as const).map(type => (
+          {(["all", "government", "enterprise", "sme", "prospect"] as const).map(type => (
             <button
               key={type}
               onClick={() => setFilterType(type)}
@@ -139,7 +141,7 @@ export default function AccountsClient({ accounts: initial, employees }: Props) 
             </thead>
             <tbody className="divide-y divide-gray-50">
               {filtered.map(account => {
-                const cfg = typeConfig[account.type]
+                const cfg = typeConfig[account.type] ?? defaultTypeConfig
                 return (
                   <tr
                     key={account.id}
@@ -186,6 +188,7 @@ export default function AccountsClient({ accounts: initial, employees }: Props) 
               { value: "government", label: t("government") },
               { value: "enterprise", label: t("enterprise") },
               { value: "sme", label: t("sme") },
+              { value: "prospect", label: t("prospect") },
             ]}
           />
           <Input
