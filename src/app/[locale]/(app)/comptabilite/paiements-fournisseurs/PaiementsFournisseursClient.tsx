@@ -69,14 +69,15 @@ export default function PaiementsFournisseursClient({ payments, locale }: Props)
   }, [payments])
 
   const filtered = useMemo(() => payments.filter(p => {
-    const q = search.toLowerCase()
-    const matchSearch = !q
-      || p.number.toLowerCase().includes(q)
-      || (p.supplier_name ?? "").toLowerCase().includes(q)
-      || (p.invoice_number ?? "").toLowerCase().includes(q)
+    if (search) {
+      const q = search.toLowerCase()
+      return p.number.toLowerCase().includes(q)
+        || (p.supplier_name ?? "").toLowerCase().includes(q)
+        || (p.invoice_number ?? "").toLowerCase().includes(q)
+    }
     const matchJournal = filterJournal === "all" || p.journal_name === filterJournal
     const matchStatus  = filterStatus  === "all" || p.invoice_status === filterStatus
-    return matchSearch && matchJournal && matchStatus
+    return matchJournal && matchStatus
   }), [payments, search, filterJournal, filterStatus])
 
   const totalPages   = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))

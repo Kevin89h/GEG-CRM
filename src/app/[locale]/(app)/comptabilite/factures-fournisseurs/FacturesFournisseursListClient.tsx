@@ -78,13 +78,13 @@ export default function FacturesFournisseursListClient({
 
   const filtered = useMemo(() => {
     let list = invoices.filter(inv => {
+      if (search) {
+        const q = search.toLowerCase()
+        return inv.number.toLowerCase().includes(q) || inv.supplier_name.toLowerCase().includes(q)
+      }
       if (statusFilters.size > 0 && !statusFilters.has(inv.status)) return false
       if (dateFrom && inv.invoice_date < dateFrom) return false
       if (dateTo && inv.invoice_date > dateTo) return false
-      if (search) {
-        const q = search.toLowerCase()
-        if (!inv.number.toLowerCase().includes(q) && !inv.supplier_name.toLowerCase().includes(q)) return false
-      }
       return true
     })
     list = [...list].sort((a, b) => {
