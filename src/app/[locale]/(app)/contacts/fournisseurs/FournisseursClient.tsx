@@ -93,7 +93,7 @@ export default function FournisseursClient({ fournisseurs: initial }: Props) {
     if (editingId) {
       setFournisseurs(prev => prev.map(f => f.id === editingId ? { ...f, ...json } : f))
     } else {
-      setFournisseurs(prev => [json as Supplier, ...prev].sort((a, b) => a.name.localeCompare(b.name)))
+      setFournisseurs(prev => [json as unknown as Supplier, ...prev].sort((a, b) => a.name.localeCompare(b.name)))
     }
     setModalOpen(false)
     setSaving(false)
