@@ -1,6 +1,7 @@
 import { cookies } from "next/headers"
 import type { NextRequest } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { createSchemaClient } from "@/lib/supabase/admin"
 
 const ALLOWED_SCHEMAS = new Set(["geg_guinee", "geg_singapore"])
 
@@ -24,14 +25,14 @@ export async function getCompanySchema(): Promise<string> {
 }
 
 /**
- * Returns a Supabase client scoped to the active company schema.
+ * Returns a Supabase admin client scoped to the active company schema via db.schema
+ * (reliable — set at construction time, not via .schema() after the fact).
  * Usage: const { db, schema } = await createCompanyClient()
  *        const { data } = await db.from("accounts").select()
  */
 export async function createCompanyClient() {
   const supabase = await createClient()
   const schema = await getCompanySchema()
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const db = (supabase as any).schema(schema) as typeof supabase
+  const db = createSchemaClient(schema)
   return { supabase, db, schema }
 }
