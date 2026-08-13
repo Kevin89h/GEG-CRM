@@ -310,7 +310,7 @@ export default function FacturesClient({ invoices, schema }: Props) {
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
             <input
               value={search}
-              onChange={e => { setSearch(e.target.value);  }}
+              onChange={e => { setSearch(e.target.value); if (e.target.value) setTab("tout") }}
               placeholder={t("searchPlaceholder")}
               className="pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 w-52"
             />

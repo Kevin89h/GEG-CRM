@@ -12,12 +12,13 @@ export function formatNumber(value: number, decimals = 0): string {
   }).format(value)
 }
 
-export function formatCurrency(value: number, currency: "USD" | "GNF" | "EUR") {
-  const locales: Record<string, string> = { USD: "en-US", GNF: "fr-FR", EUR: "fr-FR" }
-  return new Intl.NumberFormat(locales[currency], {
+export function formatCurrency(value: number, currency: string) {
+  const locales: Record<string, string> = { USD: "en-US", GNF: "fr-FR", EUR: "fr-FR", XOF: "fr-FR" }
+  const noDecimals = ["GNF", "XOF"]
+  return new Intl.NumberFormat(locales[currency] ?? "fr-FR", {
     style: "currency",
     currency,
-    maximumFractionDigits: currency === "GNF" ? 0 : 2,
+    maximumFractionDigits: noDecimals.includes(currency) ? 0 : 2,
   }).format(value)
 }
 

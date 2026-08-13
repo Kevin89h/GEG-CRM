@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createCompanyClient } from "@/lib/company"
+import { logActivity } from "@/lib/activity-logger"
 
 interface InvoiceLine {
   product_id: string | null
@@ -48,6 +49,7 @@ export async function POST(req: NextRequest)  {
       if (lineErr) return NextResponse.json({ error: lineErr.message }, { status: 400 })
     }
 
+    logActivity({ action: "create", resource: "invoice", resourceId: invoice.id, label: `Facture ${number} créée`, details: { number } })
     return NextResponse.json({ id: invoice.id })
 
   } catch (err) {

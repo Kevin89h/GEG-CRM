@@ -1,5 +1,6 @@
 import { createSchemaClient } from "@/lib/supabase/admin"
 import { getSchemaFromRequest } from "@/lib/company"
+import { logActivity } from "@/lib/activity-logger"
 import { NextRequest, NextResponse } from "next/server"
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -15,11 +16,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const { data: invoice } = await db
       .from("supplier_invoices")
-      .select("total_ttc, status, number")
+      .select("total_ttc, status, number, currency")
       .eq("id", id)
       .single()
 
     if (!invoice) return NextResponse.json({ error: "Facture introuvable" }, { status: 404 })
+
+    const parsedExchangeRate = exchange_rate ? parseFloat(exchange_rate) : null
 
     const { data: payment, error: payErr } = await db
       .from("supplier_payments")
@@ -27,7 +30,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         supplier_invoice_id: id,
         amount,
         currency,
-        exchange_rate: exchange_rate ? parseFloat(exchange_rate) : null,
+        exchange_rate: parsedExchangeRate,
         method,
         treasury_account_id: treasury_account_id || null,
         reference: reference || null,
@@ -41,10 +44,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const { data: allPayments } = await db
       .from("supplier_payments")
-      .select("amount")
+      .select("amount, currency, exchange_rate")
       .eq("supplier_invoice_id", id)
 
-    const totalPaid = (allPayments ?? []).reduce((s, p) => s + Number(p.amount), 0)
+    const invoiceCurrency = invoice.currency ?? "GNF"
+    const totalPaid = (allPayments ?? []).reduce((s, p) => {
+      const amt = Number(p.amount)
+      if (p.currency && p.currency !== invoiceCurrency && p.exchange_rate) {
+        return s + amt / Number(p.exchange_rate)
+      }
+      return s + amt
+    }, 0)
     const balance = Number(invoice.total_ttc) - totalPaid
     const newStatus = balance <= 0 ? "paid" : totalPaid > 0 ? "partial" : "pending"
     await db.from("supplier_invoices").update({ status: newStatus }).eq("id", id)
@@ -63,6 +73,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (txErr) console.error("Treasury insert error:", txErr.message)
     }
 
+    logActivity({ action: "payment", resource: "achat", resourceId: id, label: `Paiement de ${Number(amount).toLocaleString("fr")} ${currency} enregistré — ${invoice.number ?? id}`, details: { amount, currency, method } })
     return NextResponse.json({ payment, newStatus, balance })
   } catch (err) {
     console.error("Supplier payment error:", err)

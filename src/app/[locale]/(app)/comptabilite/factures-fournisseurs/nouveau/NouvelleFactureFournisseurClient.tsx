@@ -23,7 +23,7 @@ let _uid = 0
 const uid = () => ++_uid
 const newLine = (): Line => ({ id: uid(), description: "", quantity: "1", unit_price: "0", tax_rate: "0" })
 
-type Currency = "GNF" | "USD" | "EUR"
+type Currency = "GNF" | "USD" | "EUR" | "XOF"
 
 const QUICK_FORM_EMPTY = { name: "", currency: "USD", payment_terms: "" }
 
@@ -264,9 +264,10 @@ export default function NouvelleFactureFournisseurClient({ locale, treasuryAccou
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Devise</label>
               <select value={form.currency} onChange={e => setF("currency", e.target.value as Currency)}
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="GNF">GNF</option>
-                <option value="USD">USD</option>
-                <option value="EUR">EUR</option>
+                <option value="GNF">GNF — Franc guinéen</option>
+                <option value="XOF">XOF — CFA (BCEAO)</option>
+                <option value="USD">USD — Dollar américain</option>
+                <option value="EUR">EUR — Euro</option>
               </select>
             </div>
           </div>

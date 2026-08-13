@@ -147,7 +147,7 @@ export default function NouvelleFactureClient({ locale, accounts, products, trea
   const [error, setError] = useState<string | null>(null)
 
   const [accountId, setAccountId] = useState("")
-  const [currency, setCurrency] = useState<"GNF" | "USD" | "EUR">("GNF")
+  const [currency, setCurrency] = useState<"GNF" | "USD" | "EUR" | "XOF">("GNF")
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split("T")[0])
   const [dueDate, setDueDate] = useState("")
   const [notes, setNotes] = useState("")
@@ -272,11 +272,12 @@ export default function NouvelleFactureClient({ locale, accounts, products, trea
             </div>
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t("currency")}</label>
-              <select value={currency} onChange={e => setCurrency(e.target.value as "GNF"|"USD"|"EUR")}
+              <select value={currency} onChange={e => setCurrency(e.target.value as "GNF"|"USD"|"EUR"|"XOF")}
                 className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-900 focus:outline-none focus:border-blue-400 bg-white">
-                <option value="GNF">GNF</option>
-                <option value="USD">USD</option>
-                <option value="EUR">EUR</option>
+                <option value="GNF">GNF — Franc guinéen</option>
+                <option value="XOF">XOF — CFA (BCEAO)</option>
+                <option value="USD">USD — Dollar américain</option>
+                <option value="EUR">EUR — Euro</option>
               </select>
             </div>
           </div>

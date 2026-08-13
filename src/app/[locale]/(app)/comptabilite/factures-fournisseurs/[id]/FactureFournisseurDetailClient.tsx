@@ -2,7 +2,8 @@
 
 import { useState, useRef, useEffect } from "react"
 import Link from "next/link"
-import { ArrowLeft, Plus, X, ChevronDown, Ban, Trash2, Printer, FileMinus } from "lucide-react"
+import { ArrowLeft, Plus, X, ChevronDown, Ban, Trash2, Printer, FileMinus, Copy } from "lucide-react"
+import ActivityLog from "@/components/ActivityLog"
 import { formatDate } from "@/lib/utils"
 import { useRouter } from "next/navigation"
 
@@ -123,10 +124,15 @@ export default function FactureFournisseurDetailClient({
     setSaving(false)
     if (!res.ok) { setError(json.error ?? "Erreur serveur"); return }
 
+    const exchangeRate = form.exchange_rate ? parseFloat(form.exchange_rate) : 0
+    const amountInInvoiceCurrency =
+      form.currency && form.currency !== invoice.currency && exchangeRate > 0
+        ? amount / exchangeRate
+        : amount
     setInvoice(prev => ({
       ...prev,
       status: json.newStatus,
-      total_paid: prev.total_paid + amount,
+      total_paid: prev.total_paid + amountInInvoiceCurrency,
       balance: json.balance,
     }))
     setPayments(prev => [json.payment, ...prev])
@@ -177,6 +183,14 @@ export default function FactureFournisseurDetailClient({
     router.push(`/${locale}/comptabilite/factures-fournisseurs`)
   }
 
+  async function duplicateInvoice() {
+    setMenuOpen(false)
+    const res = await fetch(`/api/supplier-invoices/${invoice.id}/duplicate`, { method: "POST" })
+    const json = await res.json()
+    if (!res.ok) { alert(json.error ?? "Erreur lors de la duplication"); return }
+    router.push(`/${locale}/comptabilite/factures-fournisseurs/${json.id}`)
+  }
+
   return (
     <div className="max-w-4xl mx-auto px-6 py-8">
       <Link
@@ -219,6 +233,12 @@ export default function FactureFournisseurDetailClient({
                   className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
                 >
                   <Printer className="w-4 h-4 text-gray-400" /> Imprimer
+                </button>
+                <button
+                  onClick={duplicateInvoice}
+                  className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <Copy className="w-4 h-4 text-gray-400" /> Dupliquer
                 </button>
                 <button
                   onClick={createCreditNote}
@@ -348,6 +368,12 @@ export default function FactureFournisseurDetailClient({
           <p className="text-sm text-gray-600 whitespace-pre-wrap">{invoice.notes}</p>
         </div>
       )}
+
+      {/* Activité */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+        <h2 className="font-semibold text-gray-700 text-sm mb-4">Activité</h2>
+        <ActivityLog resource="achat" resourceId={invoice.id} />
+      </div>
 
       {/* Modal paiement */}
       {modalOpen && (

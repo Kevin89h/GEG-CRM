@@ -12,6 +12,7 @@ import { Modal } from "@/components/ui/Modal"
 import { createClient } from "@/lib/supabase/client"
 import { formatDate, formatCurrency, formatNumber } from "@/lib/utils"
 import DocumentLayout from "@/components/print/DocumentLayout"
+import ActivityLog from "@/components/ActivityLog"
 import ShareButton from "@/components/ShareButton"
 
 interface Line {
@@ -1021,6 +1022,12 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
           <p className="text-sm text-gray-700 whitespace-pre-wrap">{invoice.notes}</p>
         </div>
       )}
+
+      {/* Activité */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+        <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-4">Activité</p>
+        <ActivityLog resource="invoice" resourceId={invoice.id} />
+      </div>
 
       {/* Modal confirmation */}
       <Modal open={confirmModalOpen} onClose={() => { setConfirmModalOpen(false); setError(null) }} title={t("confirmInvoiceTitle")}>

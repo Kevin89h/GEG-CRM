@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { formatDate, formatNumber } from "@/lib/utils"
 import DocumentLayout from "@/components/print/DocumentLayout"
+import ActivityLog from "@/components/ActivityLog"
 import ShareButton from "@/components/ShareButton"
 
 interface Line {
@@ -896,6 +897,12 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
             </p>
           </div>
         )}
+      </div>
+
+      {/* Activité */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 mt-6">
+        <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-4">Activité</p>
+        <ActivityLog resource="devis" resourceId={order.id} />
       </div>
 
       {/* Zone d'impression */}
