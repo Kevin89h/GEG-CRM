@@ -27,8 +27,8 @@ export default async function DealDetailPage({ params }: { params: Promise<{ loc
     deal = sgDeal
     accounts = (sgAccounts ?? []).map((d: any) => ({ id: d.id, name: d.account_name }))
   } else {
-    const [{ data: guDeal }, { data: guAccounts }, { data: guActivities }, { data: guDevis }] = await Promise.all([
-      db.from("deals").select("*, deal_date, country, original_request, contact_name, contact_role, contact_email, contact_phone, sector, preferred_channel, selling_price, cost, account:accounts(id, name, type), invoice:invoices!deal_id(id, number, status, total_ht, currency)").eq("id", id).single(),
+    const [{ data: guDeal }, { data: guAccounts }, { data: guActivities }, { data: guDevis }, { data: guInvoice }] = await Promise.all([
+      db.from("deals").select("*, deal_date, country, original_request, contact_name, contact_role, contact_email, contact_phone, sector, preferred_channel, selling_price, cost, account:accounts(id, name, type)").eq("id", id).single(),
       db.from("accounts").select("id, name").order("name"),
       db.from("activities")
         .select("id, type, subject, notes, date, follow_up_date, completed, user_id")
@@ -38,11 +38,16 @@ export default async function DealDetailPage({ params }: { params: Promise<{ loc
         .select("id, number, status, total_ttc, currency, created_at, account:accounts(id, name)")
         .eq("deal_id", id)
         .order("created_at", { ascending: false }),
+      db.from("invoice_totals")
+        .select("id, number, status, total_ht, currency")
+        .eq("deal_id", id)
+        .maybeSingle(),
     ])
     deal = guDeal
     accounts = guAccounts ?? []
     activities = guActivities ?? []
     linkedDevis = guDevis ?? []
+    if (deal) deal.invoice = guInvoice ?? null
   }
 
   if (!deal) notFound()
