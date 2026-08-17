@@ -5,10 +5,12 @@ import { useRouter } from "next/navigation"
 import {
   ArrowLeft, MessageSquare, Mail, Phone, Users, Globe, HelpCircle,
   AlertCircle, CheckCircle2, Clock, PhoneCall, FileText, StickyNote,
-  Edit2, Plus, Calendar, User, Zap, Pencil, Trash2, ArrowLeftRight
+  Edit2, Plus, Calendar, User, Zap, Pencil, Trash2, ArrowLeftRight,
+  TrendingUp
 } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
 import type { DealStage } from "@/types"
+import DealFinancialsPanel from "@/components/DealFinancialsPanel"
 
 interface Activity {
   id: string
@@ -196,6 +198,7 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
   const [editActForm, setEditActForm] = useState({ subject: "", notes: "", type: "note" })
   const [editActSaving, setEditActSaving] = useState(false)
   const [actionLoading, setActionLoading] = useState(false)
+  const [leftTab, setLeftTab] = useState<"resume" | "activite" | "finances">("resume")
 
   async function changeStage(newStage: DealStage) {
     if (newStage === deal.stage || stageSaving) return
@@ -494,8 +497,8 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
             </div>
           </div>
 
-          {/* Info card */}
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 space-y-3">
+          {/* Info card — Résumé tab */}
+          {leftTab === "resume" && <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 space-y-3">
             <div className="flex items-center justify-between mb-1">
               <h2 className="text-sm font-semibold text-gray-900">Informations</h2>
             </div>
@@ -613,10 +616,47 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
                 <span className="text-gray-700 whitespace-pre-line">{deal.notes}</span>
               </div>
             )}
+          </div>}
+
+          {/* Tab bar */}
+          <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
+            {([
+              { key: "resume", label: "Résumé" },
+              { key: "activite", label: "Activité" },
+              { key: "finances", label: "Finances", icon: <TrendingUp className="w-3.5 h-3.5" /> },
+            ] as const).map(t => (
+              <button
+                key={t.key}
+                onClick={() => setLeftTab(t.key)}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 text-xs font-medium rounded-lg transition ${
+                  leftTab === t.key ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                {"icon" in t && t.icon}
+                {t.label}
+              </button>
+            ))}
           </div>
 
+          {/* Finances tab */}
+          {leftTab === "finances" && (
+            <DealFinancialsPanel
+              dealId={deal.id}
+              dealCurrency={deal.currency}
+              invoiceFromProps={deal.invoice ? {
+                id: deal.invoice.id,
+                number: deal.invoice.number,
+                status: deal.invoice.status,
+                total_ht: deal.invoice.total_ht ?? 0,
+                total_ttc: 0,
+                total_paid: 0,
+                currency: deal.invoice.currency,
+              } : null}
+            />
+          )}
+
           {/* Activity journal */}
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
+          {leftTab === "activite" && <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
               <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5"><Zap className="w-3.5 h-3.5 text-yellow-500" /> Journal d'activité</h2>
               <button
@@ -759,7 +799,7 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
                 )
               })}
             </div>
-          </div>
+          </div>}
         </div>
 
         {/* Right col */}
