@@ -39,17 +39,34 @@ type Invoice = {
   notes: string | null
 }
 
+type ExchangeRate = { from_currency: string; to_currency: string; rate: number; effective_date: string }
+
+function getBestRate(rates: ExchangeRate[], from: string, to: string): number | null {
+  if (from === to) return null
+  const match = rates
+    .filter(r => r.from_currency === from && r.to_currency === to)
+    .sort((a, b) => b.effective_date.localeCompare(a.effective_date))[0]
+  if (match) return Number(match.rate)
+  const inverse = rates
+    .filter(r => r.from_currency === to && r.to_currency === from)
+    .sort((a, b) => b.effective_date.localeCompare(a.effective_date))[0]
+  if (inverse) return 1 / Number(inverse.rate)
+  return null
+}
+
 export default function FactureFournisseurDetailClient({
   invoice: initialInvoice,
   lines,
   payments: initialPayments,
   treasuryAccounts,
+  exchangeRates = [],
   locale,
 }: {
   invoice: Invoice
   lines: Line[]
   payments: Payment[]
   treasuryAccounts: TreasuryAccount[]
+  exchangeRates?: ExchangeRate[]
   locale: string
 }) {
   const router = useRouter()
@@ -77,8 +94,9 @@ export default function FactureFournisseurDetailClient({
           next.amount = String(Math.max(invoice.balance, 0))
           next.exchange_rate = ""
         } else {
-          next.exchange_rate = prev.exchange_rate
-          const rate = parseFloat(prev.exchange_rate)
+          const autoRate = getBestRate(exchangeRates, invoice.currency, v)
+          next.exchange_rate = autoRate ? String(Math.round(autoRate)) : prev.exchange_rate
+          const rate = autoRate ?? parseFloat(prev.exchange_rate)
           if (rate > 0) {
             next.amount = String(Math.round(invoice.balance * rate))
           } else {
