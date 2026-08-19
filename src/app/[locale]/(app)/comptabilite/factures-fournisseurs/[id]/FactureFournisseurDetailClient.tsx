@@ -283,15 +283,27 @@ export default function FactureFournisseurDetailClient({
             <div className="flex justify-between"><span className="text-gray-500">Total HT</span><span className="font-medium">{Number(invoice.total_ht).toLocaleString("fr")} {invoice.currency}</span></div>
             {Number(invoice.tax_amount) > 0 && <div className="flex justify-between"><span className="text-gray-500">TVA</span><span className="font-medium">{Number(invoice.tax_amount).toLocaleString("fr")} {invoice.currency}</span></div>}
             <div className="flex justify-between pt-2 border-t border-gray-100"><span className="font-semibold text-gray-900">Total TTC</span><span className="font-bold text-blue-600 text-base">{Number(invoice.total_ttc).toLocaleString("fr")} {invoice.currency}</span></div>
-            {invoice.total_paid > 0 && (
-              <>
-                <div className="flex justify-between text-emerald-700"><span>Payé</span><span className="font-medium">−{Number(invoice.total_paid).toLocaleString("fr")} {invoice.currency}</span></div>
-                <div className="flex justify-between pt-2 border-t border-gray-100 font-semibold">
-                  <span className={invoice.balance <= 0 ? "text-emerald-700" : "text-amber-700"}>Solde restant</span>
-                  <span className={invoice.balance <= 0 ? "text-emerald-700" : "text-amber-700"}>{Math.max(0, invoice.balance).toLocaleString("fr")} {invoice.currency}</span>
-                </div>
-              </>
-            )}
+            {payments.length > 0 && (() => {
+              const byCurrency = payments.reduce((acc, p) => {
+                const key = p.currency
+                acc[key] = (acc[key] ?? 0) + Number(p.amount)
+                return acc
+              }, {} as Record<string, number>)
+              return (
+                <>
+                  {Object.entries(byCurrency).map(([cur, amt]) => (
+                    <div key={cur} className="flex justify-between text-emerald-700">
+                      <span>Payé</span>
+                      <span className="font-medium">−{amt.toLocaleString("fr")} {cur}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between pt-2 border-t border-gray-100 font-semibold">
+                    <span className={invoice.balance <= 0 ? "text-emerald-700" : "text-amber-700"}>Solde restant</span>
+                    <span className={invoice.balance <= 0 ? "text-emerald-700" : "text-amber-700"}>{Math.max(0, invoice.balance).toLocaleString("fr")} {invoice.currency}</span>
+                  </div>
+                </>
+              )
+            })()}
           </div>
         </div>
       </div>

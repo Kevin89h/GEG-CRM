@@ -15,7 +15,14 @@ export default async function FactureFournisseurDetailPage({ params }: { params:
 
   if (!invoice) notFound()
 
-  const totalPaid = (payments ?? []).reduce((s, p) => s + Number(p.amount), 0)
+  const invoiceCurrency = invoice.currency ?? "GNF"
+  const totalPaid = (payments ?? []).reduce((s, p) => {
+    const amt = Number(p.amount)
+    if (p.currency && p.currency !== invoiceCurrency && p.exchange_rate) {
+      return s + amt / Number(p.exchange_rate)
+    }
+    return s + amt
+  }, 0)
   const balance = Number(invoice.total_ttc) - totalPaid
 
   return (
