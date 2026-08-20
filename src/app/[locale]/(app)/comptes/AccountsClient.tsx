@@ -38,8 +38,9 @@ export default function AccountsClient({ accounts: initial, employees }: Props) 
   const [saveError, setSaveError] = useState<string | null>(null)
   const [form, setForm] = useState({
     name: "", type: "enterprise" as AccountType, industry: "",
-    country: "Guinée", city: "", address: "", phone: "", email: "", website: "", notes: "",
+    country: "Guinée", city: "", address: "", address2: "", phone: "", email: "", website: "", notes: "",
     salesperson_id: "",
+    contact_first_name: "", contact_last_name: "", contact_role: "",
   })
 
   const filtered = accounts.filter(a => {
@@ -55,7 +56,7 @@ export default function AccountsClient({ accounts: initial, employees }: Props) 
     const res = await fetch("/api/accounts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, salesperson_id: form.salesperson_id || null }),
+      body: JSON.stringify({ ...form, salesperson_id: form.salesperson_id || null, address2: form.address2 || null }),
     })
     const json = await res.json()
     if (!res.ok) {
@@ -63,9 +64,22 @@ export default function AccountsClient({ accounts: initial, employees }: Props) 
       setSaving(false)
       return
     }
+    if (form.contact_first_name || form.contact_last_name) {
+      await fetch("/api/contacts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          first_name: form.contact_first_name || null,
+          last_name: form.contact_last_name || null,
+          title: form.contact_role || null,
+          account_id: json.id,
+          is_primary: true,
+        }),
+      })
+    }
     setAccounts(prev => [json, ...prev])
     setModalOpen(false)
-    setForm({ name: "", type: "enterprise", industry: "", country: "Guinée", city: "", address: "", phone: "", email: "", website: "", notes: "", salesperson_id: "" })
+    setForm({ name: "", type: "enterprise", industry: "", country: "Guinée", city: "", address: "", address2: "", phone: "", email: "", website: "", notes: "", salesperson_id: "", contact_first_name: "", contact_last_name: "", contact_role: "" })
     setSaving(false)
   }
 
@@ -202,6 +216,12 @@ export default function AccountsClient({ accounts: initial, employees }: Props) 
             onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
             placeholder="Rue, quartier, BP…"
           />
+          <Input
+            label="Adresse (ligne 2)"
+            value={form.address2}
+            onChange={e => setForm(f => ({ ...f, address2: e.target.value }))}
+            placeholder="Complément d'adresse…"
+          />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
               label={t("country")}
@@ -233,6 +253,29 @@ export default function AccountsClient({ accounts: initial, employees }: Props) 
             onChange={e => setForm(f => ({ ...f, salesperson_id: e.target.value }))}
             options={[{ value: "", label: "— Aucun commercial —" }, ...employees.map(e => ({ value: e.id, label: e.full_name }))]}
           />
+          <div className="pt-2 border-t border-gray-100">
+            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Contact principal</p>
+            <div className="space-y-3">
+              <Input
+                label="Rôle"
+                value={form.contact_role}
+                onChange={e => setForm(f => ({ ...f, contact_role: e.target.value }))}
+                placeholder="Directeur général, Responsable achat…"
+              />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <Input
+                  label="Prénom"
+                  value={form.contact_first_name}
+                  onChange={e => setForm(f => ({ ...f, contact_first_name: e.target.value }))}
+                />
+                <Input
+                  label="Nom"
+                  value={form.contact_last_name}
+                  onChange={e => setForm(f => ({ ...f, contact_last_name: e.target.value }))}
+                />
+              </div>
+            </div>
+          </div>
           {saveError && (
             <p className="text-sm text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg">{saveError}</p>
           )}
