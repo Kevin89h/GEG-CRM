@@ -22,7 +22,7 @@ export default async function AccountsPage({ params }: { params: Promise<{ local
   const { db } = await createCompanyClient()
 
   const [acctRes, empRes] = await Promise.all([
-    db.from("accounts").select("id, name, type, industry, country, city, address, phone, email, website, salesperson_id, contacts(count), deals(count)").order("name"),
+    db.from("accounts").select("id, name, type, industry, country, city, phone, email, website, salesperson_id, contacts(count), deals(count)").order("name"),
     db.from("employees").select("id, full_name").eq("is_active", true).order("full_name"),
   ])
 
