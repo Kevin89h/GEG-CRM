@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import Link from "next/link"
-import { ArrowLeft, Plus, X, ChevronDown, Ban, Trash2, Printer, FileMinus, Copy } from "lucide-react"
+import { ArrowLeft, Plus, X, ChevronDown, Ban, Trash2, Printer, FileMinus, Copy, Download } from "lucide-react"
 import ActivityLog from "@/components/ActivityLog"
 import { formatDate } from "@/lib/utils"
 import { useRouter } from "next/navigation"
@@ -252,6 +252,15 @@ export default function FactureFournisseurDetailClient({
                 >
                   <Printer className="w-4 h-4 text-gray-400" /> Imprimer
                 </button>
+                <a
+                  href={`/api/factures-fournisseurs/${invoice.id}/pdf`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setMenuOpen(false)}
+                  className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  <Download className="w-4 h-4 text-gray-400" /> Télécharger PDF
+                </a>
                 <button
                   onClick={duplicateInvoice}
                   className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
