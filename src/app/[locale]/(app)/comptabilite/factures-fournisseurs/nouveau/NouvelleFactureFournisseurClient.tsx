@@ -265,6 +265,7 @@ export default function NouvelleFactureFournisseurClient({ locale, treasuryAccou
               <select value={form.currency} onChange={e => setF("currency", e.target.value as Currency)}
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="GNF">GNF — Franc guinéen</option>
+                <option value="XOF">XOF — Franc CFA</option>
                 <option value="XOF">XOF — CFA (BCEAO)</option>
                 <option value="USD">USD — Dollar américain</option>
                 <option value="EUR">EUR — Euro</option>

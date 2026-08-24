@@ -589,6 +589,7 @@
     "currencyGNF": "GNF — Guinean Franc",
     "currencyUSD": "USD — Dollar",
     "currencyEUR": "EUR — Euro",
+    "currencyXOF": "XOF — CFA Franc",
     "labelOrderDate": "Order date",
     "labelExpectedDate": "Expected arrival date",
     "labelIncoterm": "Incoterm",

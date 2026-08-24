@@ -30,7 +30,7 @@ const nextId = () => ++_lid
 const DEFAULT_FORM = {
   supplier_id: "",
   supplier_name: "",
-  currency: "GNF" as "USD" | "GNF" | "EUR",
+  currency: "GNF" as "USD" | "GNF" | "EUR" | "XOF",
   incoterm: "CIF",
   order_date: new Date().toISOString().split("T")[0],
   expected_date: "",
@@ -102,7 +102,7 @@ export default function NouvelAchatClient({ products: initialProducts, suppliers
       ...f,
       supplier_id: s.id,
       supplier_name: s.name,
-      currency: (s.currency as "USD" | "GNF" | "EUR") ?? f.currency,
+      currency: (s.currency as "USD" | "GNF" | "EUR" | "XOF") ?? f.currency,
     }))
     setSupplierSearch("")
     setShowDropdown(false)
@@ -310,8 +310,8 @@ export default function NouvelAchatClient({ products: initialProducts, suppliers
             </div>
 
             <Select label={t("labelCurrency")} value={form.currency}
-              onChange={e => setForm(f => ({ ...f, currency: e.target.value as "USD" | "GNF" | "EUR" }))}
-              options={[{ value: "GNF", label: t("currencyGNF") }, { value: "USD", label: t("currencyUSD") }, { value: "EUR", label: t("currencyEUR") }]} />
+              onChange={e => setForm(f => ({ ...f, currency: e.target.value as "USD" | "GNF" | "EUR" | "XOF" }))}
+              options={[{ value: "GNF", label: t("currencyGNF") }, { value: "USD", label: t("currencyUSD") }, { value: "EUR", label: t("currencyEUR") }, { value: "XOF", label: t("currencyXOF") }]} />
             <Input label={t("labelOrderDate")} type="date" value={form.order_date}
               onChange={e => setForm(f => ({ ...f, order_date: e.target.value }))} />
             <Input label={t("labelExpectedDate")} type="date" value={form.expected_date}
@@ -516,6 +516,7 @@ export default function NouvelAchatClient({ products: initialProducts, suppliers
                   <option value="USD">USD</option>
                   <option value="GNF">GNF</option>
                   <option value="EUR">EUR</option>
+                  <option value="XOF">XOF</option>
                 </select>
               </div>
               <div>

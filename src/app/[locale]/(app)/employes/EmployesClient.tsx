@@ -51,6 +51,7 @@ const CURRENCIES = [
   { value: "GNF", label: "GNF — Franc guinéen" },
   { value: "USD", label: "USD — Dollar" },
   { value: "EUR", label: "EUR — Euro" },
+  { value: "XOF", label: "XOF — Franc CFA" },
 ]
 
 const emptyForm = {
