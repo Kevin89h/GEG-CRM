@@ -2,7 +2,8 @@
 
 import { useState } from "react"
 import { useTranslations } from "next-intl"
-import { Plus, Search, Building2, Landmark, Briefcase, GitMerge, UserSearch } from "lucide-react"
+import { Plus, Search, Building2, Landmark, Briefcase, GitMerge, UserSearch, Download } from "lucide-react"
+import { exportToXls } from "@/lib/exportXls"
 import { useRouter, useParams } from "next/navigation"
 import { Button } from "@/components/ui/Button"
 import { Badge } from "@/components/ui/Badge"
@@ -92,6 +93,23 @@ export default function AccountsClient({ accounts: initial, employees }: Props) 
           <p className="text-gray-500 text-sm mt-0.5">{filtered.length} compte{filtered.length !== 1 ? "s" : ""}</p>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={() => exportToXls(accounts.map(a => ({
+              Nom: a.name,
+              Type: a.type,
+              Secteur: a.industry ?? "",
+              Pays: a.country,
+              Ville: a.city ?? "",
+              Adresse: a.address ?? "",
+              Téléphone: a.phone ?? "",
+              Email: a.email ?? "",
+              "Site web": a.website ?? "",
+            })), "comptes_clients")}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50"
+          >
+            <Download className="w-4 h-4" />
+            Exporter
+          </button>
           <button
             onClick={() => router.push(`/${locale}/comptes/doublons`)}
             className="flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50"

@@ -16,13 +16,14 @@ async function getAdminDb() {
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const { type, carrier, tracking_number, description, origin, destination, eta, status, notes } = body
+    const { type, carrier, tracking_number, bill_of_lading, description, origin, destination, eta, status, notes } = body
     if (!tracking_number || !carrier) {
       return NextResponse.json({ error: "Champs requis manquants" }, { status: 400 })
     }
     const db = await getAdminDb()
     const { data, error } = await db.from("shipments").insert([{
       type, carrier, tracking_number,
+      bill_of_lading: bill_of_lading || null,
       description: description || null,
       origin: origin || null,
       destination: destination || null,

@@ -2,8 +2,9 @@
 
 import { useState, useMemo } from "react"
 import Link from "next/link"
-import { Search, CreditCard, Building2, Smartphone, Banknote, ChevronLeft, ChevronRight } from "lucide-react"
+import { Search, CreditCard, Building2, Smartphone, Banknote, ChevronLeft, ChevronRight, Download } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
+import { exportToXls } from "@/lib/exportXls"
 
 interface Payment {
   id: string
@@ -92,13 +93,32 @@ export default function PaiementsClient({ payments, locale }: Props) {
             </span>
           </p>
         </div>
-        <Link
-          href={`/${locale}/ventes/factures`}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition"
-        >
-          <CreditCard className="w-4 h-4" />
-          Nouveau paiement
-        </Link>
+        <div className="flex gap-2">
+          <button
+            onClick={() => exportToXls(payments.map(p => ({
+              "N° paiement": p.number,
+              Date: p.paid_at ? new Date(p.paid_at).toLocaleDateString("fr-FR") : "",
+              Client: p.client_name ?? "",
+              "N° facture": p.invoice_number ?? "",
+              Montant: p.amount,
+              Devise: p.currency,
+              Méthode: p.method,
+              Journal: p.journal_name ?? "",
+              Statut: p.invoice_status ?? "",
+            })), "journal_paiements")}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-200 text-gray-600 text-sm font-medium hover:bg-gray-50 transition"
+          >
+            <Download className="w-4 h-4" />
+            Exporter
+          </button>
+          <Link
+            href={`/${locale}/ventes/factures`}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition"
+          >
+            <CreditCard className="w-4 h-4" />
+            Nouveau paiement
+          </Link>
+        </div>
       </div>
 
       {/* Filtres */}

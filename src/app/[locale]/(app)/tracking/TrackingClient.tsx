@@ -11,6 +11,7 @@ interface Shipment {
   type: ShipmentType;
   carrier: string;
   tracking_number: string;
+  bill_of_lading: string | null;
   description: string | null;
   status: Status;
   eta: string | null;
@@ -72,6 +73,7 @@ const BLANK_FORM = {
   type: 'container' as ShipmentType,
   carrier: 'MSC',
   tracking_number: '',
+  bill_of_lading: '',
   description: '',
   origin: '',
   destination: '',
@@ -182,6 +184,7 @@ export default function TrackingClient({ shipments: initial }: { shipments: Ship
               <tr>
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Transporteur</th>
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">N° de suivi</th>
+                <th className="text-left px-4 py-3 text-slate-600 font-medium">B/L</th>
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Description</th>
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">Origine → Destination</th>
                 <th className="text-left px-4 py-3 text-slate-600 font-medium">ETA</th>
@@ -198,6 +201,7 @@ export default function TrackingClient({ shipments: initial }: { shipments: Ship
                     <tr key={s.id} className="hover:bg-slate-50 transition-colors border-b border-slate-100">
                       <td className="px-4 py-3 font-medium text-slate-800">{s.carrier}</td>
                       <td className="px-4 py-3 font-mono text-slate-700">{s.tracking_number}</td>
+                      <td className="px-4 py-3 font-mono text-slate-500 text-xs">{s.bill_of_lading ?? '—'}</td>
                       <td className="px-4 py-3 text-slate-600">{s.description ?? '—'}</td>
                       <td className="px-4 py-3 text-slate-600">
                         {s.origin || s.destination
@@ -251,7 +255,7 @@ export default function TrackingClient({ shipments: initial }: { shipments: Ship
                     {/* Live events panel */}
                     {isExpanded && (
                       <tr key={`${s.id}-live`}>
-                        <td colSpan={7} className="px-4 py-0 bg-slate-50 border-b border-slate-200">
+                        <td colSpan={8} className="px-4 py-0 bg-slate-50 border-b border-slate-200">
                           {live === 'loading' && (
                             <div className="py-4 text-sm text-slate-500">Récupération en cours…</div>
                           )}
@@ -361,14 +365,23 @@ export default function TrackingClient({ shipments: initial }: { shipments: Ship
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">N° conteneur ou B/L *</label>
+                <label className="block text-xs font-medium text-slate-600 mb-1">N° conteneur *</label>
                 <input
                   required
                   autoFocus
                   value={form.tracking_number}
                   onChange={(e) => setForm((f) => ({ ...f, tracking_number: e.target.value.trim().toUpperCase() }))}
                   className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  placeholder="TCLU4080620 ou ISB1992771"
+                  placeholder="TCLU4080620"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Bill of Lading (B/L) <span className="text-slate-400 font-normal">(optionnel)</span></label>
+                <input
+                  value={form.bill_of_lading}
+                  onChange={(e) => setForm((f) => ({ ...f, bill_of_lading: e.target.value.trim().toUpperCase() }))}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="ISB1992771"
                 />
               </div>
               <div>

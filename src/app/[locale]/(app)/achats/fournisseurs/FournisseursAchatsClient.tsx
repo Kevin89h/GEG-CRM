@@ -1,7 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Search, Building2, Phone, Mail, MapPin, Pencil, X, CreditCard } from "lucide-react"
+import { Plus, Search, Building2, Phone, Mail, MapPin, Pencil, X, CreditCard, Download } from "lucide-react"
+import { exportToXls } from "@/lib/exportXls"
 
 interface Supplier {
   id: string
@@ -156,6 +157,24 @@ export default function FournisseursAchatsClient({ suppliers: initial, locale }:
           />
         </div>
         <span className="text-xs text-gray-400">{filtered.length} fournisseur{filtered.length !== 1 ? "s" : ""}</span>
+        <button
+          onClick={() => exportToXls(suppliers.map(s => ({
+            Nom: s.name,
+            Email: s.email ?? "",
+            Téléphone: s.phone ?? "",
+            Pays: s.country ?? "",
+            Ville: s.city ?? "",
+            Devise: s.currency ?? "",
+            "Conditions paiement": s.payment_terms ?? "",
+            IBAN: s.iban ?? "",
+            SWIFT: s.swift ?? "",
+            Banque: s.bank_name ?? "",
+            Actif: s.is_active ? "Oui" : "Non",
+          })), "fournisseurs")}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-gray-200 rounded text-gray-600 hover:bg-gray-50 transition"
+        >
+          <Download className="w-3.5 h-3.5" /> Exporter
+        </button>
       </div>
 
       {/* Table */}

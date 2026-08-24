@@ -1,7 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, ArrowUpRight, ArrowDownLeft, Banknote, Smartphone, Building2, MoreHorizontal, Pencil, Trash2 } from "lucide-react"
+import { Plus, ArrowUpRight, ArrowDownLeft, Banknote, Smartphone, Building2, MoreHorizontal, Pencil, Trash2, Download } from "lucide-react"
+import { exportToXls } from "@/lib/exportXls"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
@@ -248,6 +249,17 @@ export default function TresorerieClient({ accounts: initial, transactions: init
           <p className="text-gray-500 text-sm mt-0.5">Soldes en temps réel</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => exportToXls(transactions.map(t => ({
+            Date: t.date ? new Date(t.date).toLocaleDateString("fr-FR") : "",
+            Type: t.type,
+            Montant: t.amount,
+            Devise: t.currency,
+            Description: t.description,
+            Référence: t.reference ?? "",
+            Catégorie: t.category ?? "",
+          })), "journal_tresorerie")}>
+            <Download className="w-4 h-4" /> Exporter journal
+          </Button>
           <Button variant="secondary" onClick={() => setAccountModal(true)}>
             <Plus className="w-4 h-4" /> Nouveau compte
           </Button>
