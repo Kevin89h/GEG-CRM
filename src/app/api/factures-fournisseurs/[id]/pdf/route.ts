@@ -21,7 +21,7 @@ export async function GET(
 
   const { data: invoice } = await db
     .from("supplier_invoices")
-    .select("id, number, status, currency, invoice_date, due_date, reference, notes, supplier_name, total_ht, tax_amount, total_ttc, total_paid, balance")
+    .select("id, number, status, currency, invoice_date, due_date, reference, notes, supplier_name, total_ht, tax_amount, total_ttc")
     .eq("id", id)
     .single()
 
@@ -30,8 +30,8 @@ export async function GET(
   const [{ data: lines }, { data: payments }] = await Promise.all([
     db.from("supplier_invoice_lines")
       .select("id, description, quantity, unit_price, tax_rate")
-      .eq("supplier_invoice_id", id)
-      .order("created_at"),
+      .eq("invoice_id", id)
+      .order("position"),
     db.from("supplier_payments")
       .select("amount, currency, paid_at")
       .eq("supplier_invoice_id", id)
@@ -39,6 +39,11 @@ export async function GET(
   ])
 
   const inv = invoice as Record<string, unknown>
+  const totalPaid = (payments ?? []).reduce((s, p) => {
+    const p_ = p as Record<string, unknown>
+    return s + (Number(p_.amount) || 0)
+  }, 0)
+  const balance = Math.max(0, (Number(inv.total_ttc) || 0) - totalPaid)
 
   const pdfBytes = await renderFactureFournisseurPdf({
     number: String(inv.number ?? ""),
@@ -64,8 +69,8 @@ export async function GET(
     totalHt: Number(inv.total_ht) || 0,
     taxAmount: Number(inv.tax_amount) || 0,
     totalTtc: Number(inv.total_ttc) || 0,
-    totalPaid: Number(inv.total_paid) || 0,
-    balance: Number(inv.balance) || 0,
+    totalPaid,
+    balance,
     docSettings: docSettings as Record<string, unknown> | null,
   })
 
