@@ -18,7 +18,17 @@ interface Shipment {
   origin: string | null;
   destination: string | null;
   notes: string | null;
+  supplier_invoice_id: string | null;
   created_at: string;
+}
+
+interface SupplierInvoice {
+  id: string;
+  number: string;
+  supplier_name: string | null;
+  total_ttc: number;
+  currency: string;
+  status: string;
 }
 
 interface LiveEvent {
@@ -80,18 +90,22 @@ const BLANK_FORM = {
   eta: '',
   status: 'in_transit' as Status,
   notes: '',
+  supplier_invoice_id: '',
 };
 
-export default function TrackingClient({ shipments: initial }: { shipments: Shipment[], schema: string }) {
+export default function TrackingClient({ shipments: initial, supplierInvoices = [] }: { shipments: Shipment[], supplierInvoices?: SupplierInvoice[], schema: string }) {
   const router = useRouter();
+  const [shipments, setShipments] = useState(initial);
   const [tab, setTab] = useState<ShipmentType>('container');
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(BLANK_FORM);
   const [saving, setSaving] = useState(false);
   const [liveData, setLiveData] = useState<Record<string, LiveData | 'loading' | string>>({});
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editingEta, setEditingEta] = useState<string | null>(null);
+  const [etaValue, setEtaValue] = useState('');
 
-  const filtered = initial.filter((s) => s.type === tab);
+  const filtered = shipments.filter((s) => s.type === tab);
   const carriers = tab === 'container' ? CONTAINER_CARRIERS : PARCEL_CARRIERS;
 
   function handleTypeChange(type: ShipmentType) {
@@ -125,16 +139,17 @@ export default function TrackingClient({ shipments: initial }: { shipments: Ship
       const res = await fetch('/api/shipments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, supplier_invoice_id: form.supplier_invoice_id || null }),
       });
       if (!res.ok) {
         const j = await res.json();
         alert(j.error ?? 'Erreur lors de l\'enregistrement');
         return;
       }
+      const j = await res.json();
+      setShipments(prev => [j.shipment, ...prev]);
       setModalOpen(false);
       setForm(BLANK_FORM);
-      router.refresh();
     } finally {
       setSaving(false);
     }
@@ -142,7 +157,20 @@ export default function TrackingClient({ shipments: initial }: { shipments: Ship
 
   async function handleDelete(id: string) {
     await fetch(`/api/shipments?id=${id}`, { method: 'DELETE' });
-    router.refresh();
+    setShipments(prev => prev.filter(s => s.id !== id));
+  }
+
+  async function saveEta(id: string, eta: string) {
+    const res = await fetch(`/api/shipments?id=${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eta: eta || null }),
+    });
+    if (res.ok) {
+      const j = await res.json();
+      setShipments(prev => prev.map(s => s.id === id ? { ...s, eta: j.shipment.eta } : s));
+    }
+    setEditingEta(null);
   }
 
   return (
@@ -202,16 +230,45 @@ export default function TrackingClient({ shipments: initial }: { shipments: Ship
                       <td className="px-4 py-3 font-medium text-slate-800">{s.carrier}</td>
                       <td className="px-4 py-3 font-mono text-slate-700">{s.tracking_number}</td>
                       <td className="px-4 py-3 font-mono text-slate-500 text-xs">{s.bill_of_lading ?? '—'}</td>
-                      <td className="px-4 py-3 text-slate-600">{s.description ?? '—'}</td>
+                      <td className="px-4 py-3 text-slate-600">
+                        <div>{s.description ?? '—'}</div>
+                        {s.supplier_invoice_id && (() => {
+                          const inv = supplierInvoices.find(i => i.id === s.supplier_invoice_id);
+                          return inv ? (
+                            <span className="text-xs text-blue-600 font-medium">📄 {inv.number}</span>
+                          ) : null;
+                        })()}
+                      </td>
                       <td className="px-4 py-3 text-slate-600">
                         {s.origin || s.destination
                           ? `${s.origin ?? '?'} → ${s.destination ?? '?'}`
                           : '—'}
                       </td>
                       <td className="px-4 py-3 text-slate-600">
-                        {live && live !== 'loading' && typeof live === 'object' && live.eta
-                          ? <span className="text-blue-600 font-medium">{live.eta}</span>
-                          : (s.eta ?? '—')}
+                        {editingEta === s.id ? (
+                          <form onSubmit={e => { e.preventDefault(); saveEta(s.id, etaValue); }} className="flex items-center gap-1">
+                            <input
+                              type="date"
+                              autoFocus
+                              value={etaValue}
+                              onChange={e => setEtaValue(e.target.value)}
+                              className="border border-blue-400 rounded px-1.5 py-0.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                            <button type="submit" className="text-blue-600 hover:text-blue-700 text-xs font-medium">✓</button>
+                            <button type="button" onClick={() => setEditingEta(null)} className="text-slate-400 hover:text-slate-600 text-xs">✕</button>
+                          </form>
+                        ) : (
+                          <button
+                            onClick={() => { setEditingEta(s.id); setEtaValue(s.eta ?? ''); }}
+                            className="group flex items-center gap-1 hover:text-blue-600"
+                            title="Cliquer pour modifier l'ETA"
+                          >
+                            {live && live !== 'loading' && typeof live === 'object' && live.eta
+                              ? <span className="text-blue-600 font-medium">{live.eta}</span>
+                              : <span>{s.eta ? new Date(s.eta).toLocaleDateString('fr-FR') : '—'}</span>}
+                            <span className="opacity-0 group-hover:opacity-100 text-xs text-slate-400">✎</span>
+                          </button>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         {live && live !== 'loading' && typeof live === 'object' ? (
@@ -393,6 +450,23 @@ export default function TrackingClient({ shipments: initial }: { shipments: Ship
                   placeholder="ex: Huile moteur, équipements…"
                 />
               </div>
+              {supplierInvoices.length > 0 && (
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Facture achat liée <span className="text-slate-400 font-normal">(optionnel)</span></label>
+                  <select
+                    value={form.supplier_invoice_id}
+                    onChange={(e) => setForm((f) => ({ ...f, supplier_invoice_id: e.target.value }))}
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="">— Aucune —</option>
+                    {supplierInvoices.map(inv => (
+                      <option key={inv.id} value={inv.id}>
+                        {inv.number} · {inv.supplier_name ?? '?'} · {Number(inv.total_ttc).toLocaleString('fr')} {inv.currency}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="flex justify-end gap-2 pt-1">
                 <button
                   type="button"

@@ -16,7 +16,7 @@ async function getAdminDb() {
 export async function POST(req: Request) {
   try {
     const body = await req.json()
-    const { type, carrier, tracking_number, bill_of_lading, description, origin, destination, eta, status, notes } = body
+    const { type, carrier, tracking_number, bill_of_lading, description, origin, destination, eta, status, notes, supplier_invoice_id } = body
     if (!tracking_number || !carrier) {
       return NextResponse.json({ error: "Champs requis manquants" }, { status: 400 })
     }
@@ -24,6 +24,7 @@ export async function POST(req: Request) {
     const { data, error } = await db.from("shipments").insert([{
       type, carrier, tracking_number,
       bill_of_lading: bill_of_lading || null,
+      supplier_invoice_id: supplier_invoice_id || null,
       description: description || null,
       origin: origin || null,
       destination: destination || null,
@@ -35,6 +36,22 @@ export async function POST(req: Request) {
     return NextResponse.json({ shipment: data })
   } catch (err) {
     console.error("Shipment POST error:", err)
+    return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
+  }
+}
+
+export async function PATCH(req: Request) {
+  try {
+    const { searchParams } = new URL(req.url)
+    const id = searchParams.get("id")
+    if (!id) return NextResponse.json({ error: "id requis" }, { status: 400 })
+    const body = await req.json()
+    const db = await getAdminDb()
+    const { data, error } = await db.from("shipments").update(body).eq("id", id).select("*").single()
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ shipment: data })
+  } catch (err) {
+    console.error("Shipment PATCH error:", err)
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
 }

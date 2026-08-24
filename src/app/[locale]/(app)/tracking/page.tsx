@@ -13,12 +13,12 @@ export default async function TrackingPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = (admin as any).schema(schema) as typeof admin
 
-  const { data: shipments, error } = await db
-    .from('shipments')
-    .select('*')
-    .order('created_at', { ascending: false })
+  const [{ data: shipments, error }, { data: invoices }] = await Promise.all([
+    db.from('shipments').select('*').order('created_at', { ascending: false }),
+    db.from('supplier_invoices').select('id, number, supplier_name, total_ttc, currency, status').order('created_at', { ascending: false }),
+  ])
 
   if (error) console.error('Tracking fetch error:', error.message)
 
-  return <TrackingClient shipments={shipments ?? []} schema={schema} />
+  return <TrackingClient shipments={shipments ?? []} supplierInvoices={invoices ?? []} schema={schema} />
 }
