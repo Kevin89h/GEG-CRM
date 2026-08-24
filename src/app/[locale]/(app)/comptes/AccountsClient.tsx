@@ -100,7 +100,6 @@ export default function AccountsClient({ accounts: initial, employees }: Props) 
               Secteur: a.industry ?? "",
               Pays: a.country,
               Ville: a.city ?? "",
-              Adresse: a.address ?? "",
               Téléphone: a.phone ?? "",
               Email: a.email ?? "",
               "Site web": a.website ?? "",
