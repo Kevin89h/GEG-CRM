@@ -19,6 +19,8 @@ export async function POST(req: NextRequest) {
       accountCity: "Conakry",
       accountCountry: "Guinée",
       accountPhone: "+224 600 000 000",
+      accountAddress: "Friguiadi, Km 43, Maneah, BP1373",
+      accountNif: "000000000",
       lines: [
         { id: "1", description: "Produit A – Lubrifiant industriel 200L", quantity: 5, unit_price: 2500000, discount: 0, tva_rate: 18 },
         { id: "2", description: "Produit B – Hydraulic HLP 68", quantity: 2, unit_price: 6300000, discount: 10, tva_rate: 18 },
