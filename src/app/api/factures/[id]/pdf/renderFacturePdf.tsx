@@ -53,6 +53,8 @@ interface Props {
   accountCity: string | null
   accountCountry: string | null
   accountPhone: string | null
+  accountAddress: string | null
+  accountNif: string | null
   lines: Line[]
   payments: { amount: number; paid_at: string }[]
   qrDataUrl: string | null
@@ -71,7 +73,7 @@ const statusConfig: Record<string, { label: string; bg: string; text: string }> 
 export async function renderFacturePdf(props: Props): Promise<Buffer> {
   const {
     number, status, currency, issueDate, dueDate, notes,
-    accountName, accountCity, accountCountry, accountPhone,
+    accountName, accountCity, accountCountry, accountPhone, accountAddress, accountNif,
     lines, payments, qrDataUrl, bankAccounts, docSettings: ds,
   } = props
 
@@ -242,10 +244,12 @@ export async function renderFacturePdf(props: Props): Promise<Buffer> {
           <View>
             <Text style={s.billToLabel}>Facturé à</Text>
             <Text style={s.billToName}>{accountName}</Text>
+            {accountAddress && <Text style={s.billToDetail}>{accountAddress}</Text>}
             {showClientLoc && (accountCity || accountCountry) && (
               <Text style={s.billToDetail}>{[accountCity, accountCountry].filter(Boolean).join(", ")}</Text>
             )}
             {showClientPhone && accountPhone && <Text style={s.billToDetail}>{accountPhone}</Text>}
+            {accountNif && <Text style={s.billToDetail}>NIF : {accountNif}</Text>}
           </View>
           <View style={s.docInfo}>
             <Text style={s.docLabelText}>Facture</Text>

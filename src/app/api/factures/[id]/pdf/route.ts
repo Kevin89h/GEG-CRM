@@ -26,7 +26,7 @@ export async function GET(
     .from("invoices")
     .select(`
       id, number, status, currency, issue_date, due_date, notes, order_id,
-      account:accounts(id, name, city, country, phone),
+      account:accounts(id, name, city, country, phone, address, nif),
       lines:invoice_lines(id, description, quantity, unit_price, discount, position, tva_rate, product_id)
     `)
     .eq("id", id)
@@ -101,6 +101,8 @@ export async function GET(
     accountCity: acc?.city ?? null,
     accountCountry: acc?.country ?? null,
     accountPhone: acc?.phone ?? null,
+    accountAddress: acc?.address ?? null,
+    accountNif: acc?.nif ?? null,
     lines,
     payments: paymentList,
     qrDataUrl,
