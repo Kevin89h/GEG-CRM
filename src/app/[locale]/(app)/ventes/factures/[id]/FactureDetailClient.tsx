@@ -82,6 +82,8 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
   const [creatingCreditNote, setCreatingCreditNote] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [notes, setNotes] = useState(initial.notes ?? "")
+  const [notesSaving, setNotesSaving] = useState(false)
   const [paymentForm, setPaymentForm] = useState({
     amount: String(Math.max(invoice.balance, 0).toFixed(2)),
     currency: invoice.currency,
@@ -201,6 +203,16 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
       setAccounts([])
     }
     setSavingAccount(false)
+  }
+
+  async function saveNotes(value: string) {
+    setNotesSaving(true)
+    await fetch(`/api/factures/${invoice.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notes: value || null }),
+    })
+    setNotesSaving(false)
   }
 
   async function saveDates() {
@@ -1016,12 +1028,20 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
         </div>
       )}
 
-      {invoice.notes && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-          <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">{t("notes")}</p>
-          <p className="text-sm text-gray-700 whitespace-pre-wrap">{invoice.notes}</p>
-        </div>
-      )}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+        <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">{t("notes")}</p>
+        <textarea
+          value={notes}
+          onChange={e => setNotes(e.target.value)}
+          onBlur={e => saveNotes(e.target.value)}
+          rows={4}
+          placeholder="Ajouter des notes..."
+          className="w-full text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+        />
+        <p className="text-xs text-gray-400 mt-1">
+          {notesSaving ? "Sauvegarde..." : "Les notes sont sauvegardées automatiquement à la perte du focus."}
+        </p>
+      </div>
 
       {/* Activité */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
