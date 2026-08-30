@@ -84,6 +84,8 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
   const [error, setError] = useState<string | null>(null)
   const [notes, setNotes] = useState(initial.notes ?? "")
   const [notesSaving, setNotesSaving] = useState(false)
+  const [cancelModalOpen, setCancelModalOpen] = useState(false)
+  const [resetToDraftModalOpen, setResetToDraftModalOpen] = useState(false)
   const [paymentForm, setPaymentForm] = useState({
     amount: String(Math.max(invoice.balance, 0).toFixed(2)),
     currency: invoice.currency,
@@ -316,10 +318,13 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
   }
 
   async function confirmAndSend() { await updateStatus("sent") }
-  async function resetToDraft() { await updateStatus("draft") }
+  async function resetToDraft() {
+    setResetToDraftModalOpen(false)
+    await updateStatus("draft")
+  }
 
   async function cancelInvoice() {
-    if (!window.confirm(t("confirmCancelInvoice"))) return
+    setCancelModalOpen(false)
     await updateStatus("cancelled")
   }
 
@@ -528,7 +533,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
         {/* Boutons gauche */}
         <div className="flex flex-wrap items-center gap-2">
           {["sent", "partial", "paid", "cancelled"].includes(invoice.status) && (
-            <Button variant="secondary" onClick={resetToDraft} disabled={saving}>
+            <Button variant="secondary" onClick={() => setResetToDraftModalOpen(true)} disabled={saving}>
               <RotateCcw className="w-4 h-4" /> {t("resetToDraft")}
             </Button>
           )}
@@ -538,7 +543,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
             </Button>
           )}
           {["draft", "sent", "partial"].includes(invoice.status) && (
-            <Button variant="danger" onClick={cancelInvoice} disabled={saving}>
+            <Button variant="danger" onClick={() => setCancelModalOpen(true)} disabled={saving}>
               <X className="w-4 h-4" /> {t("cancel")}
             </Button>
           )}
@@ -1048,6 +1053,55 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
         <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-4">Activité</p>
         <ActivityLog resource="invoice" resourceId={invoice.id} />
       </div>
+
+      {/* Modal annulation facture */}
+      <Modal open={cancelModalOpen} onClose={() => setCancelModalOpen(false)} title="Annuler la facture ?">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            La facture <strong>{invoice.number}</strong> passera au statut <strong>Annulée</strong>. Elle restera visible mais ne sera plus active.
+          </p>
+          {invoice.total_paid > 0 && (
+            <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+              <strong>Attention :</strong> des paiements ont été enregistrés sur cette facture. L'annulation ne les supprime pas automatiquement.
+            </div>
+          )}
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="secondary" onClick={() => setCancelModalOpen(false)}>Retour</Button>
+            <Button variant="danger" onClick={cancelInvoice} disabled={saving}>
+              {saving ? "Annulation…" : "Confirmer l'annulation"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal remise en brouillon facture */}
+      <Modal open={resetToDraftModalOpen} onClose={() => setResetToDraftModalOpen(false)} title="Remettre en brouillon ?">
+        <div className="space-y-4">
+          {invoice.total_paid > 0 ? (
+            <>
+              <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
+                <strong>Attention :</strong> {invoice.status === "paid"
+                  ? "Cette facture est soldée. Des paiements ont été enregistrés."
+                  : "Des paiements partiels ont été enregistrés."
+                } Remettre en brouillon ne supprimera pas ces paiements.
+              </div>
+              <p className="text-sm text-gray-600">
+                Si vous continuez, la facture redeviendra modifiable mais les paiements resteront attachés.
+              </p>
+            </>
+          ) : (
+            <p className="text-sm text-gray-600">
+              La facture <strong>{invoice.number}</strong> repassera au statut <strong>Brouillon</strong> et sera à nouveau modifiable.
+            </p>
+          )}
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="secondary" onClick={() => setResetToDraftModalOpen(false)}>Retour</Button>
+            <Button onClick={resetToDraft} disabled={saving}>
+              {saving ? "En cours…" : "Remettre en brouillon"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Modal confirmation */}
       <Modal open={confirmModalOpen} onClose={() => { setConfirmModalOpen(false); setError(null) }} title={t("confirmInvoiceTitle")}>

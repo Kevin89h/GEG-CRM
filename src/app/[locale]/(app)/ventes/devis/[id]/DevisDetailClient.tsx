@@ -6,6 +6,7 @@ import { useTranslations } from "next-intl"
 import { CheckCircle, Receipt, X, Printer, ArrowLeft, RotateCcw, Truck, Plus, Trash2, Copy } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/Button"
+import { Modal } from "@/components/ui/Modal"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { formatDate, formatNumber } from "@/lib/utils"
 import DocumentLayout from "@/components/print/DocumentLayout"
@@ -89,6 +90,8 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
   const [creatingAccount, setCreatingAccount] = useState(false)
   const [newAccountName, setNewAccountName] = useState("")
   const [savingNewAccount, setSavingNewAccount] = useState(false)
+  const [cancelModalOpen, setCancelModalOpen] = useState(false)
+  const [resetToDraftModalOpen, setResetToDraftModalOpen] = useState(false)
 
   async function loadAccounts(q = "") {
     const res = await fetch(`/api/accounts?q=${encodeURIComponent(q)}`)
@@ -311,7 +314,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
   }
 
   async function cancel() {
-    if (!window.confirm(t("confirmCancel"))) return
+    setCancelModalOpen(false)
     setLoading(true)
     const res = await fetch(`/api/devis/${order.id}`, {
       method: "PATCH",
@@ -329,6 +332,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
   }
 
   async function resetToDraft() {
+    setResetToDraftModalOpen(false)
     setLoading(true)
     const res = await fetch(`/api/devis/${order.id}`, {
       method: "PATCH",
@@ -458,13 +462,13 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
 
           {/* Remettre en brouillon : depuis confirmed, invoiced, cancelled */}
           {["confirmed", "invoiced", "cancelled"].includes(order.status) && (
-            <Button variant="secondary" onClick={resetToDraft} disabled={loading}>
+            <Button variant="secondary" onClick={() => setResetToDraftModalOpen(true)} disabled={loading}>
               <RotateCcw className="w-4 h-4" /> {t("resetToDraft")}
             </Button>
           )}
           {/* Annuler : depuis draft, confirmed, invoiced */}
           {["draft", "confirmed", "invoiced"].includes(order.status) && (
-            <Button variant="danger" onClick={cancel} disabled={loading}>
+            <Button variant="danger" onClick={() => setCancelModalOpen(true)} disabled={loading}>
               <X className="w-4 h-4" /> {t("cancel")}
             </Button>
           )}
@@ -904,6 +908,42 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
         <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-4">Activité</p>
         <ActivityLog resource="devis" resourceId={order.id} />
       </div>
+
+      {/* Modal annulation devis */}
+      <Modal open={cancelModalOpen} onClose={() => setCancelModalOpen(false)} title="Annuler le devis ?">
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">
+            Le devis <strong>{order.number}</strong> passera au statut <strong>Annulé</strong>. Cette action peut être défaite en remettant le devis en brouillon.
+          </p>
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="secondary" onClick={() => setCancelModalOpen(false)}>Retour</Button>
+            <Button variant="danger" onClick={cancel} disabled={loading}>
+              {loading ? "Annulation…" : "Confirmer l'annulation"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal remise en brouillon devis */}
+      <Modal open={resetToDraftModalOpen} onClose={() => setResetToDraftModalOpen(false)} title="Remettre en brouillon ?">
+        <div className="space-y-4">
+          {order.status === "invoiced" ? (
+            <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+              <strong>Attention :</strong> ce devis a déjà été facturé. Remettre en brouillon ne supprimera pas la facture associée.
+            </div>
+          ) : (
+            <p className="text-sm text-gray-600">
+              Le devis <strong>{order.number}</strong> repassera au statut <strong>Brouillon</strong> et sera à nouveau modifiable.
+            </p>
+          )}
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="secondary" onClick={() => setResetToDraftModalOpen(false)}>Retour</Button>
+            <Button onClick={resetToDraft} disabled={loading}>
+              {loading ? "En cours…" : "Remettre en brouillon"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Zone d'impression */}
       <div className="print-root hidden print:block">
