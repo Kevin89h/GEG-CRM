@@ -537,11 +537,9 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
               <RotateCcw className="w-4 h-4" /> {t("resetToDraft")}
             </Button>
           )}
-          {isCancelled && (
-            <Button variant="secondary" onClick={duplicateInvoice} disabled={duplicating}>
-              <Plus className="w-4 h-4" /> {duplicating ? "Duplication..." : "Dupliquer"}
-            </Button>
-          )}
+          <Button variant="secondary" onClick={duplicateInvoice} disabled={duplicating}>
+            <Plus className="w-4 h-4" /> {duplicating ? "Duplication..." : "Dupliquer"}
+          </Button>
           {["draft", "sent", "partial"].includes(invoice.status) && (
             <Button variant="danger" onClick={() => setCancelModalOpen(true)} disabled={saving}>
               <X className="w-4 h-4" /> {t("cancel")}
