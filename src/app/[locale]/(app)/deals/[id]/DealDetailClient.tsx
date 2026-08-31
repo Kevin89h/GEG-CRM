@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useParams } from "next/navigation"
 import {
   ArrowLeft, MessageSquare, Mail, Phone, Users, Globe, HelpCircle,
   AlertCircle, CheckCircle2, Clock, PhoneCall, FileText, StickyNote,
@@ -125,6 +125,11 @@ const ACTIVITY_TYPE_ICON: Record<string, React.ReactNode> = {
   email: <Mail className="w-4 h-4 text-indigo-500" />,
   meeting: <Users className="w-4 h-4 text-purple-500" />,
   whatsapp: <MessageSquare className="w-4 h-4 text-green-500" />,
+  mise_en_relation: <Users className="w-4 h-4 text-blue-500" />,
+  distribution: <PhoneCall className="w-4 h-4 text-orange-500" />,
+  vente: <MessageSquare className="w-4 h-4 text-green-500" />,
+  achat: <Mail className="w-4 h-4 text-purple-500" />,
+  autres: <FileText className="w-4 h-4 text-gray-400" />,
 }
 
 const ACTIVITY_TYPES = [
@@ -153,6 +158,8 @@ function formatDateTime(d: string) {
 
 export default function DealDetailClient({ deal: initial, activities: initialActs, profiles, accounts, linkedDevis: initialLinkedDevis, schema }: Props) {
   const router = useRouter()
+  const params = useParams()
+  const locale = (params?.locale as string) ?? "fr"
   const [deal, setDeal] = useState(initial)
   const [activities, setActivities] = useState(initialActs)
   const [stageSaving, setStageSaving] = useState(false)
@@ -408,7 +415,7 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
       const data = await res.json()
       setActivities(prev => [data, ...prev])
       setActivityModal(false)
-      setActForm({ type: "note", subject: "", notes: "", date: new Date().toISOString().slice(0, 16), follow_up_date: "" })
+      setActForm({ type: "mise_en_relation", subject: "", notes: "", date: new Date().toISOString().slice(0, 16), follow_up_date: "" })
     }
     setActSaving(false)
   }
@@ -880,7 +887,7 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
                   <div key={d.id} className="group flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors">
                     <div className="flex-1 min-w-0">
                       <a
-                        href={`/fr/ventes/devis/${d.id}`}
+                        href={`/${locale}/ventes/devis/${d.id}`}
                         className="text-sm font-medium text-blue-600 hover:underline font-mono"
                       >
                         {d.number}
@@ -934,7 +941,7 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
               {linkedInvoice ? (
                 <div className="group flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
                   <div className="flex-1 min-w-0">
-                    <a href={`/fr/ventes/factures/${linkedInvoice.id}`} className="text-sm font-medium text-blue-600 hover:underline font-mono">
+                    <a href={`/${locale}/ventes/factures/${linkedInvoice.id}`} className="text-sm font-medium text-blue-600 hover:underline font-mono">
                       {linkedInvoice.number}
                     </a>
                     {linkedInvoice.total_ht != null && (
