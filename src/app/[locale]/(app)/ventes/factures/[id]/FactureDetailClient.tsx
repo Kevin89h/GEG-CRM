@@ -288,7 +288,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
 
   async function addLine() {
     const position = invoice.lines.length
-    const defaultTvaRate = hasTva ? 18 : 0
+    const defaultTvaRate = 0
     const res = await fetch(`/api/invoices/${invoice.id}/lines`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
