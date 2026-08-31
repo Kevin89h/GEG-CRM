@@ -31,8 +31,7 @@ export default async function DocumentsPage() {
     db
       .from("documents")
       .select(`id, name, description, file_url, file_name, file_size, file_type, created_at,
-        visibility, is_company_doc, doc_type,
-        category:document_categories(id, name, color),
+        visibility, is_company_doc, doc_type, category_id,
         account:accounts(id, name)`)
       .in("visibility", visibilityFilter)
       .order("created_at", { ascending: false }),
@@ -40,11 +39,13 @@ export default async function DocumentsPage() {
     db.from("accounts").select("id, name").order("name"),
   ])
 
+  const categoryMap = new Map((categories ?? []).map((c: Record<string, unknown>) => [c.id, c]))
+
   const normalizedDocs = (documents ?? []).map((d: Record<string, unknown>) => ({
     ...d,
     visibility: (d.visibility as string) ?? "all",
     is_company_doc: Boolean(d.is_company_doc),
-    category: Array.isArray(d.category) ? (d.category[0] ?? null) : d.category,
+    category: categoryMap.get(d.category_id as string) ?? null,
     account:  Array.isArray(d.account)  ? (d.account[0]  ?? null) : d.account,
   }))
 

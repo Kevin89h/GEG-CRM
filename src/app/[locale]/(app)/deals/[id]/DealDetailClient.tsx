@@ -128,11 +128,12 @@ const ACTIVITY_TYPE_ICON: Record<string, React.ReactNode> = {
 }
 
 const ACTIVITY_TYPES = [
+  { value: "mise_en_relation", label: "Mise en relation-client", icon: <Users className="w-4 h-4" /> },
+  { value: "distribution", label: "Distribution", icon: <PhoneCall className="w-4 h-4" /> },
+  { value: "vente", label: "Vente", icon: <MessageSquare className="w-4 h-4" /> },
+  { value: "achat", label: "Achat", icon: <Mail className="w-4 h-4" /> },
   { value: "note", label: "Note", icon: <StickyNote className="w-4 h-4" /> },
-  { value: "call", label: "Appel", icon: <PhoneCall className="w-4 h-4" /> },
-  { value: "email", label: "Email", icon: <Mail className="w-4 h-4" /> },
-  { value: "whatsapp", label: "WhatsApp", icon: <MessageSquare className="w-4 h-4" /> },
-  { value: "meeting", label: "Réunion", icon: <Users className="w-4 h-4" /> },
+  { value: "autres", label: "Autres", icon: <FileText className="w-4 h-4" /> },
 ]
 
 const QUICK_ACTIONS = [
@@ -179,7 +180,7 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
     cost: deal.cost?.toString() ?? "",
   })
   const [activityModal, setActivityModal] = useState(false)
-  const [actForm, setActForm] = useState({ type: "note", subject: "", notes: "", date: new Date().toISOString().slice(0, 16), follow_up_date: "" })
+  const [actForm, setActForm] = useState({ type: "mise_en_relation", subject: "", notes: "", date: new Date().toISOString().slice(0, 16), follow_up_date: "" })
   const [actSaving, setActSaving] = useState(false)
   const [quickNote, setQuickNote] = useState("")
   const [quickType, setQuickType] = useState<string | null>(null)
@@ -1255,8 +1256,8 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
             </div>
             <div className="px-6 py-4 space-y-4">
               <div>
-                <label className="text-xs font-medium text-gray-500 block mb-1.5">Type</label>
-                <div className="flex gap-2">
+                <label className="text-xs font-medium text-gray-500 block mb-1.5">Source</label>
+                <div className="flex flex-wrap gap-2">
                   {ACTIVITY_TYPES.map(t => (
                     <button
                       key={t.value}
