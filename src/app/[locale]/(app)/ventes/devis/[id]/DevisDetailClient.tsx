@@ -640,7 +640,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
       </div>
 
       {/* Onglets */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
         <div className="flex border-b border-gray-100">
           {tabs.map(tab => (
             <button
