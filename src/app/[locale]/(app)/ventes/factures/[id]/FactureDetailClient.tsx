@@ -908,16 +908,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
                 </button>
               </div>
             </div>
-            <button
-              onClick={toggleAllTva}
-              className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-colors border ${
-                hasTva
-                  ? "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
-                  : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-              }`}
-            >
-              {hasTva ? "TVA 18% activée — désactiver" : "Activer TVA 18%"}
-            </button>
+            <span className="text-xs text-gray-400 italic">TVA : cliquer sur le badge de chaque ligne</span>
           </div>
         )}
         <div className="border-t border-gray-100 px-4 py-3 flex flex-col items-end gap-1 text-sm">
