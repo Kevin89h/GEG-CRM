@@ -23,8 +23,7 @@ export async function POST(req: NextRequest)  {
         doc_type: body.doc_type ?? null,
       })
       .select(`id, name, description, file_url, file_name, file_size, file_type, created_at,
-        visibility, is_company_doc, doc_type,
-        category:document_categories(id, name, color),
+        visibility, is_company_doc, doc_type, category_id,
         account:accounts(id, name)`)
       .single()
 
