@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useRef } from "react"
-import { createClient } from "@/lib/supabase/client"
 import {
   FolderOpen, Upload, Search, File, FileText, Trash2,
   ExternalLink, Plus, X, Tag, Lock, Building2, ShieldCheck,
@@ -147,15 +146,14 @@ export default function DocumentsClient({ documents: initial, categories, accoun
     setUploading(true)
     setUploadError("")
     try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) throw new Error("Non authentifié")
-
-      const path = `${user.id}/${Date.now()}_${file.name}`
-      const { error: storageError } = await supabase.storage.from("documents").upload(path, file)
-      if (storageError) throw storageError
-
-      const { data: { publicUrl } } = supabase.storage.from("documents").getPublicUrl(path)
+      const formData = new FormData()
+      formData.append("file", file)
+      const uploadRes = await fetch("/api/documents/upload", { method: "POST", body: formData })
+      if (!uploadRes.ok) {
+        const err = await uploadRes.json()
+        throw new Error(err.error ?? "Erreur upload")
+      }
+      const { publicUrl } = await uploadRes.json()
 
       const res = await fetch("/api/documents", {
         method: "POST",
