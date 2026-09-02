@@ -6,7 +6,7 @@ import { useParams } from "next/navigation"
 import { useTranslations } from "next-intl"
 import {
   Plus, Search, ChevronLeft, ChevronRight, LayoutList, LayoutGrid,
-  Receipt, Clock, ChevronUp, ChevronDown, ChevronsUpDown, AlertTriangle, Download, CreditCard, X,
+  Receipt, Clock, ChevronUp, ChevronDown, ChevronsUpDown, AlertTriangle, Download, CreditCard, X, Ban,
 } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { exportToXls } from "@/lib/exportXls"
@@ -89,6 +89,25 @@ export default function FacturesClient({ invoices, schema }: Props) {
   const [bulkPayForm, setBulkPayForm] = useState({ amount: "", currency: "GNF", method: "bank", paid_at: new Date().toISOString().split("T")[0], reference: "" })
   const [bulkPayLoading, setBulkPayLoading] = useState(false)
   const [bulkPayResult, setBulkPayResult] = useState<string | null>(null)
+  const [bulkCancelLoading, setBulkCancelLoading] = useState(false)
+
+  async function submitBulkCancel() {
+    if (!window.confirm(`Annuler ${selected.size} facture${selected.size > 1 ? "s" : ""} ? Les factures déjà payées ne seront pas modifiées.`)) return
+    setBulkCancelLoading(true)
+    const res = await fetch("/api/invoices/bulk-cancel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ invoice_ids: Array.from(selected) }),
+    })
+    setBulkCancelLoading(false)
+    if (res.ok) {
+      setSelected(new Set())
+      window.location.reload()
+    } else {
+      const json = await res.json()
+      alert(json.error ?? "Erreur lors de l'annulation")
+    }
+  }
 
   async function submitBulkPayment() {
     setBulkPayLoading(true)
@@ -388,6 +407,13 @@ export default function FacturesClient({ invoices, schema }: Props) {
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
             >
               <CreditCard className="w-3.5 h-3.5" /> Enregistrer un paiement
+            </button>
+            <button
+              onClick={submitBulkCancel}
+              disabled={bulkCancelLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 transition disabled:opacity-50"
+            >
+              <Ban className="w-3.5 h-3.5" /> {bulkCancelLoading ? "En cours…" : "Annuler"}
             </button>
             <button onClick={() => setSelected(new Set())} className="text-blue-400 hover:text-blue-700 ml-1 text-lg leading-none">×</button>
           </div>
