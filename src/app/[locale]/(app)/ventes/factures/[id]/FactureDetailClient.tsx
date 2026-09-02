@@ -132,6 +132,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
   }, 0)
   const totalTTC = totalHT + totalTVA
   const hasTva = totalTVA > 0
+  const balance = totalTTC - invoice.total_paid
 
   const isPaid = invoice.status === "paid"
   const isCancelled = invoice.status === "cancelled"
@@ -411,7 +412,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
     // Balance uses converted amount when currencies differ
     const effectiveAmount = amountInInvoiceCurrency ?? amount
     const newTotalPaid = invoice.total_paid + effectiveAmount
-    const newBalance = invoice.total_ttc - newTotalPaid
+    const newBalance = totalTTC - newTotalPaid
     const newStatus = newBalance <= 0 ? "paid" : newTotalPaid > 0 ? "partial" : "sent"
 
     setInvoice(prev => ({
@@ -442,11 +443,11 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
   }
 
   const hasCrossCurrencyPayments = invoice.payments.some(p => p.currency !== invoice.currency)
-  const canRecordFxLoss = !isPaid && !isCancelled && invoice.status !== "draft" && invoice.balance > 0.005 && hasCrossCurrencyPayments
+  const canRecordFxLoss = !isPaid && !isCancelled && invoice.status !== "draft" && balance > 0.005 && hasCrossCurrencyPayments
 
   async function saveFxLoss() {
     if (!canRecordFxLoss) return
-    const balanceStr = formatCurrency(invoice.balance, invoice.currency as "USD" | "GNF" | "EUR")
+    const balanceStr = formatCurrency(balance, invoice.currency as "USD" | "GNF" | "EUR")
     if (!window.confirm(`Enregistrer une perte sur change de ${balanceStr} pour solder la facture ?`)) return
 
     setSaving(true)
@@ -459,7 +460,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        amount: invoice.balance,
+        amount: balance,
         currency: invoice.currency,
         exchange_rate: null,
         amount_in_invoice_currency: null,
@@ -477,7 +478,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
 
     setInvoice(prev => ({
       ...prev,
-      total_paid: prev.total_paid + prev.balance,
+      total_paid: totalTTC,
       balance: 0,
       status: "paid",
       payments: [json.payment, ...prev.payments],
@@ -491,7 +492,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
     const json = await res.json()
     if (!res.ok) { alert(json.error ?? "Erreur"); return }
     const newTotalPaid = json.totalPaid
-    const newBalance = invoice.total_ttc - newTotalPaid
+    const newBalance = totalTTC - newTotalPaid
     setInvoice(prev => ({
       ...prev,
       total_paid: newTotalPaid,
@@ -502,8 +503,8 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
     setPaymentForm(f => ({ ...f, amount: String(Math.max(newBalance, 0).toFixed(2)) }))
   }
 
-  const progressPct = invoice.total_ttc > 0
-    ? Math.min(100, (invoice.total_paid / invoice.total_ttc) * 100)
+  const progressPct = totalTTC > 0
+    ? Math.min(100, (invoice.total_paid / totalTTC) * 100)
     : 0
 
   // Stepper Odoo-style
@@ -713,7 +714,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
           <div className="grid grid-cols-3 gap-2 text-center">
             <div>
               <p className="text-xs text-gray-400 mb-0.5">Total TTC</p>
-              <p className="font-bold text-gray-900">{formatCurrency(invoice.total_ttc, invoice.currency as "USD" | "GNF" | "EUR")}</p>
+              <p className="font-bold text-gray-900">{formatCurrency(totalTTC, invoice.currency as "USD" | "GNF" | "EUR")}</p>
             </div>
             <div>
               <p className="text-xs text-gray-400 mb-0.5">{t("collected")}</p>
@@ -721,8 +722,8 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
             </div>
             <div>
               <p className="text-xs text-gray-400 mb-0.5">{t("remaining")}</p>
-              <p className={`font-bold ${invoice.balance > 0 ? "text-red-600" : "text-gray-400"}`}>
-                {formatCurrency(Math.max(invoice.balance, 0), invoice.currency as "USD" | "GNF" | "EUR")}
+              <p className={`font-bold ${balance > 0 ? "text-red-600" : "text-gray-400"}`}>
+                {formatCurrency(Math.max(balance, 0), invoice.currency as "USD" | "GNF" | "EUR")}
               </p>
             </div>
           </div>
@@ -1223,10 +1224,10 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
             </div>
           </div>
 
-          {invoice.balance > 0 && parseFloat(paymentForm.amount) < invoice.balance && (
+          {balance > 0 && parseFloat(paymentForm.amount) < balance && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-700 mt-3">
               {t("partialPaymentWarning")}{" "}
-              <strong>{formatCurrency(invoice.balance - (parseFloat(paymentForm.amount) || 0), invoice.currency as "USD" | "GNF" | "EUR")}</strong>{" "}
+              <strong>{formatCurrency(balance - (parseFloat(paymentForm.amount) || 0), invoice.currency as "USD" | "GNF" | "EUR")}</strong>{" "}
               {t("partialPaymentWarningAfter")}
             </div>
           )}
