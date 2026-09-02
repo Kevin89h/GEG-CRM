@@ -153,7 +153,7 @@ export default function DocumentsClient({ documents: initial, categories, accoun
         const err = await uploadRes.json()
         throw new Error(err.error ?? "Erreur upload")
       }
-      const { publicUrl } = await uploadRes.json()
+      const { publicUrl, userId } = await uploadRes.json()
 
       const res = await fetch("/api/documents", {
         method: "POST",
@@ -167,7 +167,7 @@ export default function DocumentsClient({ documents: initial, categories, accoun
           file_name: file.name,
           file_size: file.size,
           file_type: file.type,
-          uploaded_by: user.id,
+          uploaded_by: userId,
           visibility: docVisibility,
           is_company_doc: isCompanyDoc,
           doc_type: isCompanyDoc ? docType || null : null,

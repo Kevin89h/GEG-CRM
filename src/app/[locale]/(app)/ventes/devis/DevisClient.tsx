@@ -6,7 +6,7 @@ import { useParams } from "next/navigation"
 import { useTranslations } from "next-intl"
 import {
   Plus, Search, ChevronLeft, ChevronRight, LayoutList, LayoutGrid,
-  FileText, Clock, Download,
+  FileText, Clock, Download, Ban,
 } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { exportToXls } from "@/lib/exportXls"
@@ -47,6 +47,37 @@ export default function DevisClient({ orders, schema }: Props) {
   const [search, setSearch] = useState("")
   const [page, setPage] = useState(1)
   const pageSize = 20
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [bulkCancelLoading, setBulkCancelLoading] = useState(false)
+
+  function toggleSelect(id: string) {
+    setSelected(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function toggleAll() {
+    if (selected.size === paged.length && paged.length > 0) {
+      setSelected(new Set())
+    } else {
+      setSelected(new Set(paged.map(o => o.id)))
+    }
+  }
+
+  async function submitBulkCancel() {
+    if (!window.confirm(`Annuler ${selected.size} devis${selected.size > 1 ? "" : ""} ? Les devis déjà facturés ne seront pas modifiés.`)) return
+    setBulkCancelLoading(true)
+    const res = await fetch("/api/devis/bulk-cancel", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ devis_ids: Array.from(selected) }),
+    })
+    setBulkCancelLoading(false)
+    if (res.ok) { setSelected(new Set()); window.location.reload() }
+    else { const json = await res.json(); alert(json.error ?? "Erreur lors de l'annulation") }
+  }
 
   const drafts     = orders.filter(o => o.status === "draft")
   const confirmed  = orders.filter(o => o.status === "confirmed")
@@ -92,6 +123,23 @@ export default function DevisClient({ orders, schema }: Props) {
           Les devis et factures sont gérés depuis le bureau de Guinée. Passez sur le compte Guinée pour accéder à ces fonctionnalités.
         </div>
       )}
+      {/* Bulk action bar */}
+      {selected.size > 0 && (
+        <div className="bg-blue-600 text-white px-6 py-2.5 flex items-center gap-3 text-sm">
+          <span className="font-medium">{selected.size} sélectionné{selected.size > 1 ? "s" : ""}</span>
+          <button
+            onClick={submitBulkCancel}
+            disabled={bulkCancelLoading}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 transition disabled:opacity-50"
+          >
+            <Ban className="w-3.5 h-3.5" /> {bulkCancelLoading ? "En cours…" : "Annuler"}
+          </button>
+          <button onClick={() => setSelected(new Set())} className="ml-auto text-blue-200 hover:text-white text-xs">
+            Désélectionner tout
+          </button>
+        </div>
+      )}
+
       {/* Top toolbar */}
       <div className="bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-3">
         {schema !== "geg_singapore" && (
@@ -200,7 +248,12 @@ export default function DevisClient({ orders, schema }: Props) {
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-xs text-gray-500 font-medium">
                   <th className="w-8 px-4 py-3">
-                    <input type="checkbox" className="rounded border-gray-300" />
+                    <input
+                      type="checkbox"
+                      className="rounded border-gray-300"
+                      checked={paged.length > 0 && selected.size === paged.length}
+                      onChange={toggleAll}
+                    />
                   </th>
                   <th className="text-left px-4 py-3">{t("colOrderNumber")}</th>
                   <th className="text-left px-4 py-3">{t("colClient")}</th>
@@ -217,7 +270,12 @@ export default function DevisClient({ orders, schema }: Props) {
                   return (
                     <tr key={o.id} className="hover:bg-blue-50/20 transition-colors">
                       <td className="px-4 py-3">
-                        <input type="checkbox" className="rounded border-gray-300" />
+                        <input
+                          type="checkbox"
+                          className="rounded border-gray-300"
+                          checked={selected.has(o.id)}
+                          onChange={() => toggleSelect(o.id)}
+                        />
                       </td>
                       <td className="px-4 py-3">
                         <Link

@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
       .from("documents")
       .getPublicUrl(path)
 
-    return NextResponse.json({ path, publicUrl })
+    return NextResponse.json({ path, publicUrl, userId: user.id })
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 })
   }
