@@ -8,10 +8,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const body = await req.json()
   const { db, schema } = await createCompanyClient()
 
-  if (schema === "geg_singapore") {
-    return NextResponse.json({ error: "Les devis ne sont pas disponibles pour le bureau de Singapour." }, { status: 400 })
-  }
-
   const { data, error } = await db
     .from("sales_orders")
     .update(body)

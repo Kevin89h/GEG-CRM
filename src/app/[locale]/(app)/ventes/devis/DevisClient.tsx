@@ -118,11 +118,6 @@ export default function DevisClient({ orders, schema }: Props) {
 
   return (
     <div className="-m-6 min-h-screen bg-gray-50/50">
-      {schema === "geg_singapore" && (
-        <div className="mx-6 mt-6 rounded-lg bg-amber-50 border border-amber-200 p-4 text-amber-800 text-sm">
-          Les devis et factures sont gérés depuis le bureau de Guinée. Passez sur le compte Guinée pour accéder à ces fonctionnalités.
-        </div>
-      )}
       {/* Bulk action bar */}
       {selected.size > 0 && (
         <div className="bg-blue-600 text-white px-6 py-2.5 flex items-center gap-3 text-sm">
@@ -142,14 +137,12 @@ export default function DevisClient({ orders, schema }: Props) {
 
       {/* Top toolbar */}
       <div className="bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-3">
-        {schema !== "geg_singapore" && (
-          <Link
+        <Link
             href={`/${locale}/ventes/devis/nouveau`}
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded bg-[#7c3aed] text-white hover:bg-[#6d28d9] transition"
           >
             <Plus className="w-3.5 h-3.5" /> {t("new")}
           </Link>
-        )}
         <button
           onClick={() => exportToXls(displayed.map(o => ({
             "Numéro": o.number,

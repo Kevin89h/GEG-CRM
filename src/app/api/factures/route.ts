@@ -23,10 +23,6 @@ export async function POST(req: NextRequest)  {
 
     const { db, schema } = await createCompanyClient()
 
-    if (schema === "geg_singapore") {
-      return NextResponse.json({ error: "Les factures ne sont pas disponibles pour le bureau de Singapour." }, { status: 400 })
-    }
-
     const now = new Date()
     const year = now.getFullYear()
     const month = String(now.getMonth() + 1).padStart(2, "0")
