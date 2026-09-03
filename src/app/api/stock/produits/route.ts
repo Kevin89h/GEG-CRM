@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { getSchemaFromRequest } from "@/lib/company"
+import { createSchemaClient } from "@/lib/supabase/admin"
 
 export async function POST(req: NextRequest)  {
   try {
     const body = await req.json()
-    const db = createAdminClient().schema("geg_guinee")
+    const schema = getSchemaFromRequest(req)
+    const db = createSchemaClient(schema)
 
     const ALLOWED_CURRENCIES = ["GNF", "USD", "EUR"]
     const normalizeCurrency = (c: string) => ALLOWED_CURRENCIES.includes(c) ? c : "GNF"
