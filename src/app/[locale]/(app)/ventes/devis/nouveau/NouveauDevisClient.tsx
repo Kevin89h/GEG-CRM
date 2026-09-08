@@ -63,8 +63,8 @@ function AccountPicker({ accounts, value, onSelect, onCreateNew }: {
   const selected = accounts.find(a => a.id === value)
 
   const filtered = query.length > 0
-    ? accounts.filter(a => a.name.toLowerCase().includes(query.toLowerCase())).slice(0, 10)
-    : accounts.slice(0, 10)
+    ? accounts.filter(a => a.name.toLowerCase().includes(query.toLowerCase())).slice(0, 20)
+    : accounts
 
   useEffect(() => {
     function onClick(e: MouseEvent) {
@@ -244,6 +244,8 @@ export default function NouveauDevisClient({
     commission_rate: "0", currency: "GNF" as Currency,
     date_order: today, valid_until: "", payment_terms: "",
     client_order_ref: "", notes: "",
+    title: "", project_code: "", commission_client: "",
+    conditions_generales: "",
     tva: false,
   })
 
@@ -405,6 +407,10 @@ export default function NouveauDevisClient({
           client_order_ref: form.client_order_ref || null,
           date_order: form.date_order || null,
           tva: form.tva,
+          title: form.title || null,
+          project_code: form.project_code || null,
+          commission_client: form.commission_client ? parseFloat(form.commission_client) : null,
+          conditions_generales: form.conditions_generales || null,
         },
         lines: lines.map((l, i) => ({
           product_id: l.product_id || null,
@@ -531,6 +537,16 @@ export default function NouveauDevisClient({
                   className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px]"
                 />
               </div>
+
+              <div className="flex items-center gap-4">
+                <label className="w-36 shrink-0 text-gray-600">Sujet</label>
+                <input
+                  value={form.title}
+                  onChange={e => setF("title", e.target.value)}
+                  placeholder="Ex: Fourniture 15W90"
+                  className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[280px]"
+                />
+              </div>
             </div>
 
             {/* Col droite */}
@@ -581,6 +597,35 @@ export default function NouveauDevisClient({
                   <option value="USD">USD</option>
                   <option value="EUR">EUR</option>
                 </select>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <label className="w-40 shrink-0 text-gray-600">Projet</label>
+                <select
+                  value={form.project_code}
+                  onChange={e => setF("project_code", e.target.value)}
+                  className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px]"
+                >
+                  <option value="">—</option>
+                  <option value="GEG-GUI">GEG-Guinée</option>
+                  <option value="GEG-SING">GEG-Singapour</option>
+                  <option value="VALOIL">ValOil</option>
+                  <option value="AUTRE">Autre</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <label className="w-40 shrink-0 text-gray-600">Commission client</label>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number" min="0" max="100" step="0.1"
+                    value={form.commission_client}
+                    onChange={e => setF("commission_client", e.target.value)}
+                    placeholder="0"
+                    className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-24 text-right"
+                  />
+                  <span className="text-sm text-gray-500">%</span>
+                </div>
               </div>
             </div>
           </div>
@@ -729,14 +774,27 @@ export default function NouveauDevisClient({
 
             {/* Zone conditions + totaux */}
             <div className="border-t border-gray-100 px-8 py-5 flex gap-8">
-              <div className="flex-1">
-                <textarea
-                  value={form.notes}
-                  onChange={e => setF("notes", e.target.value)}
-                  rows={3}
-                  placeholder={t("conditionsGenerales")}
-                  className="w-full text-sm text-gray-500 outline-none bg-transparent border-0 resize-none placeholder-gray-300 focus:placeholder-gray-400"
-                />
+              <div className="flex-1 space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Conditions générales</label>
+                  <textarea
+                    value={form.conditions_generales}
+                    onChange={e => setF("conditions_generales", e.target.value)}
+                    rows={3}
+                    placeholder="Ex: Livraison sous 30 jours, franco de port…"
+                    className="w-full text-sm text-gray-600 outline-none bg-transparent border border-gray-100 rounded-lg resize-none p-2 focus:border-gray-300 placeholder-gray-300"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Notes internes</label>
+                  <textarea
+                    value={form.notes}
+                    onChange={e => setF("notes", e.target.value)}
+                    rows={2}
+                    placeholder="Notes internes (non imprimées)…"
+                    className="w-full text-sm text-gray-500 outline-none bg-transparent border border-gray-100 rounded-lg resize-none p-2 focus:border-gray-300 placeholder-gray-300"
+                  />
+                </div>
               </div>
               <div className="w-64 space-y-2 text-sm">
                 <div className="flex justify-between text-gray-500">

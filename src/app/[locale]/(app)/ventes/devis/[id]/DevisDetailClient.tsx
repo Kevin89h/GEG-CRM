@@ -38,6 +38,10 @@ interface Order {
   payment_terms?: string | null
   client_order_ref?: string | null
   tva?: boolean | null
+  title?: string | null
+  project_code?: string | null
+  commission_client?: number | null
+  conditions_generales?: string | null
   account: { id: string; name: string; country: string | null } | null
   contact: { id: string; first_name: string; last_name: string } | null
   salesperson?: { full_name: string } | null
@@ -635,8 +639,26 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
               )}
             </div>
             <Field label={t("fieldCurrency")} value={order.currency} />
+            {order.project_code && <Field label="Projet" value={order.project_code} />}
+            {order.commission_client != null && <Field label="Commission client" value={`${order.commission_client}%`} />}
           </div>
         </div>
+        {(order.title || order.conditions_generales) && (
+          <div className="px-6 pb-4 border-t border-gray-100 pt-3 space-y-2">
+            {order.title && (
+              <div>
+                <p className="text-xs text-gray-400">Sujet</p>
+                <p className="text-sm font-medium text-gray-900">{order.title}</p>
+              </div>
+            )}
+            {order.conditions_generales && (
+              <div>
+                <p className="text-xs text-gray-400">Conditions générales</p>
+                <p className="text-sm text-gray-700 whitespace-pre-line">{order.conditions_generales}</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Onglets */}

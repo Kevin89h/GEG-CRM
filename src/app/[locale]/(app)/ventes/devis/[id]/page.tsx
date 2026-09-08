@@ -9,7 +9,7 @@ export default async function DevisDetailPage({ params }: { params: Promise<{ lo
   let { db: supabase, schema } = await createCompanyClient()
   const publicSupa = await createClient()
 
-  const SELECT_ORDER = `id, number, status, currency, valid_until, notes, additional_info, created_at, payment_terms, client_order_ref, date_order, tva, account:accounts(id, name, country), contact:contacts(id, first_name, last_name), salesperson:employees(full_name), lines:sales_order_lines(id, description, quantity, unit_price, discount, position, product_id, tva_exempt, product:products(name, reference))`
+  const SELECT_ORDER = `id, number, status, currency, valid_until, notes, additional_info, created_at, payment_terms, client_order_ref, date_order, tva, title, project_code, commission_client, conditions_generales, account:accounts(id, name, country), contact:contacts(id, first_name, last_name), salesperson:employees(full_name), lines:sales_order_lines(id, description, quantity, unit_price, discount, position, product_id, tva_exempt, product:products(name, reference))`
 
   let { data: order } = await supabase.from("sales_orders").select(SELECT_ORDER).eq("id", id).single()
 
