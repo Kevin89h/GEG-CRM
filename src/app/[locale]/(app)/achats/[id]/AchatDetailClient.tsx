@@ -50,6 +50,13 @@ interface Order {
   freight_cost: number
   insurance_cost: number
   global_discount_pct: number
+  project_code?: string | null
+  terms_conditions?: string | null
+  commission_client?: number | null
+  pret_montant?: number | null
+  pret_devise?: string | null
+  pret_entite?: string | null
+  pret_echeance?: string | null
 }
 
 interface Warehouse { id: string; name: string; city: string | null }
@@ -889,6 +896,31 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
                     )}
                   </div>
                 </div>
+              </div>
+            )}
+
+            {/* Infos complémentaires (projet, commission, T&C, prêt) */}
+            {(order.project_code || order.commission_client != null || order.terms_conditions || order.pret_montant != null) && tab === "lines" && (
+              <div className="bg-white border border-gray-200 rounded-lg p-4 mb-4 grid grid-cols-2 gap-4 text-sm">
+                {order.project_code && (
+                  <div><p className="text-xs text-gray-400">Projet</p><p className="font-medium text-gray-800">{order.project_code}</p></div>
+                )}
+                {order.commission_client != null && (
+                  <div><p className="text-xs text-gray-400">Commission client</p><p className="font-medium text-gray-800">{order.commission_client}%</p></div>
+                )}
+                {order.terms_conditions && (
+                  <div className="col-span-2"><p className="text-xs text-gray-400 mb-1">Terms & Conditions</p><p className="text-gray-700 whitespace-pre-line text-xs">{order.terms_conditions}</p></div>
+                )}
+                {order.pret_montant != null && (
+                  <div className="col-span-2 bg-amber-50 rounded-lg p-3">
+                    <p className="text-xs font-semibold text-amber-700 mb-1">Prêt inter-entités</p>
+                    <div className="flex gap-6 text-xs text-gray-700">
+                      <span><span className="text-gray-400">Montant : </span>{order.pret_montant.toLocaleString("fr")} {order.pret_devise}</span>
+                      {order.pret_entite && <span><span className="text-gray-400">Entité : </span>{order.pret_entite}</span>}
+                      {order.pret_echeance && <span><span className="text-gray-400">Échéance : </span>{order.pret_echeance}</span>}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

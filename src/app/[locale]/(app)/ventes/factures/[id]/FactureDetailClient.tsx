@@ -54,6 +54,7 @@ interface Invoice {
   total_paid: number
   balance: number
   account: { name: string; country: string | null } | null
+  salesperson?: { full_name: string } | null
   lines: Line[]
   payments: Payment[]
 }
@@ -670,6 +671,9 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
               {invoice.account?.name ?? "—"}
               {!isCancelled && <span className="ml-1 opacity-0 group-hover:opacity-100 text-blue-400 text-xs">✎</span>}
             </button>
+          )}
+          {invoice.salesperson?.full_name && (
+            <p className="text-xs text-gray-400 mt-0.5">Vendeur : <span className="text-gray-600">{invoice.salesperson.full_name}</span></p>
           )}
         </div>
         <div className="flex gap-2">

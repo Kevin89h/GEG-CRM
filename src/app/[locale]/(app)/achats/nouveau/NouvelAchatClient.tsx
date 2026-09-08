@@ -38,6 +38,13 @@ const DEFAULT_FORM = {
   freight_cost: "",
   insurance_cost: "",
   global_discount_pct: "",
+  project_code: "",
+  terms_conditions: "",
+  commission_client: "",
+  pret_montant: "",
+  pret_devise: "USD" as string,
+  pret_entite: "",
+  pret_echeance: "",
 }
 
 const DEFAULT_LINES: Line[] = [
@@ -225,6 +232,13 @@ export default function NouvelAchatClient({ products: initialProducts, suppliers
           freight_cost: freight,
           insurance_cost: insurance,
           global_discount_pct: discountPct,
+          project_code: form.project_code || null,
+          terms_conditions: form.terms_conditions || null,
+          commission_client: form.commission_client ? parseFloat(form.commission_client) : null,
+          pret_montant: form.pret_montant ? parseFloat(form.pret_montant) : null,
+          pret_devise: form.pret_montant ? form.pret_devise : null,
+          pret_entite: form.pret_entite || null,
+          pret_echeance: form.pret_echeance || null,
         },
         lines: lines.map((l, i) => ({
           product_id: l.product_id || null,
@@ -481,6 +495,79 @@ export default function NouvelAchatClient({ products: initialProducts, suppliers
             onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
             placeholder={t("placeholderNotes")}
             className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+        </div>
+
+        {/* Informations complémentaires */}
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 space-y-4">
+          <h2 className="font-semibold text-gray-800">Informations complémentaires</h2>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Projet</label>
+              <select value={form.project_code} onChange={e => setForm(f => ({ ...f, project_code: e.target.value }))}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">—</option>
+                <option value="GEG-GUI">GEG-Guinée</option>
+                <option value="GEG-SING">GEG-Singapour</option>
+                <option value="VALOIL">ValOil</option>
+                <option value="AUTRE">Autre</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Commission client (%)</label>
+              <input type="number" min="0" max="100" step="0.1"
+                value={form.commission_client}
+                onChange={e => setForm(f => ({ ...f, commission_client: e.target.value }))}
+                placeholder="0"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-right" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1.5">Terms & Conditions</label>
+            <textarea rows={3} value={form.terms_conditions}
+              onChange={e => setForm(f => ({ ...f, terms_conditions: e.target.value }))}
+              placeholder="Ex: FOB port de Conakry, paiement à 30 jours…"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+          </div>
+        </div>
+
+        {/* Prêt inter-entités */}
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 space-y-4">
+          <h2 className="font-semibold text-gray-800">Prêt inter-entités <span className="text-xs font-normal text-gray-400">(optionnel)</span></h2>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Montant prêté</label>
+              <div className="flex gap-2">
+                <input type="number" min="0" step="any"
+                  value={form.pret_montant}
+                  onChange={e => setForm(f => ({ ...f, pret_montant: e.target.value }))}
+                  placeholder="0"
+                  className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-right" />
+                <select value={form.pret_devise} onChange={e => setForm(f => ({ ...f, pret_devise: e.target.value }))}
+                  className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="USD">USD</option>
+                  <option value="GNF">GNF</option>
+                  <option value="EUR">EUR</option>
+                  <option value="XOF">XOF</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Entité prêteuse</label>
+              <select value={form.pret_entite} onChange={e => setForm(f => ({ ...f, pret_entite: e.target.value }))}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">—</option>
+                <option value="GEG-GUI">GEG-Guinée</option>
+                <option value="GEG-SING">GEG-Singapour</option>
+                <option value="VALOIL">ValOil</option>
+              </select>
+            </div>
+          </div>
+          <div className="w-56">
+            <label className="block text-xs font-medium text-gray-600 mb-1.5">Échéance de remboursement</label>
+            <input type="date" value={form.pret_echeance}
+              onChange={e => setForm(f => ({ ...f, pret_echeance: e.target.value }))}
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
         </div>
 
         {error && <p className="text-sm text-red-600 bg-red-50 px-4 py-3 rounded-lg">{error}</p>}

@@ -10,13 +10,14 @@ export default async function FactureDetailPage({ params }: { params: Promise<{ 
   const publicSupa = await createClient()
 
   // Try to find the invoice in the current schema; fall back to geg_guinee if needed
-  let { data: inv } = await db.from("invoices").select("id, number, status, currency, account_id, issue_date, due_date, notes").eq("id", id).single()
+  const INV_SELECT = "id, number, status, currency, account_id, issue_date, due_date, notes, order_id"
+  let { data: inv } = await db.from("invoices").select(INV_SELECT).eq("id", id).single()
 
   if (!inv && schema !== "geg_guinee") {
     const supabase = await createClient()
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const fallbackDb = (supabase as any).schema("geg_guinee") as typeof supabase
-    const { data: fallbackInv } = await fallbackDb.from("invoices").select("id, number, status, currency, account_id, issue_date, due_date, notes").eq("id", id).single()
+    const { data: fallbackInv } = await fallbackDb.from("invoices").select(INV_SELECT).eq("id", id).single()
     if (fallbackInv) {
       inv = fallbackInv
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -54,6 +55,22 @@ export default async function FactureDetailPage({ params }: { params: Promise<{ 
     ? await db.from("accounts").select("name, country").eq("id", inv.account_id).single()
     : { data: null }
 
+  // Fetch salesperson from linked sales_order
+  let salesperson: { full_name: string } | null = null
+  if (inv.order_id) {
+    const { data: linkedOrder } = await db.from("sales_orders")
+      .select("salesperson_id")
+      .eq("id", inv.order_id)
+      .single()
+    if (linkedOrder?.salesperson_id) {
+      const { data: emp } = await db.from("employees")
+        .select("full_name")
+        .eq("id", linkedOrder.salesperson_id)
+        .single()
+      if (emp) salesperson = emp
+    }
+  }
+
   // Calcul totaux depuis les lignes
   const linesData = lines ?? []
   const total_ht = linesData.reduce((s, l) => {
@@ -80,6 +97,7 @@ export default async function FactureDetailPage({ params }: { params: Promise<{ 
     total_paid,
     balance,
     account: account ?? null,
+    salesperson: salesperson ?? null,
     lines: linesData,
     payments: payments ?? [],
   }
