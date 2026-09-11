@@ -365,7 +365,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         account_id: order.account?.id ?? null,
-        currency: order.currency,
+        currency: orderFields.currency,
         tva,
         payment_terms: order.payment_terms ?? null,
         lines: lines.map(l => ({
@@ -644,7 +644,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
               {isDraft ? (
                 <select
                   className="text-sm text-gray-900 bg-transparent border-b border-gray-200 hover:border-gray-400 focus:border-blue-500 focus:outline-none py-0.5 w-full"
-                  value={orderFields.currency ?? order.currency}
+                  value={orderFields.currency}
                   onChange={e => { setOrderFields(p => ({ ...p, currency: e.target.value })); updateOrderField("currency", e.target.value) }}
                 >
                   {(["GNF","USD","EUR","GBP","XOF","SGD","CNY"] as const).map(c => (
@@ -652,7 +652,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                   ))}
                 </select>
               ) : (
-                <p className="text-sm text-gray-900 font-medium">{order.currency}</p>
+                <p className="text-sm text-gray-900 font-medium">{orderFields.currency}</p>
               )}
             </div>
             {order.project_code && <Field label="Projet" value={order.project_code} />}
@@ -880,23 +880,23 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
               <div className="w-64 space-y-2">
                 <div className="flex justify-between text-sm text-gray-500">
                   <span>{t("totalHT")}</span>
-                  <span className="font-semibold text-gray-900">{formatNumber(total)} {order.currency}</span>
+                  <span className="font-semibold text-gray-900">{formatNumber(total)} {orderFields.currency}</span>
                 </div>
                 {tva && (
                   <>
                     {lines.some(l => l.tva_exempt) && (
                       <div className="flex justify-between text-xs text-amber-600">
                         <span>Base taxable</span>
-                        <span>{formatNumber(totalTaxable)} {order.currency}</span>
+                        <span>{formatNumber(totalTaxable)} {orderFields.currency}</span>
                       </div>
                     )}
                     <div className="flex justify-between text-sm text-gray-500">
                       <span>TVA 18%</span>
-                      <span className="font-semibold text-gray-900">{formatNumber(tvaAmount)} {order.currency}</span>
+                      <span className="font-semibold text-gray-900">{formatNumber(tvaAmount)} {orderFields.currency}</span>
                     </div>
                     <div className="flex justify-between text-sm font-bold text-gray-900 border-t border-gray-200 pt-2">
                       <span>Total TTC</span>
-                      <span>{formatNumber(totalTTC)} {order.currency}</span>
+                      <span>{formatNumber(totalTTC)} {orderFields.currency}</span>
                     </div>
                   </>
                 )}
@@ -995,7 +995,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
           recipientCountry={order.account?.country ?? undefined}
           lines={order.lines}
           notes={notes || undefined}
-          currency={order.currency}
+          currency={orderFields.currency}
           locale={locale}
         />
       </div>
