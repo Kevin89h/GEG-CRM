@@ -900,7 +900,7 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
             )}
 
             {/* Infos complémentaires (projet, commission, T&C, prêt) */}
-            {(order.project_code || order.commission_client != null || order.terms_conditions || order.pret_montant != null) && tab === "lines" && (
+            {(order.project_code || order.commission_client != null || order.terms_conditions || order.pret_montant != null) && tab === "produits" && (
               <div className="bg-white border border-gray-200 rounded-lg p-4 mb-4 grid grid-cols-2 gap-4 text-sm">
                 {order.project_code && (
                   <div><p className="text-xs text-gray-400">Projet</p><p className="font-medium text-gray-800">{order.project_code}</p></div>
