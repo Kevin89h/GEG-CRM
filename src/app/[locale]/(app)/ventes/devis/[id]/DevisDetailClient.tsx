@@ -81,6 +81,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
     payment_terms: order.payment_terms ?? "",
     valid_until: order.valid_until ?? "",
     client_order_ref: order.client_order_ref ?? "",
+    currency: order.currency ?? "GNF",
   })
   const [notes, setNotes] = useState(order.notes ?? "")
   const [notesSaving, setNotesSaving] = useState(false)
@@ -638,7 +639,22 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                 <p className="text-sm text-gray-900">{order.payment_terms ? (PAYMENT_TERMS_LABELS[order.payment_terms] ?? order.payment_terms) : "—"}</p>
               )}
             </div>
-            <Field label={t("fieldCurrency")} value={order.currency} />
+            <div>
+              <p className="text-xs text-gray-400 mb-0.5">{t("fieldCurrency")}</p>
+              {isDraft ? (
+                <select
+                  className="text-sm text-gray-900 bg-transparent border-b border-gray-200 hover:border-gray-400 focus:border-blue-500 focus:outline-none py-0.5 w-full"
+                  value={orderFields.currency ?? order.currency}
+                  onChange={e => { setOrderFields(p => ({ ...p, currency: e.target.value })); updateOrderField("currency", e.target.value) }}
+                >
+                  {(["GNF","USD","EUR","GBP","XOF","SGD","CNY"] as const).map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-sm text-gray-900 font-medium">{order.currency}</p>
+              )}
+            </div>
             {order.project_code && <Field label="Projet" value={order.project_code} />}
             {order.commission_client != null && <Field label="Commission client" value={`${order.commission_client}%`} />}
           </div>
