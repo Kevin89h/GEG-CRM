@@ -49,7 +49,7 @@ interface LiveData {
 }
 
 const LIVE_CARRIERS = ['MSC', 'CMA CGM'];
-const CONTAINER_CARRIERS = ['MSC', 'CMA CGM', 'Hapag-Lloyd', 'Maersk'];
+const CONTAINER_CARRIERS = ['MSC', 'CMA CGM', 'Hapag-Lloyd', 'Maersk', 'COSCO', 'OOCL'];
 const PARCEL_CARRIERS = ['DHL', 'FedEx'];
 
 const STATUS_LABELS: Record<Status, string> = {
@@ -73,6 +73,8 @@ function trackingUrl(carrier: string, number: string): string {
     case 'CMA CGM': return `https://www.cma-cgm.com/ebusiness/tracking/search?numero=${n}`;
     case 'Hapag-Lloyd': return `https://www.hapag-lloyd.com/en/online-business/tracing/tracing-by-container.html?container=${n}`;
     case 'Maersk': return `https://www.maersk.com/tracking/${n}`;
+    case 'COSCO': return `https://elines.coscoshipping.com/ebusiness/cargoTracking?trackingType=CONTAINER&number=${n}`;
+    case 'OOCL': return `https://www.oocl.com/eng/ourservices/eservices/cargotracking/Pages/cargotracking.aspx?BL=${n}`;
     case 'DHL': return `https://www.dhl.com/fr-fr/home/tracking/tracking-parcel.html?submit=1&tracking-id=${n}`;
     case 'FedEx': return `https://www.fedex.com/fedextrack/?trknbr=${n}`;
     default: return '#';
