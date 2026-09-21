@@ -95,6 +95,16 @@ const BLANK_FORM = {
   supplier_invoice_id: '',
 };
 
+interface EditForm {
+  carrier: string;
+  tracking_number: string;
+  bill_of_lading: string;
+  description: string;
+  origin: string;
+  destination: string;
+  status: Status;
+}
+
 export default function TrackingClient({ shipments: initial, supplierInvoices = [] }: { shipments: Shipment[], supplierInvoices?: SupplierInvoice[], schema: string }) {
   const router = useRouter();
   const [shipments, setShipments] = useState(initial);
@@ -106,6 +116,8 @@ export default function TrackingClient({ shipments: initial, supplierInvoices = 
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingEta, setEditingEta] = useState<string | null>(null);
   const [etaValue, setEtaValue] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<EditForm | null>(null);
 
   const filtered = shipments.filter((s) => s.type === tab);
   const carriers = tab === 'container' ? CONTAINER_CARRIERS : PARCEL_CARRIERS;
@@ -160,6 +172,42 @@ export default function TrackingClient({ shipments: initial, supplierInvoices = 
   async function handleDelete(id: string) {
     await fetch(`/api/shipments?id=${id}`, { method: 'DELETE' });
     setShipments(prev => prev.filter(s => s.id !== id));
+  }
+
+  function openEdit(s: Shipment) {
+    setEditingId(s.id);
+    setEditForm({
+      carrier: s.carrier,
+      tracking_number: s.tracking_number,
+      bill_of_lading: s.bill_of_lading ?? '',
+      description: s.description ?? '',
+      origin: s.origin ?? '',
+      destination: s.destination ?? '',
+      status: s.status,
+    });
+  }
+
+  async function saveEdit(id: string) {
+    if (!editForm) return;
+    const res = await fetch(`/api/shipments?id=${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        carrier: editForm.carrier,
+        tracking_number: editForm.tracking_number,
+        bill_of_lading: editForm.bill_of_lading || null,
+        description: editForm.description || null,
+        origin: editForm.origin || null,
+        destination: editForm.destination || null,
+        status: editForm.status,
+      }),
+    });
+    if (res.ok) {
+      const j = await res.json();
+      setShipments(prev => prev.map(s => s.id === id ? { ...s, ...j.shipment } : s));
+    }
+    setEditingId(null);
+    setEditForm(null);
   }
 
   async function saveEta(id: string, eta: string) {
@@ -226,25 +274,82 @@ export default function TrackingClient({ shipments: initial, supplierInvoices = 
               {filtered.map((s) => {
                 const live = liveData[s.id];
                 const isExpanded = expandedId === s.id;
+                const isEditing = editingId === s.id;
                 return (
                   <>
-                    <tr key={s.id} className="hover:bg-slate-50 transition-colors border-b border-slate-100">
-                      <td className="px-4 py-3 font-medium text-slate-800">{s.carrier}</td>
-                      <td className="px-4 py-3 font-mono text-slate-700">{s.tracking_number}</td>
-                      <td className="px-4 py-3 font-mono text-slate-500 text-xs">{s.bill_of_lading ?? '—'}</td>
-                      <td className="px-4 py-3 text-slate-600">
-                        <div>{s.description ?? '—'}</div>
-                        {s.supplier_invoice_id && (() => {
-                          const inv = supplierInvoices.find(i => i.id === s.supplier_invoice_id);
-                          return inv ? (
-                            <span className="text-xs text-blue-600 font-medium">📄 {inv.number}</span>
-                          ) : null;
-                        })()}
+                    <tr key={s.id} className={`transition-colors border-b border-slate-100 ${isEditing ? 'bg-blue-50' : 'hover:bg-slate-50'}`}>
+                      <td className="px-4 py-3 font-medium text-slate-800">
+                        {isEditing && editForm ? (
+                          <select
+                            value={editForm.carrier}
+                            onChange={e => setEditForm(f => f ? { ...f, carrier: e.target.value } : f)}
+                            className="border border-blue-400 rounded px-1.5 py-0.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+                          >
+                            {CONTAINER_CARRIERS.map(c => <option key={c} value={c}>{c}</option>)}
+                          </select>
+                        ) : s.carrier}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-slate-700">
+                        {isEditing && editForm ? (
+                          <input
+                            value={editForm.tracking_number}
+                            onChange={e => setEditForm(f => f ? { ...f, tracking_number: e.target.value.trim().toUpperCase() } : f)}
+                            className="border border-blue-400 rounded px-1.5 py-0.5 text-xs font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 w-32"
+                          />
+                        ) : s.tracking_number}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-slate-500 text-xs">
+                        {isEditing && editForm ? (
+                          <input
+                            value={editForm.bill_of_lading}
+                            onChange={e => setEditForm(f => f ? { ...f, bill_of_lading: e.target.value.trim().toUpperCase() } : f)}
+                            className="border border-blue-400 rounded px-1.5 py-0.5 text-xs font-mono text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 w-28"
+                            placeholder="B/L"
+                          />
+                        ) : (s.bill_of_lading ?? '—')}
                       </td>
                       <td className="px-4 py-3 text-slate-600">
-                        {s.origin || s.destination
-                          ? `${s.origin ?? '?'} → ${s.destination ?? '?'}`
-                          : '—'}
+                        {isEditing && editForm ? (
+                          <input
+                            value={editForm.description}
+                            onChange={e => setEditForm(f => f ? { ...f, description: e.target.value } : f)}
+                            className="border border-blue-400 rounded px-1.5 py-0.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 w-36"
+                            placeholder="Description"
+                          />
+                        ) : (
+                          <>
+                            <div>{s.description ?? '—'}</div>
+                            {s.supplier_invoice_id && (() => {
+                              const inv = supplierInvoices.find(i => i.id === s.supplier_invoice_id);
+                              return inv ? (
+                                <span className="text-xs text-blue-600 font-medium">📄 {inv.number}</span>
+                              ) : null;
+                            })()}
+                          </>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600">
+                        {isEditing && editForm ? (
+                          <div className="flex items-center gap-1">
+                            <input
+                              value={editForm.origin}
+                              onChange={e => setEditForm(f => f ? { ...f, origin: e.target.value } : f)}
+                              className="border border-blue-400 rounded px-1.5 py-0.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 w-20"
+                              placeholder="Origine"
+                            />
+                            <span className="text-slate-400">→</span>
+                            <input
+                              value={editForm.destination}
+                              onChange={e => setEditForm(f => f ? { ...f, destination: e.target.value } : f)}
+                              className="border border-blue-400 rounded px-1.5 py-0.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 w-20"
+                              placeholder="Destination"
+                            />
+                          </div>
+                        ) : (
+                          s.origin || s.destination
+                            ? `${s.origin ?? '?'} → ${s.destination ?? '?'}`
+                            : '—'
+                        )}
                       </td>
                       <td className="px-4 py-3 text-slate-600">
                         {editingEta === s.id ? (
@@ -273,7 +378,17 @@ export default function TrackingClient({ shipments: initial, supplierInvoices = 
                         )}
                       </td>
                       <td className="px-4 py-3">
-                        {live && live !== 'loading' && typeof live === 'object' ? (
+                        {isEditing && editForm ? (
+                          <select
+                            value={editForm.status}
+                            onChange={e => setEditForm(f => f ? { ...f, status: e.target.value as Status } : f)}
+                            className="border border-blue-400 rounded px-1.5 py-0.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white"
+                          >
+                            {(Object.keys(STATUS_LABELS) as Status[]).map(st => (
+                              <option key={st} value={st}>{STATUS_LABELS[st]}</option>
+                            ))}
+                          </select>
+                        ) : live && live !== 'loading' && typeof live === 'object' ? (
                           <span className="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
                             {live.status}
                           </span>
@@ -285,28 +400,54 @@ export default function TrackingClient({ shipments: initial, supplierInvoices = 
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2 justify-end">
-                          {LIVE_CARRIERS.includes(s.carrier) && (
-                            <button
-                              onClick={() => isExpanded ? setExpandedId(null) : fetchLive(s)}
-                              className="text-emerald-600 hover:text-emerald-700 text-xs font-medium transition-colors"
-                            >
-                              {live === 'loading' ? '…' : isExpanded ? 'Fermer' : '↻ Live'}
-                            </button>
+                          {isEditing ? (
+                            <>
+                              <button
+                                onClick={() => saveEdit(s.id)}
+                                className="text-blue-600 hover:text-blue-700 text-xs font-medium"
+                              >
+                                ✓ Sauvegarder
+                              </button>
+                              <button
+                                onClick={() => { setEditingId(null); setEditForm(null); }}
+                                className="text-slate-400 hover:text-slate-600 text-xs"
+                              >
+                                Annuler
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              {LIVE_CARRIERS.includes(s.carrier) && (
+                                <button
+                                  onClick={() => isExpanded ? setExpandedId(null) : fetchLive(s)}
+                                  className="text-emerald-600 hover:text-emerald-700 text-xs font-medium transition-colors"
+                                >
+                                  {live === 'loading' ? '…' : isExpanded ? 'Fermer' : '↻ Live'}
+                                </button>
+                              )}
+                              <button
+                                onClick={() => openEdit(s)}
+                                className="text-slate-500 hover:text-blue-600 text-xs font-medium transition-colors"
+                                title="Modifier"
+                              >
+                                ✎
+                              </button>
+                              <a
+                                href={trackingUrl(s.carrier, s.tracking_number)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors"
+                              >
+                                ↗ Tracker
+                              </a>
+                              <button
+                                onClick={() => handleDelete(s.id)}
+                                className="text-slate-400 hover:text-red-500 text-xs transition-colors"
+                              >
+                                ×
+                              </button>
+                            </>
                           )}
-                          <a
-                            href={trackingUrl(s.carrier, s.tracking_number)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-2.5 py-1.5 rounded-lg transition-colors"
-                          >
-                            ↗ Tracker
-                          </a>
-                          <button
-                            onClick={() => handleDelete(s.id)}
-                            className="text-slate-400 hover:text-red-500 text-xs transition-colors"
-                          >
-                            ×
-                          </button>
                         </div>
                       </td>
                     </tr>
