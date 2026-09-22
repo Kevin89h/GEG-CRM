@@ -231,7 +231,7 @@ export default function ProduitsClient({ products: initial, categories, units }:
             <div className="col-span-1 sm:col-span-2">
               <Input label={t("nomDuProduit")} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
             </div>
-            <Input label={t("reference")} value={form.reference} onChange={e => setForm(f => ({ ...f, reference: e.target.value }))} placeholder="LUB-20L-001" />
+            <Input label={`${t("reference")} (optionnel)`} value={form.reference} onChange={e => setForm(f => ({ ...f, reference: e.target.value }))} placeholder="ex: CIM-42.5-001" />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

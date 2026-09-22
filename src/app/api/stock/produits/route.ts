@@ -27,7 +27,12 @@ export async function POST(req: NextRequest)  {
       .select("*, category:product_categories(id, name, color), unit:units(id, name, type)")
       .single()
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+    if (error) {
+      const msg = error.message.includes("products_reference_key")
+        ? "Une référence identique existe déjà. Laissez le champ vide ou choisissez une référence unique."
+        : error.message
+      return NextResponse.json({ error: msg }, { status: 400 })
+    }
     return NextResponse.json(data)
 
   } catch (err) {
