@@ -31,14 +31,16 @@ interface Line {
   discount: string
 }
 
-function AccountPicker({ accounts, value, onSelect }: {
+function AccountPicker({ accounts, value, onSelect, onCreated }: {
   accounts: Account[]
   value: string
   onSelect: (id: string, name: string) => void
+  onCreated: (a: Account) => void
 }) {
   const t = useTranslations("factures")
   const [query, setQuery] = useState("")
   const [open, setOpen] = useState(false)
+  const [creating, setCreating] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const selected = accounts.find(a => a.id === value)
 
@@ -49,6 +51,24 @@ function AccountPicker({ accounts, value, onSelect }: {
   }, [])
 
   const filtered = accounts.filter(a => a.name.toLowerCase().includes(query.toLowerCase())).slice(0, 20)
+
+  async function handleCreate() {
+    if (!query.trim() || creating) return
+    setCreating(true)
+    const res = await fetch("/api/accounts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: query.trim(), type: "client" }),
+    })
+    const json = await res.json()
+    setCreating(false)
+    if (res.ok && json.id) {
+      const newAccount: Account = { id: json.id, name: json.name }
+      onCreated(newAccount)
+      onSelect(json.id, json.name)
+      setOpen(false)
+    }
+  }
 
   return (
     <div ref={ref} className="relative">
@@ -70,10 +90,10 @@ function AccountPicker({ accounts, value, onSelect }: {
               placeholder={t("search")}
               value={query}
               onChange={e => setQuery(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && filtered.length === 0 && handleCreate()}
             />
           </div>
           <div className="max-h-56 overflow-y-auto">
-            {filtered.length === 0 && <p className="text-sm text-gray-400 px-3 py-2">{t("noResults")}</p>}
             {filtered.map(a => (
               <div key={a.id} onMouseDown={() => { onSelect(a.id, a.name); setOpen(false) }}
                 className="px-3 py-2 text-sm text-gray-800 hover:bg-blue-50 cursor-pointer">
@@ -81,21 +101,36 @@ function AccountPicker({ accounts, value, onSelect }: {
               </div>
             ))}
           </div>
+          {query.trim() && (
+            <div className="border-t border-gray-100 p-1.5">
+              <button
+                type="button"
+                onMouseDown={handleCreate}
+                disabled={creating}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition disabled:opacity-50"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                {creating ? "Création…" : `Créer « ${query.trim()} »`}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
   )
 }
 
-function ProductPicker({ products, value, onChange, lineIndex }: {
+function ProductPicker({ products, value, onChange, lineIndex, onCreated }: {
   products: Product[]
   value: string
   onChange: (lineIndex: number, product: Product | null, raw: string) => void
   lineIndex: number
+  onCreated: (p: Product) => void
 }) {
   const t = useTranslations("factures")
   const [query, setQuery] = useState("")
   const [open, setOpen] = useState(false)
+  const [creating, setCreating] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const selected = products.find(p => p.id === value)
 
@@ -114,6 +149,31 @@ function ProductPicker({ products, value, onChange, lineIndex }: {
     (p.reference ?? "").toLowerCase().includes(query.toLowerCase())
   ).slice(0, 20)
 
+  async function handleCreate() {
+    if (!query.trim() || creating) return
+    setCreating(true)
+    const res = await fetch("/api/stock/produits", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: query.trim() }),
+    })
+    const json = await res.json()
+    setCreating(false)
+    if (res.ok && json.id) {
+      const newProduct: Product = {
+        id: json.id,
+        name: json.name,
+        reference: json.reference ?? null,
+        sell_price: json.sell_price ?? 0,
+        currency: json.currency ?? "GNF",
+      }
+      onCreated(newProduct)
+      onChange(lineIndex, newProduct, newProduct.name)
+      setQuery(newProduct.name)
+      setOpen(false)
+    }
+  }
+
   return (
     <div ref={ref} className="relative">
       <input
@@ -123,7 +183,7 @@ function ProductPicker({ products, value, onChange, lineIndex }: {
         onFocus={() => setOpen(true)}
         onChange={e => { setQuery(e.target.value); setOpen(true); onChange(lineIndex, null, e.target.value) }}
       />
-      {open && filtered.length > 0 && (
+      {open && (
         <div className="absolute z-50 top-full mt-0.5 left-0 w-72 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
           <div className="max-h-48 overflow-y-auto">
             {filtered.map(p => (
@@ -134,17 +194,33 @@ function ProductPicker({ products, value, onChange, lineIndex }: {
               </div>
             ))}
           </div>
+          {query.trim() && (
+            <div className="border-t border-gray-100 p-1.5">
+              <button
+                type="button"
+                onMouseDown={handleCreate}
+                disabled={creating}
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition disabled:opacity-50"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                {creating ? "Création…" : `Créer « ${query.trim()} »`}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
   )
 }
 
-export default function NouvelleFactureClient({ locale, accounts, products, treasuryAccounts }: Props) {
+export default function NouvelleFactureClient({ locale, accounts: initialAccounts, products: initialProducts, treasuryAccounts }: Props) {
   const t = useTranslations("factures")
   const router = useRouter()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const [localAccounts, setLocalAccounts] = useState(initialAccounts)
+  const [localProducts, setLocalProducts] = useState(initialProducts)
 
   const [accountId, setAccountId] = useState("")
   const [currency, setCurrency] = useState<"GNF" | "USD" | "EUR" | "XOF">("GNF")
@@ -257,7 +333,7 @@ export default function NouvelleFactureClient({ locale, accounts, products, trea
         <div className="grid grid-cols-2 gap-6">
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t("client")} *</label>
-            <AccountPicker accounts={accounts} value={accountId} onSelect={(id) => setAccountId(id)} />
+            <AccountPicker accounts={localAccounts} value={accountId} onSelect={(id) => setAccountId(id)} onCreated={(a) => setLocalAccounts(prev => [...prev, a])} />
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
@@ -320,7 +396,7 @@ export default function NouvelleFactureClient({ locale, accounts, products, trea
                 return (
                   <tr key={line.id} className="group">
                     <td className="py-1.5 pr-2">
-                      <ProductPicker products={products} value={line.product_id} onChange={handleProductSelect} lineIndex={idx} />
+                      <ProductPicker products={localProducts} value={line.product_id} onChange={handleProductSelect} lineIndex={idx} onCreated={(p) => setLocalProducts(prev => [...prev, p])} />
                     </td>
                     <td className="py-1.5 px-1">
                       <input type="number" value={line.quantity} onChange={e => updateLine(line.id, "quantity", e.target.value)}
