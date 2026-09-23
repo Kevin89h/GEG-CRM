@@ -63,7 +63,7 @@ export async function POST(req: NextRequest)  {
         notes: body.notes ?? null,
         salesperson_id: body.salesperson_id ?? null,
       }])
-      .select("*, contacts(count), deals(count)")
+      .select("*")
       .single()
 
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
