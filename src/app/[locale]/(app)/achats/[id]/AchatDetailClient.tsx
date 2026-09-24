@@ -203,6 +203,10 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
   }
 
   function handlePrint() {
+    window.print()
+  }
+
+  function handlePdf() {
     window.open(`/${locale}/achats/${order.id}/pdf`, "_blank")
   }
 
@@ -506,6 +510,9 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
               {t("loadInvoice")}
             </button>
           )}
+          <button onClick={handlePdf} className="px-3 py-1.5 text-xs font-medium rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition flex items-center gap-1.5">
+            <FileText className="w-3.5 h-3.5" /> PDF
+          </button>
           <button onClick={handlePrint} className="px-3 py-1.5 text-xs font-medium rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition flex items-center gap-1.5">
             <Printer className="w-3.5 h-3.5" /> {t("print")}
           </button>
