@@ -203,7 +203,7 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
   }
 
   function handlePrint() {
-    window.print()
+    window.open(`/${locale}/achats/${order.id}/pdf`, "_blank")
   }
 
   async function sendMessage() {
