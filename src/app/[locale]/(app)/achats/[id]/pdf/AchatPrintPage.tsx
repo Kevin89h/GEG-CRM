@@ -56,7 +56,7 @@ export default function AchatPrintPage({
 }: Props) {
 
   useEffect(() => {
-    document.title = `Bon de commande ${number}`
+    document.title = number
   }, [number])
 
   const color = docSettings?.brand_color ?? "#1e3a5f"
@@ -178,7 +178,9 @@ export default function AchatPrintPage({
 
       <div className="no-print">
         <button className="btn btn-secondary" onClick={() => window.close()}>✕ Fermer</button>
-        <button className="btn btn-primary" onClick={() => window.print()}>🖨 Imprimer / PDF</button>
+        <button className="btn btn-primary" onClick={() => { document.title = number; window.print(); }}>
+          🖨 Enregistrer — {number}.pdf
+        </button>
       </div>
 
       <div className="page">
