@@ -12,7 +12,10 @@ export async function POST(req: NextRequest) {
     const file = formData.get("file") as File | null
     if (!file) return NextResponse.json({ error: "Fichier manquant" }, { status: 400 })
 
-    const path = `${user.id}/${Date.now()}_${file.name}`
+    const safeName = file.name
+      .normalize("NFD").replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-zA-Z0-9._-]/g, "_")
+    const path = `${user.id}/${Date.now()}_${safeName}`
     const buffer = Buffer.from(await file.arrayBuffer())
 
     const admin = createAdminClient()
