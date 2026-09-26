@@ -125,7 +125,9 @@ export default function FacturePrintPage({
   const balance = totalTTC - totalPaid
 
   const curSymbol = currency === "GNF" ? "FG" : currency
-  const fmtAmt = (n: number) => `${fmt(Math.round(n))} ${curSymbol}`
+  const NO_DEC = ["GNF", "XOF"]
+  const amtDecimals = NO_DEC.includes(currency) ? 0 : 2
+  const fmtAmt = (n: number) => `${fmt(n, amtDecimals)} ${curSymbol}`
 
   const statusConfig: Record<string, { label: string; bg: string; text: string }> = {
     draft:     { label: "Brouillon",     bg: "#f3f4f6", text: "#6b7280" },
@@ -420,14 +422,14 @@ export default function FacturePrintPage({
                         </div>
                       </td>
                       <td className="td-r">{fmt(l.quantity, 2)} U</td>
-                      <td className="td-r">{fmt(l.unit_price, 0)} {curSymbol}</td>
+                      <td className="td-r">{fmt(l.unit_price, amtDecimals)} {curSymbol}</td>
                       {hasTva && (
                         <td className="td-r" style={{ fontSize: "9px", color: "#999" }}>
                           {rate > 0 ? `TVA ${rate}%` : "—"}
                         </td>
                       )}
                       <td className="td-r" style={{ fontWeight: 700 }}>
-                        {fmt(sub, 0)} {curSymbol}
+                        {fmt(sub, amtDecimals)} {curSymbol}
                       </td>
                     </tr>
                   )

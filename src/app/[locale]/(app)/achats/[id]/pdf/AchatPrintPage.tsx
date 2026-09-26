@@ -3,8 +3,16 @@
 import { useEffect } from "react"
 import { formatDate } from "@/lib/utils"
 
-function fmt(value: number): string {
-  return value.toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g, " ")
+const NO_DECIMAL_CURRENCIES = ["GNF", "XOF"]
+
+function fmt(value: number, decimals = 0): string {
+  const parts = value.toFixed(decimals).split(".")
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, " ")
+  return decimals > 0 ? parts.join(".") : parts[0]
+}
+
+function fmtAmt(value: number, currency: string): string {
+  return fmt(value, NO_DECIMAL_CURRENCIES.includes(currency) ? 0 : 2)
 }
 
 interface Line {
@@ -248,8 +256,8 @@ export default function AchatPrintPage({
                 <tr key={i}>
                   <td>{l.description}</td>
                   <td className="right">{fmt(l.quantity)}</td>
-                  <td className="right">{fmt(l.unit_price)}</td>
-                  <td className="right">{fmt(l.total)}</td>
+                  <td className="right">{fmtAmt(l.unit_price, currency)}</td>
+                  <td className="right">{fmtAmt(l.total, currency)}</td>
                 </tr>
               ))}
             </tbody>
@@ -260,7 +268,7 @@ export default function AchatPrintPage({
             <div className="totals-inner">
               <div className="tot-row tot-grand">
                 <span>Total HT</span>
-                <span>{fmt(totalHT)} {currency}</span>
+                <span>{fmtAmt(totalHT, currency)} {currency}</span>
               </div>
             </div>
           </div>
