@@ -15,10 +15,12 @@ export function formatNumber(value: number, decimals = 0): string {
 export function formatCurrency(value: number, currency: string) {
   const locales: Record<string, string> = { USD: "en-US", GNF: "fr-FR", EUR: "fr-FR", XOF: "fr-FR" }
   const noDecimals = ["GNF", "XOF"]
+  const fracDigits = noDecimals.includes(currency) ? 0 : 2
   return new Intl.NumberFormat(locales[currency] ?? "fr-FR", {
     style: "currency",
     currency,
-    maximumFractionDigits: noDecimals.includes(currency) ? 0 : 2,
+    minimumFractionDigits: fracDigits,
+    maximumFractionDigits: fracDigits,
   }).format(value)
 }
 

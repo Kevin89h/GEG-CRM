@@ -3,10 +3,17 @@
 import { useEffect, useState } from "react"
 import { formatDate } from "@/lib/utils"
 
+const NO_DECIMAL_CURRENCIES = ["GNF", "XOF"]
+
 function fmt(value: number, decimals = 0): string {
   const parts = value.toFixed(decimals).split(".")
   parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, " ")
-  return decimals > 0 ? parts.join(",") : parts[0]
+  return decimals > 0 ? parts.join(".") : parts[0]
+}
+
+function fmtAmt(value: number, currency: string): string {
+  const decimals = NO_DECIMAL_CURRENCIES.includes(currency) ? 0 : 2
+  return fmt(value, decimals)
 }
 
 interface Line {
@@ -317,9 +324,9 @@ export default function PrintPage({
                               </div>
                             </td>
                             <td className="td-r">{fmt(l.quantity, 2)} U</td>
-                            <td className="td-r">{fmt(l.unit_price, 0)} {cur}</td>
+                            <td className="td-r">{fmtAmt(l.unit_price, currency)} {cur}</td>
                             {tvaRate > 0 && <td className="td-r" style={{ fontSize: "9px", color: "#999" }}>{lineTva > 0 ? `${lineTva}%` : "—"}</td>}
-                            <td className="td-r" style={{ fontWeight: 700 }}>{fmt(sub, 0)} {cur}</td>
+                            <td className="td-r" style={{ fontWeight: 700 }}>{fmtAmt(sub, currency)} {cur}</td>
                           </tr>
                         )
                       })}
@@ -354,17 +361,17 @@ export default function PrintPage({
                     <tbody>
                       <tr>
                         <td>Montant hors taxes</td>
-                        <td style={{ textAlign: "right" }}>{fmt(totalHT, 0)} {cur}</td>
+                        <td style={{ textAlign: "right" }}>{fmtAmt(totalHT, currency)} {cur}</td>
                       </tr>
                       {tvaAmt > 0 && (
                         <tr>
                           <td>TVA {tvaRate}%</td>
-                          <td style={{ textAlign: "right" }}>{fmt(tvaAmt, 0)} {cur}</td>
+                          <td style={{ textAlign: "right" }}>{fmtAmt(tvaAmt, currency)} {cur}</td>
                         </tr>
                       )}
                       <tr>
                         <td className="tot-ttc">Total</td>
-                        <td className="tot-ttc" style={{ textAlign: "right" }}>{fmt(totalTTC, 0)} {cur}</td>
+                        <td className="tot-ttc" style={{ textAlign: "right" }}>{fmtAmt(totalTTC, currency)} {cur}</td>
                       </tr>
                     </tbody>
                   </table>
