@@ -77,9 +77,11 @@ export async function renderDevisPdf(props: Props): Promise<Buffer> {
   const website = (ds?.website as string) ?? "www.globalenergygroup.com"
   const nif = (ds?.nif as string) ?? "446243099"
   const logoUrl = (ds?.logo_url as string) ?? null
+  const cgvText = (ds?.cgv_text as string) ?? null
 
   const docLabel = docType === "bon-livraison" ? "BON DE LIVRAISON" : status === "confirmed" ? "BON DE COMMANDE" : "DEVIS"
   const cur = currency === "GNF" ? "FG" : currency
+  const dec = ["GNF", "XOF"].includes(currency) ? 0 : 2
 
   const hasTva = lines.some(l => l.tva_rate > 0)
   const totalHT = lines.reduce((s, l) => s + l.quantity * l.unit_price * (1 - l.discount / 100), 0)
@@ -236,9 +238,9 @@ export async function renderDevisPdf(props: Props): Promise<Buffer> {
                   </View>
                 </View>
                 <Text style={[{ width: 50, fontSize: 8.5, color: "#333" }, s.tdR]}>{fmt(l.quantity, 2)} U</Text>
-                <Text style={[{ width: 80, fontSize: 8.5, color: "#333" }, s.tdR]}>{fmt(l.unit_price, 0)} {cur}</Text>
+                <Text style={[{ width: 80, fontSize: 8.5, color: "#333" }, s.tdR]}>{fmt(l.unit_price, dec)} {cur}</Text>
                 {hasTva && <Text style={[{ width: 40, fontSize: 8, color: "#aaa" }, s.tdR]}>{l.tva_rate > 0 ? `${l.tva_rate}%` : "—"}</Text>}
-                <Text style={[{ width: 80 }, s.tdAmt]}>{fmt(sub, 0)} {cur}</Text>
+                <Text style={[{ width: 80 }, s.tdAmt]}>{fmt(sub, dec)} {cur}</Text>
               </View>
             )
           })}
@@ -249,17 +251,17 @@ export async function renderDevisPdf(props: Props): Promise<Buffer> {
           <View style={s.totalsInner}>
             <View style={s.totRow}>
               <Text>Montant hors taxes</Text>
-              <Text>{fmt(totalHT, 0)} {cur}</Text>
+              <Text>{fmt(totalHT, dec)} {cur}</Text>
             </View>
             {hasTva && (
               <View style={s.totRow}>
                 <Text>TVA 18%</Text>
-                <Text>{fmt(tvaAmt, 0)} {cur}</Text>
+                <Text>{fmt(tvaAmt, dec)} {cur}</Text>
               </View>
             )}
             <View style={s.totTTC}>
               <Text style={s.totTTCText}>Total</Text>
-              <Text style={s.totTTCText}>{fmt(totalTTC, 0)} {cur}</Text>
+              <Text style={s.totTTCText}>{fmt(totalTTC, dec)} {cur}</Text>
             </View>
           </View>
         </View>
@@ -304,6 +306,16 @@ export async function renderDevisPdf(props: Props): Promise<Buffer> {
             </View>
           )}
         </View>
+
+        {/* CGV */}
+        {cgvText && (
+          <View style={{ margin: "16 20 0 20", paddingTop: 14, borderTopWidth: 1, borderTopColor: "#eee" }} wrap={false}>
+            <Text style={{ fontSize: 7, fontFamily: "Helvetica", fontWeight: "bold", color, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>
+              Conditions Générales de Vente
+            </Text>
+            <Text style={{ fontSize: 7, color: "#555", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{cgvText}</Text>
+          </View>
+        )}
 
         {/* Footer — absolute, always at bottom */}
         <View style={s.footer} fixed>

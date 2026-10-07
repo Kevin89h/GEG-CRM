@@ -88,6 +88,7 @@ export async function renderFacturePdf(props: Props): Promise<Buffer> {
   const nif = (ds?.nif as string) ?? "446243099"
   const logoUrl = (ds?.logo_url as string) ?? null
   const bankMeta = (ds?.bank_details as Record<string, string> | null) ?? {}
+  const cgvText = (ds?.cgv_text as string) ?? null
 
   // Layout config — all true by default
   const lc = (ds?.layout_config as Record<string, unknown>) ?? {}
@@ -112,6 +113,7 @@ export async function renderFacturePdf(props: Props): Promise<Buffer> {
 
   const sc = statusConfig[status] ?? statusConfig.sent
   const cur = currency === "GNF" ? "FG" : currency
+  const dec = ["GNF", "XOF"].includes(currency) ? 0 : 2
 
   const hasTva = lines.some(l => (l.tva_rate ?? 0) > 0)
   const defaultTva = hasTva ? 18 : 0
@@ -132,7 +134,7 @@ export async function renderFacturePdf(props: Props): Promise<Buffer> {
   const totalPaid = payments.reduce((s, p) => s + p.amount, 0)
   const balance = totalTTC - totalPaid
 
-  const fmtAmt = (n: number) => `${fmt(Math.round(n))} ${cur}`
+  const fmtAmt = (n: number) => `${fmt(dec === 0 ? Math.round(n) : n, dec)} ${cur}`
   const sameCurrency = bankAccounts.filter(a => a.currency === currency)
   const relevantAccounts = sameCurrency.length > 0 ? sameCurrency : bankAccounts
   const currencies = Array.from(new Set(relevantAccounts.map(a => a.currency)))
@@ -307,13 +309,13 @@ export async function renderFacturePdf(props: Props): Promise<Buffer> {
                   </View>
                 </View>
                 <Text style={[{ width: 50, fontSize: 8.5, color: "#333" }, s.tdR]}>{fmt(l.quantity, 2)} U</Text>
-                <Text style={[{ width: 80, fontSize: 8.5, color: "#333" }, s.tdR]}>{fmt(l.unit_price, 0)} {cur}</Text>
+                <Text style={[{ width: 80, fontSize: 8.5, color: "#333" }, s.tdR]}>{fmt(l.unit_price, dec)} {cur}</Text>
                 {hasTva && (
                   <Text style={[{ width: 40, fontSize: 8, color: "#aaa" }, s.tdR]}>
                     {rate > 0 ? `TVA ${rate}%` : "—"}
                   </Text>
                 )}
-                <Text style={[{ width: 80 }, s.tdAmt]}>{fmt(sub, 0)} {cur}</Text>
+                <Text style={[{ width: 80 }, s.tdAmt]}>{fmt(sub, dec)} {cur}</Text>
               </View>
             )
           })}
@@ -398,6 +400,16 @@ export async function renderFacturePdf(props: Props): Promise<Buffer> {
             {bankMeta.tva_key && (
               <Text style={s.bankTvaKey}>Clé TVA : {bankMeta.tva_key}</Text>
             )}
+          </View>
+        )}
+
+        {/* CGV */}
+        {cgvText && (
+          <View style={{ margin: "16 20 0 20", paddingTop: 14, borderTopWidth: 1, borderTopColor: "#eee" }} wrap={false}>
+            <Text style={{ fontSize: 7, fontFamily: "Helvetica", fontWeight: "bold", color, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>
+              Conditions Générales de Vente
+            </Text>
+            <Text style={{ fontSize: 7, color: "#555", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{cgvText}</Text>
           </View>
         )}
 

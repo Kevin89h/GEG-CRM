@@ -104,6 +104,7 @@ const FIELD_GROUPS = [
     icon: FileText,
     fields: [
       { key: "footer_text", label: "Pied de page", placeholder: "Merci pour votre confiance. Règlement à 30 jours.", textarea: true },
+      { key: "cgv_text", label: "Conditions Générales de Vente (CGV)", placeholder: "Article 1 – Objet\nLes présentes conditions générales de vente s'appliquent à toutes les offres et ventes conclues par la société...", textarea: true },
     ],
   },
 ]

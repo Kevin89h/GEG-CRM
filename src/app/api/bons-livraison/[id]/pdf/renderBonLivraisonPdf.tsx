@@ -55,6 +55,7 @@ export async function renderBonLivraisonPdf(props: BonLivraisonPdfProps): Promis
   const website  = (ds?.website as string)         ?? "www.globalenergygroup.com"
   const nif      = (ds?.nif as string)             ?? "446243099"
   const logoUrl  = (ds?.logo_url as string)        ?? null
+  const cgvText  = (ds?.cgv_text as string)        ?? null
 
   const sc = statusConfig[status] ?? statusConfig.draft
 
@@ -200,6 +201,16 @@ export async function renderBonLivraisonPdf(props: BonLivraisonPdfProps): Promis
               <Text style={s.sigLabel}>Signature et cachet du destinataire</Text>
             </View>
           </View>
+
+        {/* CGV */}
+        {cgvText && (
+          <View style={{ margin: "16 20 0 20", paddingTop: 14, borderTopWidth: 1, borderTopColor: "#eee" }} wrap={false}>
+            <Text style={{ fontSize: 7, fontFamily: "Helvetica", fontWeight: "bold", color, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>
+              Conditions Générales de Vente
+            </Text>
+            <Text style={{ fontSize: 7, color: "#555", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{cgvText}</Text>
+          </View>
+        )}
 
         </View>
 
