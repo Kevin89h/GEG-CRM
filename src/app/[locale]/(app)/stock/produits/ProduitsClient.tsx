@@ -26,6 +26,7 @@ interface ProductRow {
   is_active: boolean
   category: { id: string; name: string; color: string } | null
   unit: { id: string; name: string; type: string } | null
+  unit_ids: string[] | null
 }
 
 interface Props {
@@ -55,7 +56,7 @@ export default function ProduitsClient({ products: initial, categories, units }:
   const [form, setForm] = useState({
     reference: "", name: "", description: "",
     category_id: categories[0]?.id ?? "",
-    unit_id: units[0]?.id ?? "",
+    unit_ids: [] as string[],
     buy_price: "", buy_price_currency: "GNF" as Currency,
     sell_price: "", currency: "GNF" as Currency,
   })
@@ -74,7 +75,7 @@ export default function ProduitsClient({ products: initial, categories, units }:
     const json = await res.json()
     if (res.ok && json.unit) {
       setLocalUnits(prev => [...prev, json.unit])
-      setForm(f => ({ ...f, unit_id: json.unit.id }))
+      setForm(f => ({ ...f, unit_ids: [...f.unit_ids, json.unit.id] }))
       setShowNewFormat(false)
       setNewFormatName("")
     }
@@ -99,7 +100,7 @@ export default function ProduitsClient({ products: initial, categories, units }:
         reference: form.reference || null,
         description: form.description || null,
         category_id: form.category_id || null,
-        unit_id: form.unit_id || null,
+        unit_ids: form.unit_ids.length > 0 ? form.unit_ids : null,
         buy_price: form.buy_price ? parseFloat(form.buy_price) : null,
         buy_price_currency: form.buy_price_currency,
         sell_price: form.sell_price ? parseFloat(form.sell_price) : null,
@@ -115,7 +116,7 @@ export default function ProduitsClient({ products: initial, categories, units }:
       setSaveError("")
       setShowNewFormat(false)
       setNewFormatName("")
-      setForm({ reference: "", name: "", description: "", category_id: categories[0]?.id ?? "", unit_id: localUnits[0]?.id ?? "", buy_price: "", buy_price_currency: "GNF", sell_price: "", currency: "GNF" })
+      setForm({ reference: "", name: "", description: "", category_id: categories[0]?.id ?? "", unit_ids: [], buy_price: "", buy_price_currency: "GNF", sell_price: "", currency: "GNF" })
     }
     setSaving(false)
   }
@@ -210,7 +211,21 @@ export default function ProduitsClient({ products: initial, categories, units }:
                       <Badge variant={colorMap[p.category.color] ?? "gray"}>{p.category.name}</Badge>
                     ) : "—"}
                   </td>
-                  <td className="px-4 py-3 text-gray-600">{p.unit?.name ?? "—"}</td>
+                  <td className="px-4 py-3">
+                    {(p.unit_ids && p.unit_ids.length > 0)
+                      ? <div className="flex flex-wrap gap-1">
+                          {p.unit_ids.map(uid => {
+                            const u = localUnits.find(u => u.id === uid)
+                            return u ? (
+                              <span key={uid} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100">{u.name}</span>
+                            ) : null
+                          })}
+                        </div>
+                      : p.unit ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100">{p.unit.name}</span>
+                        ) : "—"
+                    }
+                  </td>
                   <td className="px-4 py-3 text-right text-gray-600">
                     {p.buy_price != null ? formatCurrency(p.buy_price, p.buy_price_currency ?? p.currency) : "—"}
                   </td>
@@ -242,24 +257,45 @@ export default function ProduitsClient({ products: initial, categories, units }:
               options={categories.map(c => ({ value: c.id, label: c.name }))}
             />
             <div>
-              <div className="flex items-end gap-2">
-                <div className="flex-1">
-                  <Select
-                    label={t("formatConditionnement")}
-                    value={form.unit_id}
-                    onChange={e => setForm(f => ({ ...f, unit_id: e.target.value }))}
-                    options={localUnits.map(u => ({ value: u.id, label: u.name }))}
-                  />
-                </div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm font-medium text-gray-700">{t("formatConditionnement")}</label>
                 <button
                   type="button"
                   title="Créer un nouveau format"
                   onClick={() => setShowNewFormat(v => !v)}
-                  className="mb-0.5 flex items-center justify-center w-9 h-9 rounded-lg border border-dashed border-blue-400 text-blue-600 hover:bg-blue-50 transition text-lg font-bold"
+                  className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium"
                 >
-                  +
+                  <span className="text-base font-bold leading-none">+</span> Nouveau format
                 </button>
               </div>
+              <div className="border border-gray-200 rounded-lg p-2 max-h-32 overflow-y-auto bg-white space-y-1">
+                {localUnits.length === 0 && (
+                  <p className="text-xs text-gray-400 text-center py-2">Aucun format disponible</p>
+                )}
+                {localUnits.map(u => (
+                  <label key={u.id} className="flex items-center gap-2 cursor-pointer rounded px-2 py-1 hover:bg-gray-50 transition">
+                    <input
+                      type="checkbox"
+                      checked={form.unit_ids.includes(u.id)}
+                      onChange={e => {
+                        setForm(f => ({
+                          ...f,
+                          unit_ids: e.target.checked
+                            ? [...f.unit_ids, u.id]
+                            : f.unit_ids.filter(id => id !== u.id),
+                        }))
+                      }}
+                      className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-700">{u.name}</span>
+                  </label>
+                ))}
+              </div>
+              {form.unit_ids.length > 0 && (
+                <p className="text-xs text-gray-500 mt-1">
+                  {form.unit_ids.length} format{form.unit_ids.length > 1 ? "s" : ""} sélectionné{form.unit_ids.length > 1 ? "s" : ""}
+                </p>
+              )}
               {showNewFormat && (
                 <div className="mt-2 flex gap-2 items-center p-2 bg-blue-50 border border-blue-200 rounded-lg">
                   <input

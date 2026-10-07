@@ -7,7 +7,7 @@ export default async function ProduitsPage() {
   const [{ data: products }, { data: categories }, { data: units }] = await Promise.all([
     supabase
       .from("products")
-      .select("id, reference, name, description, buy_price, buy_price_currency, sell_price, currency, is_active, category:product_categories(id, name, color), unit:units(id, name, type)")
+      .select("id, reference, name, description, buy_price, buy_price_currency, sell_price, currency, is_active, unit_ids, category:product_categories(id, name, color), unit:units(id, name, type)")
       .order("name"),
     supabase.from("product_categories").select("*").order("name"),
     supabase.from("units").select("*").order("name"),

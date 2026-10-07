@@ -95,7 +95,8 @@ export async function renderFactureFournisseurPdf(props: Props): Promise<Buffer>
 
   const sc = statusConfig[status] ?? statusConfig.pending
   const cur = currency === "GNF" ? "FG" : currency
-  const fmtAmt = (n: number) => `${fmt(Math.round(n))} ${cur}`
+  const dec = ["GNF", "XOF"].includes(currency) ? 0 : 2
+  const fmtAmt = (n: number) => `${fmt(dec === 0 ? Math.round(n) : n, dec)} ${cur}`
 
   const hasTva = lines.some(l => (l.tax_rate ?? 0) > 0)
 
@@ -223,13 +224,13 @@ export async function renderFactureFournisseurPdf(props: Props): Promise<Buffer>
                     <Text style={s.tdDesc}>{l.description}</Text>
                   </View>
                   <Text style={[{ width: 50, fontSize: 8.5, color: "#333" }, s.tdR]}>{fmt(l.quantity, 2)}</Text>
-                  <Text style={[{ width: 80, fontSize: 8.5, color: "#333" }, s.tdR]}>{fmt(l.unit_price, 0)} {cur}</Text>
+                  <Text style={[{ width: 80, fontSize: 8.5, color: "#333" }, s.tdR]}>{fmt(l.unit_price, dec)} {cur}</Text>
                   {hasTva && (
                     <Text style={[{ width: 40, fontSize: 8, color: "#aaa" }, s.tdR]}>
                       {l.tax_rate > 0 ? `${l.tax_rate}%` : "—"}
                     </Text>
                   )}
-                  <Text style={[{ width: 80 }, s.tdAmt]}>{fmt(Math.round(total), 0)} {cur}</Text>
+                  <Text style={[{ width: 80 }, s.tdAmt]}>{fmt(dec === 0 ? Math.round(total) : total, dec)} {cur}</Text>
                 </View>
               )
             })}
@@ -264,7 +265,7 @@ export async function renderFactureFournisseurPdf(props: Props): Promise<Buffer>
               {payments.map((p, i) => (
                 <View key={i} style={s.totPaid}>
                   <Text style={s.totPaidLabel}>Paiement {fmtDate(p.paid_at.slice(0, 10))}</Text>
-                  <Text style={s.totPaidValue}>− {fmt(Math.round(p.amount), 0)} {p.currency === "GNF" ? "FG" : p.currency}</Text>
+                  <Text style={s.totPaidValue}>− {fmt(["GNF","XOF"].includes(p.currency) ? Math.round(p.amount) : p.amount, ["GNF","XOF"].includes(p.currency) ? 0 : 2)} {p.currency === "GNF" ? "FG" : p.currency}</Text>
                 </View>
               ))}
               {payments.length > 0 && (

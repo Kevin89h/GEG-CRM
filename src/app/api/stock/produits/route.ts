@@ -18,13 +18,14 @@ export async function POST(req: NextRequest)  {
         reference: body.reference ?? null,
         description: body.description ?? null,
         category_id: body.category_id ?? null,
-        unit_id: body.unit_id ?? null,
+        unit_id: (body.unit_ids as string[] | null)?.length ? body.unit_ids[0] : (body.unit_id ?? null),
+        unit_ids: (body.unit_ids as string[] | null)?.length ? body.unit_ids : null,
         buy_price: body.buy_price ?? null,
         buy_price_currency: normalizeCurrency(body.buy_price_currency ?? "GNF"),
         sell_price: body.sell_price ?? null,
         currency: normalizeCurrency(body.currency ?? "GNF"),
       }])
-      .select("*, category:product_categories(id, name, color), unit:units(id, name, type)")
+      .select("*, category:product_categories(id, name, color), unit:units(id, name, type), unit_ids")
       .single()
 
     if (error) {
