@@ -66,7 +66,6 @@ type LinkedDevis = {
   id: string
   number: string
   status: string
-  total_ttc: number | null
   currency: string
   created_at: string
   account: { id: string; name: string } | null
@@ -895,11 +894,7 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
                       {d.account && <p className="text-xs text-gray-400">{d.account.name}</p>}
                     </div>
                     <div className="text-right flex-shrink-0">
-                      {d.total_ttc != null && (
-                        <p className="text-xs font-medium text-gray-700">
-                          {formatCurrency(d.total_ttc, (d.currency === "XOF" ? "EUR" : d.currency) as "USD" | "GNF" | "EUR")}
-                        </p>
-                      )}
+                      <p className="text-xs text-gray-400">{new Date(d.created_at).toLocaleDateString("fr-FR")}</p>
                       <span className={`text-xs px-1.5 py-0.5 rounded-full ${
                         d.status === "confirmed" ? "bg-green-50 text-green-600" :
                         d.status === "draft" ? "bg-gray-100 text-gray-500" :
@@ -1060,11 +1055,7 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
                     {d.account && <p className="text-xs text-gray-400">{d.account.name}</p>}
                   </div>
                   <div className="text-right flex-shrink-0">
-                    {d.total_ttc != null && (
-                      <p className="text-xs font-medium text-gray-600">
-                        {formatCurrency(d.total_ttc, (d.currency === "XOF" ? "EUR" : d.currency) as "USD" | "GNF" | "EUR")}
-                      </p>
-                    )}
+                    <p className="text-xs text-gray-400">{new Date(d.created_at).toLocaleDateString("fr-FR")}</p>
                     <span className={`text-xs px-1.5 py-0.5 rounded-full ${
                       d.status === "confirmed" ? "bg-green-50 text-green-600" :
                       d.status === "draft" ? "bg-gray-100 text-gray-500" :

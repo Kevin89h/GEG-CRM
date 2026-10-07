@@ -8,7 +8,7 @@ export async function GET(req: NextRequest)  {
 
     let query = db
       .from("sales_orders")
-      .select("id, number, status, total_ttc, currency, account:accounts(id, name)")
+      .select("id, number, status, currency, created_at, account:accounts(id, name)")
       .order("created_at", { ascending: false })
       .limit(30)
 

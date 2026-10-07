@@ -10,7 +10,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
   const { data, error } = await db
     .from("sales_orders")
-    .select("id, number, status, total_ttc, currency, created_at, account:accounts(id, name)")
+    .select("id, number, status, currency, created_at, account:accounts(id, name)")
     .eq("deal_id", id)
     .order("created_at", { ascending: false })
 
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     .from("sales_orders")
     .update({ deal_id: id })
     .eq("id", devis_id)
-    .select("id, number, status, total_ttc, currency, created_at, account:accounts(id, name)")
+    .select("id, number, status, currency, created_at, account:accounts(id, name)")
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
