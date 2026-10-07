@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Printer, CheckCircle, Truck, X } from "lucide-react"
+import { ArrowLeft, Printer, Download, Share2, CheckCircle, Truck, X } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/Button"
 import { Select } from "@/components/ui/Select"
@@ -44,12 +44,14 @@ const statusConfig: Record<string, { label: string; color: string }> = {
 
 export default function BonLivraisonClient({ dn, lines: initialLines, warehouses, locale, docSettings = {} }: Props) {
   const router = useRouter()
-  const [lines, setLines] = useState(initialLines)
+  const firstWarehouseId = warehouses[0]?.id ?? ""
+  const [lines, setLines] = useState(() =>
+    initialLines.map(l => ({ ...l, warehouse_id: l.warehouse_id || firstWarehouseId || null }))
+  )
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // Entrepôt par défaut = premier dispo, ou peut être surchargé par ligne
-  const [defaultWarehouse, setDefaultWarehouse] = useState(warehouses[0]?.id ?? "")
+  const [defaultWarehouse, setDefaultWarehouse] = useState(firstWarehouseId)
 
   const isDraft = dn.status === "draft"
 
@@ -141,6 +143,31 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
           </p>
         </div>
         <div className="flex gap-2">
+          <a
+            href={`/api/bons-livraison/${dn.id}/pdf`}
+            download={`BL ${dn.number}.pdf`}
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
+          >
+            <Download className="w-4 h-4" /> Télécharger
+          </a>
+          <button
+            onClick={async () => {
+              const url = `${window.location.origin}/api/bons-livraison/${dn.id}/pdf`
+              if (navigator.share) {
+                try {
+                  const res = await fetch(url)
+                  const blob = await res.blob()
+                  const file = new File([blob], `BL ${dn.number}.pdf`, { type: "application/pdf" })
+                  await navigator.share({ files: [file], title: `BL ${dn.number}` })
+                } catch { /* annulé */ }
+              } else {
+                window.open(url, "_blank")
+              }
+            }}
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"
+          >
+            <Share2 className="w-4 h-4" /> Partager
+          </button>
           <button
             onClick={() => window.print()}
             className="inline-flex items-center gap-2 px-3 py-2 text-sm rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50"

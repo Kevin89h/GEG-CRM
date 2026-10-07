@@ -12,7 +12,7 @@ const statusColors: Record<string, "gray" | "blue" | "green" | "red"> = {
 }
 
 const statusLabels: Record<string, string> = {
-  draft: "Brouillon",
+  draft: "En cours",
   confirmed: "Confirmé",
   delivered: "Livré",
   cancelled: "Annulé",
