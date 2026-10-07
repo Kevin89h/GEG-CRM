@@ -313,7 +313,7 @@ export async function renderDevisPdf(props: Props): Promise<Buffer> {
             <Text style={{ fontSize: 7, fontFamily: "Helvetica", fontWeight: "bold", color, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 }}>
               Conditions Générales de Vente
             </Text>
-            <Text style={{ fontSize: 7, color: "#555", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{cgvText}</Text>
+            <Text style={{ fontSize: 7, color: "#555", lineHeight: 1.6 }}>{cgvText}</Text>
           </View>
         )}
 
