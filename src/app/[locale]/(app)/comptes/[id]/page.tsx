@@ -97,6 +97,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
         website: acct.website as string | null,
         notes: acct.notes as string | null,
         nif: acct.nif as string | null,
+        cgv_text: acct.cgv_text as string | null,
         salesperson: sp as { full_name: string } | null,
       }}
       orders={ordersWithTotal}
