@@ -9,7 +9,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const admin = createSchemaClient(getSchemaFromRequest(req))
 
     const patch: Record<string, unknown> = {}
-    const allowed = ["name", "type", "industry", "country", "city", "address", "phone", "email", "website", "notes", "salesperson_id", "nif"]
+    const allowed = ["name", "type", "industry", "country", "city", "address", "phone", "email", "website", "notes", "salesperson_id", "nif", "cgv_text"]
     for (const k of allowed) {
       if (k in body) patch[k] = body[k]
     }

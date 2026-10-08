@@ -9,7 +9,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
   const [{ data: account }, { data: orders }, { data: invoices }] = await Promise.all([
     supabase
       .from("accounts")
-      .select("id, name, type, industry, country, city, address, phone, email, website, notes, nif, salesperson:employees(full_name)")
+      .select("id, name, type, industry, country, city, address, phone, email, website, notes, nif, cgv_text, salesperson:employees(full_name)")
       .eq("id", id)
       .single(),
     supabase

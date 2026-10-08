@@ -56,6 +56,7 @@ interface Account {
   website: string | null
   notes: string | null
   nif: string | null
+  cgv_text: string | null
   salesperson?: { full_name: string } | null
 }
 
@@ -136,6 +137,7 @@ export default function AccountDetailClient({ account, orders, invoices, payment
     website: account.website ?? "",
     notes: account.notes ?? "",
     nif: account.nif ?? "",
+    cgv_text: account.cgv_text ?? "",
   })
   const [infoSaving, setInfoSaving] = useState(false)
   const [infoError, setInfoError] = useState<string | null>(null)
@@ -167,6 +169,7 @@ export default function AccountDetailClient({ account, orders, invoices, payment
       website: infoForm.website || null,
       notes: infoForm.notes || null,
       nif: infoForm.nif || null,
+      cgv_text: infoForm.cgv_text || null,
     }
     try {
       const res = await fetch(`/api/accounts/${account.id}`, {
@@ -432,6 +435,13 @@ export default function AccountDetailClient({ account, orders, invoices, payment
               <label className="block text-xs font-medium text-gray-500 mb-1">Notes internes</label>
               <textarea value={infoForm.notes} onChange={e => setInfoForm(f => ({ ...f, notes: e.target.value }))} rows={2}
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" placeholder="Informations complémentaires…" />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-xs font-medium text-gray-500 mb-1">Conditions Générales de Vente spécifiques</label>
+              <p className="text-xs text-gray-400 mb-1">Si renseignées, ces CGV remplacent les CGV globales sur les devis et factures de ce client.</p>
+              <textarea value={infoForm.cgv_text} onChange={e => setInfoForm(f => ({ ...f, cgv_text: e.target.value }))} rows={4}
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                placeholder="Article 1 – Conditions particulières applicables à ce client…" />
             </div>
           </div>
           {infoError && <p className="text-xs text-red-600 mt-2">{infoError}</p>}

@@ -9,9 +9,9 @@ import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { formatNumber } from "@/lib/utils"
 
 /* --- Types ----------------------------------------------- */
-interface Account  { id: string; name: string; salesperson_id: string | null }
+interface Account  { id: string; name: string; salesperson_id: string | null; cgv_text?: string | null }
 interface Contact  { id: string; first_name: string; last_name: string; account_id: string | null }
-interface Product  { id: string; name: string; reference: string | null; sell_price: number | null; currency: string; unit: { id: string; name: string } | null }
+interface Product  { id: string; name: string; reference: string | null; sell_price: number | null; currency: string; unit: { id: string; name: string } | null; unit_ids: string[] | null }
 interface Employee { id: string; full_name: string; commission_rate: number }
 interface Unit     { id: string; name: string; type: string }
 
@@ -284,6 +284,7 @@ export default function NouveauDevisClient({
       ...f, account_id: id, contact_id: "",
       salesperson_id:   emp?.id ?? f.salesperson_id,
       commission_rate:  emp ? String(emp.commission_rate) : f.commission_rate,
+      conditions_generales: acct?.cgv_text ?? f.conditions_generales,
     }))
   }
 
@@ -713,14 +714,22 @@ export default function NouveauDevisClient({
                             />
                           </td>
                           <td className="px-3 py-2">
-                            <select
-                              value={l.unit_id}
-                              onChange={e => updateLine(l.id, { unit_id: e.target.value })}
-                              className="w-full text-sm bg-transparent outline-none border-b border-transparent hover:border-gray-200 focus:border-blue-400 py-0.5"
-                            >
-                              <option value="">—</option>
-                              {units.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                            </select>
+                            {(() => {
+                              const prod = products.find(p => p.id === l.product_id)
+                              const availableUnits = prod?.unit_ids?.length
+                                ? units.filter(u => prod.unit_ids!.includes(u.id))
+                                : units
+                              return (
+                                <select
+                                  value={l.unit_id}
+                                  onChange={e => updateLine(l.id, { unit_id: e.target.value })}
+                                  className="w-full text-sm bg-transparent outline-none border-b border-transparent hover:border-gray-200 focus:border-blue-400 py-0.5"
+                                >
+                                  <option value="">—</option>
+                                  {availableUnits.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                                </select>
+                              )
+                            })()}
                           </td>
                           <td className="px-3 py-2">
                             <input
