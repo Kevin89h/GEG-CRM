@@ -138,7 +138,8 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
   const isPaid = invoice.status === "paid"
   const isCancelled = invoice.status === "cancelled"
   const isDraft = invoice.status === "draft"
-  const canEdit = !isCancelled
+  const hasDeliveredBL = deliveryNotes.some(dn => dn.status === "delivered")
+  const canEdit = !isCancelled && !hasDeliveredBL
   const [duplicating, setDuplicating] = useState(false)
 
   async function duplicateInvoice() {

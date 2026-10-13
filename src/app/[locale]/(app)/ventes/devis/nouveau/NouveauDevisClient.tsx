@@ -11,7 +11,7 @@ import { formatNumber } from "@/lib/utils"
 /* --- Types ----------------------------------------------- */
 interface Account  { id: string; name: string; salesperson_id: string | null; cgv_text?: string | null }
 interface Contact  { id: string; first_name: string; last_name: string; account_id: string | null }
-interface Product  { id: string; name: string; reference: string | null; sell_price: number | null; currency: string; unit: { id: string; name: string } | null; unit_ids: string[] | null }
+interface Product  { id: string; name: string; reference: string | null; sell_price: number | null; currency: string; unit: { id: string; name: string } | null; unit_ids: string[] | null; packaging: { unit_id: string; sell_price: number | null; currency: string }[] | null }
 interface Employee { id: string; full_name: string; commission_rate: number }
 interface Unit     { id: string; name: string; type: string }
 
@@ -298,11 +298,23 @@ export default function NouveauDevisClient({
 
   function onProductSelected(lineId: number, productId: string) {
     const p = products.find(p => p.id === productId)
+    const firstPkg = p?.packaging?.[0]
     updateLine(lineId, {
       product_id:  productId,
       description: p?.name ?? "",
-      unit_price:  String(p?.sell_price ?? 0),
-      unit_id:     p?.unit?.id ?? "",
+      unit_price:  String(firstPkg?.sell_price ?? p?.sell_price ?? 0),
+      unit_id:     firstPkg?.unit_id ?? p?.unit?.id ?? "",
+    })
+  }
+
+  function onUnitChanged(lineId: number, unitId: string) {
+    const line = lines.find(l => l.id === lineId)
+    if (!line) return
+    const p = products.find(p => p.id === line.product_id)
+    const pkg = p?.packaging?.find(pk => pk.unit_id === unitId)
+    updateLine(lineId, {
+      unit_id: unitId,
+      ...(pkg?.sell_price != null ? { unit_price: String(pkg.sell_price) } : {}),
     })
   }
 
@@ -716,13 +728,16 @@ export default function NouveauDevisClient({
                           <td className="px-3 py-2">
                             {(() => {
                               const prod = products.find(p => p.id === l.product_id)
-                              const availableUnits = prod?.unit_ids?.length
-                                ? units.filter(u => prod.unit_ids!.includes(u.id))
-                                : units
+                              const pkgUnitIds = prod?.packaging?.map(pk => pk.unit_id)
+                              const availableUnits = pkgUnitIds?.length
+                                ? units.filter(u => pkgUnitIds.includes(u.id))
+                                : prod?.unit_ids?.length
+                                  ? units.filter(u => prod.unit_ids!.includes(u.id))
+                                  : units
                               return (
                                 <select
                                   value={l.unit_id}
-                                  onChange={e => updateLine(l.id, { unit_id: e.target.value })}
+                                  onChange={e => onUnitChanged(l.id, e.target.value)}
                                   className="w-full text-sm bg-transparent outline-none border-b border-transparent hover:border-gray-200 focus:border-blue-400 py-0.5"
                                 >
                                   <option value="">—</option>

@@ -17,6 +17,7 @@ interface Product {
   id: string
   name: string
   image_url: string | null
+  product_code: string | null
   reference: string | null
   merchant_reference: string | null
   sku: string | null
@@ -379,6 +380,11 @@ export default function ProductDetailClient({
                 )}
                 {/* References row */}
                 <div className="flex flex-wrap items-center gap-3 mt-1.5">
+                  {product.product_code && (
+                    <span className="text-xs text-blue-800 font-mono font-bold bg-blue-100 px-2 py-0.5 rounded border border-blue-200">
+                      {product.product_code}
+                    </span>
+                  )}
                   {(editing ? form.merchant_reference : product.merchant_reference) && (
                     <span className="text-xs text-gray-500 font-mono bg-gray-100 px-2 py-0.5 rounded">
                       <Eye className="w-3 h-3 inline mr-1 text-gray-400" />

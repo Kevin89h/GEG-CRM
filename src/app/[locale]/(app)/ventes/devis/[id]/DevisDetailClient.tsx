@@ -162,7 +162,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
     })
     setAdditionalInfoSaving(false)
   }
-  const isDraft = order.status === "draft"
+  const isDraft = order.status !== "invoiced" && order.status !== "cancelled"
 
   const PAYMENT_TERMS_LABELS: Record<string, string> = {
     immediate: t("paymentImmediate"),

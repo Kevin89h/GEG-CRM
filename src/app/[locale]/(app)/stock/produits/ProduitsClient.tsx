@@ -4,7 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useTranslations } from "next-intl"
-import { Plus, Search, Package, Download } from "lucide-react"
+import { Plus, Search, Package, Download, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { Badge } from "@/components/ui/Badge"
 import { Modal } from "@/components/ui/Modal"
@@ -14,8 +14,18 @@ import { formatCurrency } from "@/lib/utils"
 import { exportToXls } from "@/lib/exportXls"
 import type { ProductCategory, Unit } from "@/types"
 
+interface PackagingRow {
+  id: string
+  unit_id: string
+  sell_price: number | null
+  buy_price: number | null
+  currency: string
+  buy_price_currency: string
+}
+
 interface ProductRow {
   id: string
+  product_code: string | null
   reference: string | null
   name: string
   description: string | null
@@ -27,6 +37,7 @@ interface ProductRow {
   category: { id: string; name: string; color: string } | null
   unit: { id: string; name: string; type: string } | null
   unit_ids: string[] | null
+  packaging: PackagingRow[] | null
 }
 
 interface Props {
@@ -53,16 +64,28 @@ export default function ProduitsClient({ products: initial, categories, units }:
   type Currency = "USD" | "GNF" | "EUR"
 
   const [localUnits, setLocalUnits] = useState(units)
+  interface PkgFormRow { unit_id: string; sell_price: string; buy_price: string; sell_currency: Currency; buy_currency: Currency }
+
   const [form, setForm] = useState({
     reference: "", name: "", description: "",
     category_id: categories[0]?.id ?? "",
-    unit_ids: [] as string[],
-    buy_price: "", buy_price_currency: "GNF" as Currency,
     sell_price: "", currency: "GNF" as Currency,
+    buy_price: "", buy_price_currency: "GNF" as Currency,
   })
+  const [pkgRows, setPkgRows] = useState<PkgFormRow[]>([])
   const [showNewFormat, setShowNewFormat] = useState(false)
   const [newFormatName, setNewFormatName] = useState("")
   const [newFormatSaving, setNewFormatSaving] = useState(false)
+
+  function addPkgRow() {
+    setPkgRows(r => [...r, { unit_id: localUnits[0]?.id ?? "", sell_price: "", buy_price: "", sell_currency: form.currency, buy_currency: form.buy_price_currency }])
+  }
+  function updatePkgRow(i: number, patch: Partial<PkgFormRow>) {
+    setPkgRows(r => r.map((row, idx) => idx === i ? { ...row, ...patch } : row))
+  }
+  function removePkgRow(i: number) {
+    setPkgRows(r => r.filter((_, idx) => idx !== i))
+  }
 
   async function handleCreateFormat() {
     if (!newFormatName.trim()) return
@@ -75,7 +98,7 @@ export default function ProduitsClient({ products: initial, categories, units }:
     const json = await res.json()
     if (res.ok && json.unit) {
       setLocalUnits(prev => [...prev, json.unit])
-      setForm(f => ({ ...f, unit_ids: [...f.unit_ids, json.unit.id] }))
+      setPkgRows(r => [...r, { unit_id: json.unit.id, sell_price: "", buy_price: "", sell_currency: form.currency, buy_currency: form.buy_price_currency }])
       setShowNewFormat(false)
       setNewFormatName("")
     }
@@ -84,7 +107,8 @@ export default function ProduitsClient({ products: initial, categories, units }:
 
   const filtered = products.filter(p => {
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
-      (p.reference ?? "").toLowerCase().includes(search.toLowerCase())
+      (p.reference ?? "").toLowerCase().includes(search.toLowerCase()) ||
+      (p.product_code ?? "").toLowerCase().includes(search.toLowerCase())
     const matchCat = filterCat === "all" || p.category?.id === filterCat
     return matchSearch && matchCat
   })
@@ -92,6 +116,9 @@ export default function ProduitsClient({ products: initial, categories, units }:
   async function handleSave() {
     setSaving(true)
     setSaveError("")
+    // Derive unit_ids from packaging rows for backwards compat
+    const validPkg = pkgRows.filter(r => r.unit_id)
+    const unit_ids = validPkg.length > 0 ? validPkg.map(r => r.unit_id) : null
     const res = await fetch("/api/stock/produits", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -100,7 +127,7 @@ export default function ProduitsClient({ products: initial, categories, units }:
         reference: form.reference || null,
         description: form.description || null,
         category_id: form.category_id || null,
-        unit_ids: form.unit_ids.length > 0 ? form.unit_ids : null,
+        unit_ids,
         buy_price: form.buy_price ? parseFloat(form.buy_price) : null,
         buy_price_currency: form.buy_price_currency,
         sell_price: form.sell_price ? parseFloat(form.sell_price) : null,
@@ -110,14 +137,32 @@ export default function ProduitsClient({ products: initial, categories, units }:
     const json = await res.json()
     if (!res.ok) {
       setSaveError(json.error ?? "Erreur serveur")
-    } else if (json) {
-      setProducts(prev => [json, ...prev])
-      setModalOpen(false)
-      setSaveError("")
-      setShowNewFormat(false)
-      setNewFormatName("")
-      setForm({ reference: "", name: "", description: "", category_id: categories[0]?.id ?? "", unit_ids: [], buy_price: "", buy_price_currency: "GNF", sell_price: "", currency: "GNF" })
+      setSaving(false)
+      return
     }
+    // Save packaging rows if any
+    if (validPkg.length > 0) {
+      await fetch(`/api/stock/produits/${json.id}/packaging`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          packaging: validPkg.map(r => ({
+            unit_id: r.unit_id,
+            sell_price: r.sell_price ? parseFloat(r.sell_price) : null,
+            buy_price: r.buy_price ? parseFloat(r.buy_price) : null,
+            currency: r.sell_currency,
+            buy_price_currency: r.buy_currency,
+          }))
+        }),
+      })
+    }
+    setProducts(prev => [{ ...json, packaging: validPkg.length > 0 ? validPkg : null }, ...prev])
+    setModalOpen(false)
+    setSaveError("")
+    setShowNewFormat(false)
+    setNewFormatName("")
+    setPkgRows([])
+    setForm({ reference: "", name: "", description: "", category_id: categories[0]?.id ?? "", sell_price: "", currency: "GNF", buy_price: "", buy_price_currency: "GNF" })
     setSaving(false)
   }
 
@@ -131,6 +176,7 @@ export default function ProduitsClient({ products: initial, categories, units }:
         <div className="flex gap-2">
           <button
             onClick={() => exportToXls(filtered.map(p => ({
+              "Code": p.product_code ?? "",
               "Référence": p.reference ?? "",
               "Nom": p.name,
               "Catégorie": p.category?.name ?? "",
@@ -194,6 +240,7 @@ export default function ProduitsClient({ products: initial, categories, units }:
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
                 <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colProduit")}</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Code</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colReference")}</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colCategorie")}</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colFormat")}</th>
@@ -205,6 +252,7 @@ export default function ProduitsClient({ products: initial, categories, units }:
               {filtered.map(p => (
                 <tr key={p.id} className="hover:bg-blue-50/30 transition-colors cursor-pointer" onClick={() => window.location.href = `/${locale}/stock/produits/${p.id}`}>
                   <td className="px-4 py-3 font-medium text-gray-900">{p.name}</td>
+                  <td className="px-4 py-3 text-blue-700 font-mono text-xs font-semibold">{p.product_code ?? "—"}</td>
                   <td className="px-4 py-3 text-gray-500 font-mono text-xs">{p.reference ?? "—"}</td>
                   <td className="px-4 py-3">
                     {p.category ? (
@@ -256,48 +304,32 @@ export default function ProduitsClient({ products: initial, categories, units }:
               onChange={e => setForm(f => ({ ...f, category_id: e.target.value }))}
               options={categories.map(c => ({ value: c.id, label: c.name }))}
             />
-            <div>
+          </div>
+
+          <div>
+            <div className="sm:col-span-2">
               <div className="flex items-center justify-between mb-1">
-                <label className="block text-sm font-medium text-gray-700">{t("formatConditionnement")}</label>
-                <button
-                  type="button"
-                  title="Créer un nouveau format"
-                  onClick={() => setShowNewFormat(v => !v)}
-                  className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium"
-                >
-                  <span className="text-base font-bold leading-none">+</span> Nouveau format
-                </button>
+                <label className="block text-sm font-medium text-gray-700">Formats / Conditionnements</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowNewFormat(v => !v)}
+                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium"
+                  >
+                    <span className="text-base font-bold leading-none">+</span> Créer format
+                  </button>
+                  <button
+                    type="button"
+                    onClick={addPkgRow}
+                    className="flex items-center gap-1 text-xs text-green-700 hover:text-green-800 font-medium"
+                  >
+                    <span className="text-base font-bold leading-none">+</span> Ajouter ligne
+                  </button>
+                </div>
               </div>
-              <div className="border border-gray-200 rounded-lg p-2 max-h-32 overflow-y-auto bg-white space-y-1">
-                {localUnits.length === 0 && (
-                  <p className="text-xs text-gray-400 text-center py-2">Aucun format disponible</p>
-                )}
-                {localUnits.map(u => (
-                  <label key={u.id} className="flex items-center gap-2 cursor-pointer rounded px-2 py-1 hover:bg-gray-50 transition">
-                    <input
-                      type="checkbox"
-                      checked={form.unit_ids.includes(u.id)}
-                      onChange={e => {
-                        setForm(f => ({
-                          ...f,
-                          unit_ids: e.target.checked
-                            ? [...f.unit_ids, u.id]
-                            : f.unit_ids.filter(id => id !== u.id),
-                        }))
-                      }}
-                      className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="text-sm text-gray-700">{u.name}</span>
-                  </label>
-                ))}
-              </div>
-              {form.unit_ids.length > 0 && (
-                <p className="text-xs text-gray-500 mt-1">
-                  {form.unit_ids.length} format{form.unit_ids.length > 1 ? "s" : ""} sélectionné{form.unit_ids.length > 1 ? "s" : ""}
-                </p>
-              )}
+
               {showNewFormat && (
-                <div className="mt-2 flex gap-2 items-center p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="mb-2 flex gap-2 items-center p-2 bg-blue-50 border border-blue-200 rounded-lg">
                   <input
                     autoFocus
                     value={newFormatName}
@@ -321,6 +353,81 @@ export default function ProduitsClient({ products: initial, categories, units }:
                   >
                     ✕
                   </button>
+                </div>
+              )}
+
+              {pkgRows.length === 0 ? (
+                <p className="text-xs text-gray-400 italic py-2">Aucun format — les prix globaux ci-dessous s&apos;appliqueront.</p>
+              ) : (
+                <div className="border border-gray-200 rounded-lg overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-100">
+                        <th className="text-left px-2 py-1.5 font-medium text-gray-600">Format</th>
+                        <th className="text-left px-2 py-1.5 font-medium text-gray-600">Prix achat</th>
+                        <th className="text-left px-2 py-1.5 font-medium text-gray-600">Devise</th>
+                        <th className="text-left px-2 py-1.5 font-medium text-gray-600">Prix vente</th>
+                        <th className="text-left px-2 py-1.5 font-medium text-gray-600">Devise</th>
+                        <th className="px-2 py-1.5" />
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {pkgRows.map((row, i) => (
+                        <tr key={i}>
+                          <td className="px-2 py-1.5">
+                            <select
+                              value={row.unit_id}
+                              onChange={e => updatePkgRow(i, { unit_id: e.target.value })}
+                              className="w-full text-xs border border-gray-200 rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            >
+                              {localUnits.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                            </select>
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <input
+                              type="number"
+                              value={row.buy_price}
+                              onChange={e => updatePkgRow(i, { buy_price: e.target.value })}
+                              placeholder="0"
+                              className="w-20 text-xs border border-gray-200 rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <select
+                              value={row.buy_currency}
+                              onChange={e => updatePkgRow(i, { buy_currency: e.target.value as Currency })}
+                              className="text-xs border border-gray-200 rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            >
+                              {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <input
+                              type="number"
+                              value={row.sell_price}
+                              onChange={e => updatePkgRow(i, { sell_price: e.target.value })}
+                              placeholder="0"
+                              className="w-20 text-xs border border-gray-200 rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            />
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <select
+                              value={row.sell_currency}
+                              onChange={e => updatePkgRow(i, { sell_currency: e.target.value as Currency })}
+                              className="text-xs border border-gray-200 rounded px-1.5 py-1 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            >
+                              {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                          </td>
+                          <td className="px-2 py-1.5">
+                            <button type="button" onClick={() => removePkgRow(i)} className="text-red-400 hover:text-red-600 transition">
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </div>

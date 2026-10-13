@@ -8,7 +8,7 @@ export default async function NouveauDevisPage({ params }: { params: Promise<{ l
   const [{ data: accounts }, { data: contacts }, { data: products }, { data: employees }, { data: units }] = await Promise.all([
     supabase.from("accounts").select("id, name, salesperson_id, cgv_text").order("name"),
     supabase.from("contacts").select("id, first_name, last_name, account_id").order("last_name"),
-    supabase.from("products").select("id, name, reference, sell_price, currency, unit_ids, unit:units(id, name)").eq("is_active", true).order("name"),
+    supabase.from("products").select("id, name, reference, sell_price, currency, unit_ids, unit:units(id, name), packaging:product_packaging(unit_id, sell_price, currency)").eq("is_active", true).order("name"),
     supabase.from("employees").select("id, full_name, commission_rate").eq("is_active", true).order("full_name"),
     supabase.from("units").select("id, name, type").order("name"),
   ])

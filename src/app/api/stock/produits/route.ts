@@ -11,10 +11,25 @@ export async function POST(req: NextRequest)  {
     const ALLOWED_CURRENCIES = ["GNF", "USD", "EUR"]
     const normalizeCurrency = (c: string) => ALLOWED_CURRENCIES.includes(c) ? c : "GNF"
 
+    // Generate next PRD-XXXXX code
+    const { data: lastCode } = await db
+      .from("products")
+      .select("product_code")
+      .like("product_code", "PRD-%")
+      .order("product_code", { ascending: false })
+      .limit(1)
+      .single()
+
+    const nextNum = lastCode?.product_code
+      ? parseInt(lastCode.product_code.replace("PRD-", ""), 10) + 1
+      : 1
+    const product_code = `PRD-${String(nextNum).padStart(5, "0")}`
+
     const { data, error } = await db
       .from("products")
       .insert([{
         name: body.name,
+        product_code,
         reference: body.reference ?? null,
         description: body.description ?? null,
         category_id: body.category_id ?? null,
