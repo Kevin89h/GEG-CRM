@@ -277,18 +277,18 @@ export default function FacturesClient({ invoices, schema }: Props) {
         </button>
 
         <div className="flex items-center gap-1 ml-2">
-          {TABS.map(tab => (
+          {TABS.map(tabItem => (
             <button
-              key={tab.key}
-              onClick={() => { setTab(tab.key);  }}
+              key={tabItem.key}
+              onClick={() => { setTab(tabItem.key) }}
               className={`px-3 py-1.5 text-sm rounded transition font-medium ${
-                tab.key === tab.key
+                tabItem.key === tab
                   ? "bg-gray-100 text-gray-900"
                   : "text-gray-500 hover:text-gray-700 hover:bg-gray-50"
               }`}
             >
-              {tab.label}
-              <span className="ml-1.5 text-xs text-gray-400">({tab.count})</span>
+              {tabItem.label}
+              <span className="ml-1.5 text-xs text-gray-400">({tabItem.count})</span>
             </button>
           ))}
         </div>

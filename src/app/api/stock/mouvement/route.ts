@@ -69,8 +69,14 @@ export async function POST(req: NextRequest)  {
         .eq("warehouse_id", from_warehouse_id)
         .maybeSingle()
       const cur = Number(lFrom?.quantity ?? 0)
+      if (cur < quantity) {
+        return NextResponse.json(
+          { error: `Stock insuffisant: ${cur} disponible, ${quantity} demandé` },
+          { status: 422 }
+        )
+      }
       await db.from("stock_levels").upsert(
-        { product_id, warehouse_id: from_warehouse_id, quantity: Math.max(0, cur - quantity) },
+        { product_id, warehouse_id: from_warehouse_id, quantity: cur - quantity },
         { onConflict: "product_id,warehouse_id" }
       )
     }

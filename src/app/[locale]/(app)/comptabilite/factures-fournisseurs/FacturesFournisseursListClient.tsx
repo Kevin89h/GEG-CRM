@@ -23,7 +23,7 @@ type Invoice = {
   invoice_date: string; due_date: string | null
 }
 
-type SortKey = "number" | "supplier_name" | "invoice_date" | "due_date" | "balance" | "status"
+type SortKey = "number" | "supplier_name" | "invoice_date" | "due_date" | "balance" | "total_ttc" | "status"
 
 export default function FacturesFournisseursListClient({
   invoices: initial,
@@ -80,7 +80,7 @@ export default function FacturesFournisseursListClient({
     let list = invoices.filter(inv => {
       if (search) {
         const q = search.toLowerCase()
-        return inv.number.toLowerCase().includes(q) || inv.supplier_name.toLowerCase().includes(q)
+        if (!inv.number.toLowerCase().includes(q) && !inv.supplier_name.toLowerCase().includes(q)) return false
       }
       if (statusFilters.size > 0 && !statusFilters.has(inv.status)) return false
       if (dateFrom && inv.invoice_date < dateFrom) return false
@@ -326,7 +326,7 @@ export default function FacturesFournisseursListClient({
                   </th>
                 ))}
                 <th onClick={() => toggleSort("balance")} className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase cursor-pointer hover:text-gray-600 select-none">
-                  Total TTC<SortIcon k="balance" />
+                  Total TTC<SortIcon k="total_ttc" />
                 </th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-emerald-500 uppercase select-none hidden md:table-cell">Payé</th>
                 <th className="px-4 py-3 text-right text-xs font-medium text-amber-500 uppercase select-none">Solde dû</th>

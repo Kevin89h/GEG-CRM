@@ -53,6 +53,7 @@ interface Invoice {
   total_ttc: number
   total_paid: number
   balance: number
+  account_id: string | null
   account: { name: string; country: string | null } | null
   salesperson?: { full_name: string } | null
   lines: Line[]
@@ -341,7 +342,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { setError("Non authentifié"); setCreatingBL(false); return }
 
-      const accountId = invoice.account ? (invoice as unknown as Record<string, unknown>).account_id as string : null
+      const accountId = invoice.account_id ?? null
       const res = await fetch(`/api/factures/${invoice.id}/create-delivery-note`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

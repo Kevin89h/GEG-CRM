@@ -54,9 +54,9 @@ export default function PertesClient({ moves }: { moves: Move[] }) {
   })
 
   const kpi = {
-    damaged: moves.filter(m => m.type === "damaged").reduce((s, m) => s + m.quantity, 0),
-    lost: moves.filter(m => m.type === "lost").reduce((s, m) => s + m.quantity, 0),
-    destroyed: moves.filter(m => m.type === "destroyed").reduce((s, m) => s + m.quantity, 0),
+    damaged: filtered.filter(m => m.type === "damaged").reduce((s, m) => s + m.quantity, 0),
+    lost: filtered.filter(m => m.type === "lost").reduce((s, m) => s + m.quantity, 0),
+    destroyed: filtered.filter(m => m.type === "destroyed").reduce((s, m) => s + m.quantity, 0),
   }
 
   const totalValeur = filtered.reduce((s, m) => {

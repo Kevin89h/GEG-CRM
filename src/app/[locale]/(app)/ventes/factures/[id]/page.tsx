@@ -96,6 +96,7 @@ export default async function FactureDetailPage({ params }: { params: Promise<{ 
     total_ttc,
     total_paid,
     balance,
+    account_id: inv.account_id ?? null,
     account: account ?? null,
     salesperson: salesperson ?? null,
     lines: linesData,
