@@ -8,7 +8,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const { id } = await params
     const body = await req.json()
-    const { amount, currency, exchange_rate, amount_in_invoice_currency, method, treasury_account_id, reference, notes, paid_at, user_id } = body
+    const { amount, currency, exchange_rate, amount_in_invoice_currency, method, treasury_account_id, reference, notes, paid_at } = body
 
     if (!amount || amount <= 0) return NextResponse.json({ error: "Montant invalide" }, { status: 400 })
 
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         reference: reference || null,
         notes: notes || null,
         paid_at: new Date(paid_at).toISOString(),
-        user_id,
+        user_id: user.id,
       }])
       .select("*")
       .single()
