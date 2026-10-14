@@ -18,6 +18,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "No valid fields to update" }, { status: 400 })
   }
 
+  update.updated_at = new Date().toISOString()
+
   const { data, error } = await db
     .from("invoices")
     .update(update)
@@ -27,7 +29,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
 
-  logActivity({ action: "update", resource: "invoice", resourceId: id, label: `Facture ${data.number} modifiée`, details: update })
+  const label = update.status
+    ? `Statut facture ${data.number} → ${update.status}`
+    : `Facture ${data.number} modifiée`
+
+  logActivity({ action: "update", resource: "invoice", resourceId: id, label, details: update })
 
   return NextResponse.json(data)
 }
