@@ -8,8 +8,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const schema = getSchemaFromRequest(req)
   const db = createSchemaClient(schema)
 
-  const ALLOWED_FIELDS = ["name", "sku", "description", "category_id", "unit_id", "selling_price",
-    "purchase_price", "tva_rate", "is_active", "image_url", "barcode", "min_stock", "max_stock"]
+  const ALLOWED_FIELDS = [
+    "name", "reference", "merchant_reference", "description", "category_id", "unit_id",
+    "product_type", "can_be_sold", "can_be_purchased",
+    "sell_price", "currency", "buy_price", "buy_price_currency",
+    "tva_vente", "tva_achat", "barcode", "sku", "origin", "internal_notes", "is_active",
+  ]
   const update: Record<string, unknown> = {}
   for (const key of ALLOWED_FIELDS) {
     if (key in body) update[key] = body[key]
