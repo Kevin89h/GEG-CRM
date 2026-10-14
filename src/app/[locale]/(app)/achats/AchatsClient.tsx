@@ -34,6 +34,7 @@ interface Order {
   expected_date: string | null
   user_id: string | null
   total: number
+  total_paid: number
   invoice: InvoiceRef | null
   purchase_order_lines?: OrderLine[]
 }
@@ -347,6 +348,7 @@ export default function AchatsClient({ orders }: Props) {
                         {t("colTotal")} <SortIcon field="total" />
                       </button>
                     </th>
+                    <th className="text-right px-4 py-3 hidden md:table-cell">Payé / Solde</th>
                     <th className="text-left px-4 py-3 hidden lg:table-cell">Facture</th>
                     <th className="text-left px-4 py-3">{t("colStatus")}</th>
                   </tr>
@@ -382,6 +384,24 @@ export default function AchatsClient({ orders }: Props) {
                           {o.total > 0
                             ? formatCurrency(o.total, o.currency as "GNF" | "USD" | "EUR")
                             : "—"}
+                        </td>
+                        <td className="px-4 py-3 text-right hidden md:table-cell">
+                          {o.total > 0 ? (
+                            <div className="flex flex-col items-end gap-1">
+                              <div className="flex items-center gap-2 text-xs tabular-nums">
+                                <span className="text-emerald-600 font-medium">{formatCurrency(o.total_paid, o.currency as "GNF" | "USD" | "EUR")}</span>
+                                {o.total_paid < o.total && (
+                                  <span className="text-amber-600 font-medium">– {formatCurrency(o.total - o.total_paid, o.currency as "GNF" | "USD" | "EUR")}</span>
+                                )}
+                              </div>
+                              <div className="w-24 h-1 bg-gray-100 rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full ${o.total_paid >= o.total ? "bg-emerald-500" : o.total_paid > 0 ? "bg-amber-400" : "bg-gray-200"}`}
+                                  style={{ width: `${Math.min(100, o.total > 0 ? (o.total_paid / o.total) * 100 : 0)}%` }}
+                                />
+                              </div>
+                            </div>
+                          ) : <span className="text-xs text-gray-300">—</span>}
                         </td>
                         <td className="px-4 py-3 hidden lg:table-cell">
                           {o.invoice ? (

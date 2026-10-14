@@ -4,13 +4,16 @@ import AchatsClient from "./AchatsClient"
 export default async function AchatsPage() {
   const { db } = await createCompanyClient()
 
-  const [{ data: orders }, { data: invoices }] = await Promise.all([
+  const [{ data: orders }, { data: invoices }, { data: payments }] = await Promise.all([
     db.from("purchase_orders")
       .select("id, number, supplier_name, status, currency, order_date, expected_date, user_id, lines:purchase_order_lines(quantity, fob_unit_price, qty_received)")
       .order("created_at", { ascending: false }),
     db.from("supplier_invoices")
       .select("id, number, purchase_order_id, status")
       .not("purchase_order_id", "is", null),
+    db.from("supplier_payments")
+      .select("amount, supplier_invoice_id, supplier_invoices!inner(purchase_order_id)")
+      .not("supplier_invoices.purchase_order_id", "is", null),
   ])
 
   type RawOrder = {
@@ -33,12 +36,20 @@ export default async function AchatsPage() {
     }
   }
 
+  type RawPayment = { amount: number; supplier_invoice_id: string; supplier_invoices: { purchase_order_id: string } }
+  const paidByPO = new Map<string, number>()
+  for (const p of (payments ?? []) as unknown as RawPayment[]) {
+    const poId = p.supplier_invoices?.purchase_order_id
+    if (poId) paidByPO.set(poId, (paidByPO.get(poId) ?? 0) + Number(p.amount))
+  }
+
   const list = ((orders ?? []) as unknown as RawOrder[]).map(o => {
     const total = (o.lines ?? []).reduce(
       (s, l) => s + l.quantity * l.fob_unit_price,
       0
     )
     const invoice = invoicesByPO.get(o.id) ?? null
+    const total_paid = paidByPO.get(o.id) ?? 0
     return {
       id: o.id,
       number: o.number,
@@ -49,6 +60,7 @@ export default async function AchatsPage() {
       expected_date: o.expected_date,
       user_id: o.user_id,
       total,
+      total_paid,
       invoice,
       purchase_order_lines: (o.lines ?? []).map(l => ({
         quantity: l.quantity,

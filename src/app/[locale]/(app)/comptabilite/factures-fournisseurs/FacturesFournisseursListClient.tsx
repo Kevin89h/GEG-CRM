@@ -316,17 +316,21 @@ export default function FacturesFournisseursListClient({
                   ["supplier_name", "Fournisseur"],
                   ["invoice_date", "Date"],
                   ["due_date", "Échéance"],
-                  ["balance", "Montant dû"],
-                  ["status", "Statut"],
                 ] as [SortKey, string][]).map(([k, label]) => (
                   <th
                     key={k}
                     onClick={() => toggleSort(k)}
-                    className={`px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase cursor-pointer hover:text-gray-600 select-none ${k === "balance" ? "text-right" : ""}`}
+                    className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase cursor-pointer hover:text-gray-600 select-none"
                   >
                     {label}<SortIcon k={k} />
                   </th>
                 ))}
+                <th onClick={() => toggleSort("balance")} className="px-4 py-3 text-right text-xs font-medium text-gray-400 uppercase cursor-pointer hover:text-gray-600 select-none">
+                  Total TTC<SortIcon k="balance" />
+                </th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-emerald-500 uppercase select-none hidden md:table-cell">Payé</th>
+                <th className="px-4 py-3 text-right text-xs font-medium text-amber-500 uppercase select-none">Solde dû</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-400 uppercase select-none">Statut</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -348,8 +352,16 @@ export default function FacturesFournisseursListClient({
                   <td className="px-4 py-3 text-gray-800">{inv.supplier_name}</td>
                   <td className="px-4 py-3 text-gray-500">{formatDate(inv.invoice_date)}</td>
                   <td className="px-4 py-3 text-gray-500">{inv.due_date ? formatDate(inv.due_date) : "—"}</td>
-                  <td className="px-4 py-3 text-right font-medium text-gray-900">
-                    {Number(inv.balance ?? inv.total_ttc).toLocaleString("fr")} {inv.currency}
+                  <td className="px-4 py-3 text-right font-medium text-gray-900 tabular-nums">
+                    {Number(inv.total_ttc).toLocaleString("fr")} {inv.currency}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums hidden md:table-cell">
+                    {(() => { const paid = Number(inv.total_ttc) - Number(inv.balance ?? inv.total_ttc); return paid > 0 ? <span className="text-emerald-600 font-medium">{paid.toLocaleString("fr")} {inv.currency}</span> : <span className="text-gray-300">—</span> })()}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums">
+                    {Number(inv.balance ?? 0) > 0
+                      ? <span className="font-semibold text-amber-600">{Number(inv.balance).toLocaleString("fr")} {inv.currency}</span>
+                      : <span className="text-emerald-500 font-medium">Soldée</span>}
                   </td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_COLOR[inv.status] ?? STATUS_COLOR.draft}`}>
