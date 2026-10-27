@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createCompanyClient } from "@/lib/company"
+import { errorResponse } from "@/lib/access"
 
 interface OrderLine {
   product_id: string | null
@@ -56,6 +57,6 @@ export async function POST(req: NextRequest)  {
     return NextResponse.json({ id: order.id })
 
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 })
+    return errorResponse(err)
   }
 }

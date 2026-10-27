@@ -4,7 +4,7 @@ import { getSchemaFromRequest } from "@/lib/company"
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string; paymentId: string }> }) {
   const { id, paymentId } = await params
-  const schema = getSchemaFromRequest(req)
+  const schema = await getSchemaFromRequest(req)
   const db = createSchemaClient(schema)
 
   // Récupérer le paiement avant suppression pour nettoyer la trésorerie

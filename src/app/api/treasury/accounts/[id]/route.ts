@@ -13,7 +13,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     if (!name) return NextResponse.json({ error: "Nom requis" }, { status: 400 })
 
-    const db = createSchemaClient(getSchemaFromRequest(req))
+    const db = createSchemaClient(await getSchemaFromRequest(req))
     const updates: Record<string, unknown> = {
       name, type,
       institution: institution || null,
@@ -51,7 +51,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     const { id } = await params
     const { searchParams } = new URL(req.url)
     const action = searchParams.get("action") ?? "reset"
-    const db = createSchemaClient(getSchemaFromRequest(req))
+    const db = createSchemaClient(await getSchemaFromRequest(req))
 
     if (action === "purge") {
       // Vérifier que l'appelant est super admin

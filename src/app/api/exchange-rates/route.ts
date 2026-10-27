@@ -1,5 +1,6 @@
 import { createCompanyClient } from "@/lib/company"
 import { NextResponse } from "next/server"
+import { errorResponse } from "@/lib/access"
 
 // GET /api/exchange-rates?from=XOF&to=GNF
 // Returns the latest exchange rate for a currency pair, trying both directions.
@@ -40,6 +41,6 @@ export async function GET(req: Request)  {
     return NextResponse.json({ rate: null })
 
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 })
+    return errorResponse(err)
   }
 }

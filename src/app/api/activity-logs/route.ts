@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient as createAdminClient } from "@supabase/supabase-js"
+import { guard, requireSchemaAccess } from "@/lib/access"
 
 function getAdmin() {
   return createAdminClient(
@@ -9,6 +10,8 @@ function getAdmin() {
 }
 
 export async function GET(req: NextRequest) {
+  const denied = await guard(() => requireSchemaAccess("geg_guinee"))
+  if (denied) return denied
   const resource = req.nextUrl.searchParams.get("resource")
   const resourceId = req.nextUrl.searchParams.get("resourceId")
 

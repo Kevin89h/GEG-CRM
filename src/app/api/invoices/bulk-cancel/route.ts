@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createCompanyClient } from "@/lib/company"
+import { errorResponse } from "@/lib/access"
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,6 +18,6 @@ export async function POST(req: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ success: true, count: invoice_ids.length })
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 })
+    return errorResponse(err)
   }
 }

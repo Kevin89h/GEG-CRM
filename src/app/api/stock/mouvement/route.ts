@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { guard, requireSchemaAccess } from "@/lib/access"
 
 export async function POST(req: NextRequest)  {
+  const denied = await guard(() => requireSchemaAccess("geg_guinee"))
+  if (denied) return denied
   try {
     const body = await req.json()
     const { type, product_id, from_warehouse_id, to_warehouse_id, quantity, notes, user_id } = body as {

@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
+import { guard, requireAdmin } from "@/lib/access"
 
 // POST: upsert document settings (table is in public schema)
 export async function POST(req: NextRequest)  {
+  const denied = await guard(requireAdmin)
+  if (denied) return denied
   try {
     const body = await req.json()
     const db = await createClient()

@@ -11,7 +11,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     if (!amount || amount <= 0) return NextResponse.json({ error: "Montant invalide" }, { status: 400 })
 
-    const schema = getSchemaFromRequest(req)
+    const schema = await getSchemaFromRequest(req)
     const db = createSchemaClient(schema)
 
     const { data: invoice } = await db
@@ -83,7 +83,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const db = createSchemaClient(getSchemaFromRequest(req))
+  const db = createSchemaClient(await getSchemaFromRequest(req))
   const { data: payments } = await db
     .from("supplier_payments")
     .select("*")

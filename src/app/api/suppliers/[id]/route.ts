@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createSchemaClient, createAdminClient } from "@/lib/supabase/admin"
 import { getSchemaFromRequest } from "@/lib/company"
+import { errorResponse } from "@/lib/access"
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
     const body = await req.json()
-    const schema = getSchemaFromRequest(req)
+    const schema = await getSchemaFromRequest(req)
 
     if (schema === "geg_singapore") {
       const admin = createAdminClient()
@@ -54,14 +55,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
     return NextResponse.json(data)
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 })
+    return errorResponse(err)
   }
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params
-    const schema = getSchemaFromRequest(req)
+    const schema = await getSchemaFromRequest(req)
 
     if (schema === "geg_singapore") {
       const admin = createAdminClient()
@@ -78,6 +79,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
     return NextResponse.json({ ok: true })
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 })
+    return errorResponse(err)
   }
 }

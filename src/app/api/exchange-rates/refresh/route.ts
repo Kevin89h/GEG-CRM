@@ -1,5 +1,6 @@
 import { createCompanyClient } from "@/lib/company"
 import { NextResponse } from "next/server"
+import { errorResponse } from "@/lib/access"
 
 const PAIRS = [
   { from: "USD", to: "GNF" },
@@ -44,6 +45,6 @@ export async function POST() {
 
     return NextResponse.json({ ok: true, updated: rows.length, rates: rows })
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 })
+    return errorResponse(err)
   }
 }

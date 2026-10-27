@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Le nom du fournisseur est requis" }, { status: 400 })
     }
 
-    const db = createSchemaClient(getSchemaFromRequest(req))
+    const db = createSchemaClient(await getSchemaFromRequest(req))
 
     const now = new Date()
     const year = now.getFullYear()

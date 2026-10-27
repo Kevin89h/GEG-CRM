@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createSchemaClient } from "@/lib/supabase/admin"
 import { getSchemaFromRequest } from "@/lib/company"
+import { errorResponse } from "@/lib/access"
 
 async function fetchTransactions(req: NextRequest, accountId: string | null) {
-  const db = createSchemaClient(getSchemaFromRequest(req))
+  const db = createSchemaClient(await getSchemaFromRequest(req))
 
   let query = db
     .from("treasury_transactions")
@@ -131,6 +132,6 @@ export async function GET(req: NextRequest)  {
     return NextResponse.json({ error: "Format invalide" }, { status: 400 })
 
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 })
+    return errorResponse(err)
   }
 }

@@ -1,10 +1,9 @@
 import { createClient as createAdminClient } from "@supabase/supabase-js"
-import { cookies } from "next/headers"
+import { getCompanySchema } from "@/lib/company"
 import TrackingClient from './TrackingClient'
 
 export default async function TrackingPage() {
-  const cookieStore = await cookies()
-  const schema = cookieStore.get("geg_company")?.value ?? "geg_guinee"
+  const schema = await getCompanySchema()
 
   const admin = createAdminClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

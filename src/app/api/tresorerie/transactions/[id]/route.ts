@@ -5,7 +5,7 @@ import { getSchemaFromRequest } from "@/lib/company"
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const body = await req.json()
-  const db = createSchemaClient(getSchemaFromRequest(req))
+  const db = createSchemaClient(await getSchemaFromRequest(req))
 
   const { data, error } = await db
     .from("treasury_transactions")
@@ -20,7 +20,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const db = createSchemaClient(getSchemaFromRequest(req))
+  const db = createSchemaClient(await getSchemaFromRequest(req))
 
   const { error } = await db.from("treasury_transactions").delete().eq("id", id)
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })

@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const db = createSchemaClient(getSchemaFromRequest(req))
+  const db = createSchemaClient(await getSchemaFromRequest(req))
 
   const [
     { data: supplierInvoices },
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Type et montant requis" }, { status: 400 })
   }
 
-  const db = createSchemaClient(getSchemaFromRequest(req))
+  const db = createSchemaClient(await getSchemaFromRequest(req))
   const { data, error } = await db.from("deal_costs").insert({
     deal_id: id,
     type,

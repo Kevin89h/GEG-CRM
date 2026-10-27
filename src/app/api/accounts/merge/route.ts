@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { guard, requireSchemaAccess } from "@/lib/access"
 
 // POST { keepId, deleteId }
 // Reassigns all references from deleteId to keepId, then deletes deleteId
 export async function POST(req: NextRequest)  {
+  const denied = await guard(() => requireSchemaAccess("geg_guinee"))
+  if (denied) return denied
   try {
     const { keepId, deleteId } = await req.json()
     if (!keepId || !deleteId) return NextResponse.json({ error: "keepId and deleteId required" }, { status: 400 })

@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import { renderFacturePdf } from "@/app/api/factures/[id]/pdf/renderFacturePdf"
+import { guard, requireAdmin } from "@/lib/access"
 
 export const maxDuration = 60
 export const runtime = "nodejs"
 
 export async function POST(req: NextRequest) {
+  const denied = await guard(requireAdmin)
+  if (denied) return denied
   try {
     const ds = await req.json()
 

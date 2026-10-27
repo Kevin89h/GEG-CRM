@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin"
+import { requireSchemaAccess } from "@/lib/access"
 import StockDashboard from "./StockDashboard"
 import type { Warehouse } from "@/types"
 
@@ -23,6 +24,7 @@ function normalizeJoin<T>(val: T | T[] | null | undefined): T | null {
 }
 
 export default async function StockPage() {
+  await requireSchemaAccess("geg_guinee")
   const supabase = createAdminClient().schema("geg_guinee")
 
   const [{ data: levels }, { data: warehouses }, { data: products }] = await Promise.all([

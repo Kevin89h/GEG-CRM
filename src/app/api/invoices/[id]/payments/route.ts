@@ -23,7 +23,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (perm && !perm.create) return NextResponse.json({ error: "Accès refusé" }, { status: 403 })
     }
 
-    const schema = getSchemaFromRequest(req)
+    const schema = await getSchemaFromRequest(req)
     const db = createSchemaClient(schema)
 
     const { data: payment, error: payErr } = await db

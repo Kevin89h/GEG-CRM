@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient, createSchemaClient } from "@/lib/supabase/admin"
 import { getSchemaFromRequest } from "@/lib/company"
+import { guard, requireSchemaAccess } from "@/lib/access"
 
 // Transfer Guinée → Singapore
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const schema = getSchemaFromRequest(req)
+  // A transfer reads one company and writes the other: the user needs both
+  const denied = await guard(async () => {
+    await requireSchemaAccess("geg_guinee")
+    await requireSchemaAccess("geg_singapore")
+  })
+  if (denied) return denied
+  const schema = await getSchemaFromRequest(req)
   const db = createSchemaClient(schema)
 
   if (schema === "geg_guinee") {

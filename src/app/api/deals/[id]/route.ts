@@ -5,7 +5,7 @@ import { sendPushToUser } from "@/lib/webpush"
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const db = createSchemaClient(getSchemaFromRequest(req))
+  const db = createSchemaClient(await getSchemaFromRequest(req))
 
   const { data, error } = await db
     .from("deals")
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const body = await req.json()
-  const db = createSchemaClient(getSchemaFromRequest(req))
+  const db = createSchemaClient(await getSchemaFromRequest(req))
 
   const allowedFields = [
     "title", "stage", "value", "currency", "probability", "close_date",

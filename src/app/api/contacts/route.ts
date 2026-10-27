@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createCompanyClient } from "@/lib/company"
+import { errorResponse } from "@/lib/access"
 
 export async function POST(req: NextRequest)  {
   try {
@@ -25,6 +26,6 @@ export async function POST(req: NextRequest)  {
     return NextResponse.json(data)
 
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 })
+    return errorResponse(err)
   }
 }

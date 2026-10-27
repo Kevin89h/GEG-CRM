@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSchemaFromRequest } from "@/lib/company"
 import { createSchemaClient, createAdminClient } from "@/lib/supabase/admin"
+import { errorResponse } from "@/lib/access"
 
 export async function GET(req: NextRequest)  {
   try {
     const q = req.nextUrl.searchParams.get("q") ?? ""
-    const schema = getSchemaFromRequest(req)
+    const schema = await getSchemaFromRequest(req)
     const db = createSchemaClient(schema)
 
     let query = db.from("accounts").select("id, name").order("name").limit(50)
@@ -16,14 +17,14 @@ export async function GET(req: NextRequest)  {
     return NextResponse.json(data ?? [])
 
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 })
+    return errorResponse(err)
   }
 }
 
 export async function POST(req: NextRequest)  {
   try {
     const body = await req.json()
-    const schema = getSchemaFromRequest(req)
+    const schema = await getSchemaFromRequest(req)
     const db = createSchemaClient(schema)
 
     // Singapore schema not accessible via PostgREST — use RPC
@@ -70,6 +71,6 @@ export async function POST(req: NextRequest)  {
     return NextResponse.json(data)
 
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 })
+    return errorResponse(err)
   }
 }

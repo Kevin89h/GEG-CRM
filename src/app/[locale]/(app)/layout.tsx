@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { getCompanySchema } from "@/lib/company"
+import { getAccess } from "@/lib/access"
 import Sidebar from "@/components/layout/Sidebar"
 import MobileHeader from "@/components/layout/MobileHeader"
 import ChatWidget from "@/components/chat/ChatWidget"
@@ -18,6 +19,9 @@ export default async function AppLayout({ children, params }: Props) {
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) redirect(`/${locale}/login`)
+
+  const access = await getAccess()
+  if (!access?.schemas.length) redirect(`/${locale}/aucune-societe`)
 
   const [{ data: profile }, currentSchema] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", user.id).single(),

@@ -5,7 +5,7 @@ import { createSchemaClient } from "@/lib/supabase/admin"
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const body = await req.json()
-  const schema = getSchemaFromRequest(req)
+  const schema = await getSchemaFromRequest(req)
   const db = createSchemaClient(schema)
 
   const ALLOWED_FIELDS = [
@@ -32,7 +32,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const schema = getSchemaFromRequest(_req)
+  const schema = await getSchemaFromRequest(_req)
   const db = createSchemaClient(schema)
 
   const { error } = await db.from("products").delete().eq("id", id)

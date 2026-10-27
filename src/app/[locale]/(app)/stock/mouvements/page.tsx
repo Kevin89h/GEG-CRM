@@ -1,11 +1,9 @@
-import { createCompanyClient } from "@/lib/company"
+import { createCompanyClient, getCompanySchema } from "@/lib/company"
 import { createClient as createAdminClient } from "@supabase/supabase-js"
-import { cookies } from "next/headers"
 import MouvementsClient from "./MouvementsClient"
 
 export default async function MouvementsPage() {
-  const cookieStore = await cookies()
-  const schema = cookieStore.get("geg_company")?.value ?? "geg_guinee"
+  const schema = await getCompanySchema()
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
   const adminRaw = serviceKey

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSchemaFromRequest } from "@/lib/company"
 import { createSchemaClient } from "@/lib/supabase/admin"
+import { errorResponse } from "@/lib/access"
 
 const ALLOWED_CURRENCIES = ["GNF", "USD", "EUR"]
 const normCur = (c: string) => ALLOWED_CURRENCIES.includes(c) ? c : "GNF"
@@ -9,7 +10,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   try {
     const { id: product_id } = await params
     const body = await req.json()
-    const db = createSchemaClient(getSchemaFromRequest(req))
+    const db = createSchemaClient(await getSchemaFromRequest(req))
 
     const rows = (body.packaging as Array<{
       unit_id: string; sell_price?: number | null; buy_price?: number | null
@@ -42,6 +43,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     return NextResponse.json(data ?? [])
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 })
+    return errorResponse(err)
   }
 }

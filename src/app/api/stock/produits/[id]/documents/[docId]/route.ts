@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { guard, requireSchemaAccess } from "@/lib/access"
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string; docId: string }> }) {
+  const denied = await guard(() => requireSchemaAccess("geg_guinee"))
+  if (denied) return denied
   const { docId } = await params
   const admin = createAdminClient()
   const db = admin.schema("geg_guinee")

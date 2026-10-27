@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from "next/server"
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const { supplier_invoice_id, action } = await req.json()
-  const db = createSchemaClient(getSchemaFromRequest(req))
+  const db = createSchemaClient(await getSchemaFromRequest(req))
 
   if (action === "unlink") {
     const { error } = await db.from("supplier_invoices")

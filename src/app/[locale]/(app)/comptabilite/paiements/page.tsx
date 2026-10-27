@@ -1,14 +1,11 @@
 import { createCompanyClient } from "@/lib/company"
 import { createClient as createAdminClient } from "@supabase/supabase-js"
-import { cookies } from "next/headers"
 import PaiementsClient from "./PaiementsClient"
 
 export default async function PaiementsPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params
-  const { db } = await createCompanyClient()
+  const { db, schema } = await createCompanyClient()
 
-  const cookieStore = await cookies()
-  const schema = cookieStore.get("geg_company")?.value ?? "geg_guinee"
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   const adminRaw = serviceKey
     ? createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceKey)

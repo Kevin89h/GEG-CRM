@@ -1,11 +1,11 @@
 import { createClient as createAdminClient } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase/server"
-import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
+import { getCompanySchema } from "@/lib/company"
+import { errorResponse } from "@/lib/access"
 
 async function getClients() {
-  const cookieStore = await cookies()
-  const schema = cookieStore.get("geg_company")?.value ?? "geg_guinee"
+  const schema = await getCompanySchema()
   const admin = createAdminClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -75,7 +75,7 @@ export async function GET(req: Request)  {
     return NextResponse.json({ error: "action invalide" }, { status: 400 })
 
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 })
+    return errorResponse(err)
   }
 }
 
@@ -138,6 +138,6 @@ export async function POST(req: Request)  {
     return NextResponse.json({ error: "action invalide" }, { status: 400 })
 
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 })
+    return errorResponse(err)
   }
 }

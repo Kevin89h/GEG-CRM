@@ -4,7 +4,7 @@ import { getSchemaFromRequest } from "@/lib/company"
 
 export async function GET(req: NextRequest) {
   try {
-    const db = createSchemaClient(getSchemaFromRequest(req))
+    const db = createSchemaClient(await getSchemaFromRequest(req))
     const { data, error } = await db
       .from("treasury_accounts")
       .select("id, name, institution, account_number, swift, iban, currency, type, is_active")
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
 
     if (!name) return NextResponse.json({ error: "Nom requis" }, { status: 400 })
 
-    const db = createSchemaClient(getSchemaFromRequest(req))
+    const db = createSchemaClient(await getSchemaFromRequest(req))
     const { data, error } = await db.from("treasury_accounts").insert([{
       name,
       type: type ?? "bank",

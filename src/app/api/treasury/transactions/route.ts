@@ -5,7 +5,7 @@ import { getSchemaFromRequest } from "@/lib/company"
 
 export async function GET(req: NextRequest) {
   try {
-    const db = createSchemaClient(getSchemaFromRequest(req))
+    const db = createSchemaClient(await getSchemaFromRequest(req))
     const { data, error } = await db
       .from("treasury_transactions")
       .select("id, account_id, type, amount, currency, description, reference, category, date")
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 })
 
-    const db = createSchemaClient(getSchemaFromRequest(req))
+    const db = createSchemaClient(await getSchemaFromRequest(req))
     const isTransfer = type === "transfer_out"
 
     const rows = [{

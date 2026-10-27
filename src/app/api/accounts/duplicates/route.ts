@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { guard, requireSchemaAccess } from "@/lib/access"
 
 export async function GET()  {
+  const denied = await guard(() => requireSchemaAccess("geg_guinee"))
+  if (denied) return denied
   try {
     const db = createAdminClient().schema("geg_guinee")
 

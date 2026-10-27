@@ -5,8 +5,17 @@ import { updateSession } from "@/lib/supabase/middleware"
 
 const intlMiddleware = createMiddleware(routing)
 
+// API routes called without a user session; each one checks its own secret
+const PUBLIC_API = ["/api/public/", "/api/cron/"]
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
+
+  if (pathname.startsWith("/api/")) {
+    if (PUBLIC_API.some(p => pathname.startsWith(p))) return NextResponse.next()
+    return await updateSession(request)
+  }
+
   // Redirect legacy /accounts routes to /comptes
   const accountsMatch = pathname.match(/^(\/[a-z]{2})(\/accounts)(\/.*)?$/)
   if (accountsMatch) {
@@ -23,5 +32,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next|_vercel|api|pdf|.*\\..*).*)"],
+  matcher: ["/((?!_next|_vercel|pdf|.*\\..*).*)"],
 }

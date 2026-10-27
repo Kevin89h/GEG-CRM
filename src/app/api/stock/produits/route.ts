@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSchemaFromRequest } from "@/lib/company"
 import { createSchemaClient } from "@/lib/supabase/admin"
+import { errorResponse } from "@/lib/access"
 
 export async function POST(req: NextRequest)  {
   try {
     const body = await req.json()
-    const schema = getSchemaFromRequest(req)
+    const schema = await getSchemaFromRequest(req)
     const db = createSchemaClient(schema)
 
     const ALLOWED_CURRENCIES = ["GNF", "USD", "EUR"]
@@ -52,6 +53,6 @@ export async function POST(req: NextRequest)  {
     return NextResponse.json(data)
 
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 })
+    return errorResponse(err)
   }
 }

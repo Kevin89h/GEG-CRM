@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server"
+import { guard, requireUser } from "@/lib/access"
 
 export async function GET(req: Request)  {
+  const denied = await guard(requireUser)
+  if (denied) return denied
   try {
     const { searchParams } = new URL(req.url)
     const carrier = searchParams.get("carrier") ?? ""

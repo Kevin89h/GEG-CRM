@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server"
 
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get("q") ?? ""
-  const db = createSchemaClient(getSchemaFromRequest(req))
+  const db = createSchemaClient(await getSchemaFromRequest(req))
 
   let query = db.from("supplier_invoices")
     .select("id, number, supplier_name, total_ttc, currency, status, invoice_date")

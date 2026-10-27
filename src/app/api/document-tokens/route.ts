@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { guard, requireSchemaAccess } from "@/lib/access"
 
 export async function POST(req: NextRequest)  {
+  // Shared PDF links (/pdf/[token]) only render GEG Guinée documents
+  const denied = await guard(() => requireSchemaAccess("geg_guinee"))
+  if (denied) return denied
   try {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()

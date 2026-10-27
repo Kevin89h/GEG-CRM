@@ -6,7 +6,7 @@ import { sendLeadNotification } from "@/lib/notify"
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
-  const schema = getSchemaFromRequest(req)
+  const schema = await getSchemaFromRequest(req)
   const db = createSchemaClient(schema)
 
   // Singapore schema not accessible via PostgREST — use RPC

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createCompanyClient } from "@/lib/company"
+import { errorResponse } from "@/lib/access"
 
 interface AdjustmentItem {
   product_id: string
@@ -42,6 +43,6 @@ export async function POST(req: NextRequest)  {
     return NextResponse.json({ ok: true, count: adjustments.length })
 
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 })
+    return errorResponse(err)
   }
 }

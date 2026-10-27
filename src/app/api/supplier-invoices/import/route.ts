@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createCompanyClient } from "@/lib/company"
+import { errorResponse } from "@/lib/access"
 
 // POST: import supplier invoices from CSV
 // Expected CSV columns: supplier_name, currency, invoice_date, due_date, reference, total_ht, tax_amount, total_ttc
@@ -45,6 +46,6 @@ export async function POST(req: NextRequest)  {
     return NextResponse.json({ imported: data?.length ?? 0, invoices: data })
 
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 })
+    return errorResponse(err)
   }
 }
