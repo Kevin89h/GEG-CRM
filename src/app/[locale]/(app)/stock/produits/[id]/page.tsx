@@ -1,12 +1,12 @@
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
-import { requireSchemaAccess } from "@/lib/access"
+import { requireSchemaPage } from "@/lib/access"
 import { notFound } from "next/navigation"
 import ProductDetailClient from "./ProductDetailClient"
 
 export default async function ProductDetailPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params
-  await requireSchemaAccess("geg_guinee")
+  await requireSchemaPage("geg_guinee")
   const db = createAdminClient().schema("geg_guinee")
   const supabase = await createClient()
 

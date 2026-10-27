@@ -1,9 +1,9 @@
 import { createAdminClient } from "@/lib/supabase/admin"
-import { requireSchemaAccess } from "@/lib/access"
+import { requireSchemaPage } from "@/lib/access"
 import ProduitsClient from "./ProduitsClient"
 
 export default async function ProduitsPage() {
-  await requireSchemaAccess("geg_guinee")
+  await requireSchemaPage("geg_guinee")
   const supabase = createAdminClient().schema("geg_guinee")
 
   const [{ data: products }, { data: categories }, { data: units }] = await Promise.all([

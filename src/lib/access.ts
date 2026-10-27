@@ -1,4 +1,5 @@
 import { cache } from "react"
+import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 
@@ -56,6 +57,12 @@ export async function requireSchemaAccess(schema: string): Promise<Access> {
   const access = await requireUser()
   if (!access.schemas.includes(schema)) throw new AccessError(403, "Accès refusé à cette société")
   return access
+}
+
+/** For pages: shows "not found" instead of an error page when the user can't access the company. */
+export async function requireSchemaPage(schema: string): Promise<void> {
+  const access = await getAccess()
+  if (!access?.schemas.includes(schema)) notFound()
 }
 
 /**
