@@ -375,6 +375,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
           discount: l.discount,
           product_id: (l as unknown as { product_id?: string }).product_id ?? null,
           tva_exempt: l.tva_exempt ?? false,
+          unit_id: (l as unknown as { unit_id?: string }).unit_id ?? null,
         })),
         user_id: user.id,
       }),

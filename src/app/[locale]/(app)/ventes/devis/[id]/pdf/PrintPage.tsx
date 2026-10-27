@@ -24,6 +24,7 @@ interface Line {
   discount: number
   tva_rate?: number
   image_url?: string | null
+  unit_label?: string | null
   product: { name: string; reference: string | null } | null
 }
 
@@ -71,6 +72,7 @@ interface Props {
   salespersonName: string | null
   deliveryAddress?: string | null
   paymentTerms?: string | null
+  termsConditions?: Record<string, string> | null
   lines: Line[]
   locale: string
   docType: "devis" | "bon-livraison"
@@ -78,9 +80,18 @@ interface Props {
   bankAccounts?: BankAccount[]
 }
 
+const DEFAULT_TC = {
+  prices: "USD",
+  payment_terms: "100% before delivery",
+  validity: "7 days",
+  lead_time: "5–7 days",
+  delivery_location: "To be discussed",
+}
+
 export default function PrintPage({
   id, number, status, currency, createdAt, validUntil, notes,
   accountName, accountCountry, accountNif, salespersonName, deliveryAddress, paymentTerms,
+  termsConditions,
   lines, locale, docType, docSettings, bankAccounts = [],
 }: Props) {
   const [showImages, setShowImages] = useState(true)
@@ -213,6 +224,15 @@ export default function PrintPage({
         .cond-item { font-size: 10px; color: #555; line-height: 1.7; margin-bottom: 4px; }
         .cond-label { font-weight: 700; color: #333; }
 
+        /* T&C */
+        .tc-section { margin: 18px 24px 0; }
+        .tc-header { background: #4a6580; padding: 7px 14px; text-align: center; }
+        .tc-header-text { color: white; font-size: 10px; font-weight: 700; text-decoration: underline; letter-spacing: 1px; }
+        .tc-body { border: 1px solid #d0d0d0; border-top: none; padding: 10px 14px; display: flex; flex-wrap: wrap; gap: 4px 24px; }
+        .tc-item { font-size: 9.5px; color: #444; line-height: 1.7; width: calc(50% - 12px); }
+        .tc-bullet { color: #4a6580; font-weight: 700; margin-right: 4px; }
+        .tc-label { font-weight: 700; color: #222; }
+
         /* FOOTER */
         .footer-bar { background: ${color}; padding: 11px 24px; display: flex; justify-content: center; align-items: center; gap: 0; flex-wrap: wrap; }
         .footer-item { display: flex; align-items: center; gap: 5px; color: rgba(255,255,255,.9); font-size: 9.5px; padding: 0 14px; }
@@ -299,11 +319,12 @@ export default function PrintPage({
                   <table className="products-table">
                     <thead>
                       <tr>
-                        <th style={{ width: "44%" }}>Description</th>
-                        <th className="th-r" style={{ width: "12%" }}>Qté</th>
-                        <th className="th-r" style={{ width: "20%" }}>Prix unitaire</th>
-                        {tvaRate > 0 && <th className="th-r" style={{ width: "10%" }}>TVA</th>}
-                        <th className="th-r" style={{ width: tvaRate > 0 ? "14%" : "24%" }}>Montant</th>
+                        <th style={{ width: "40%" }}>Description</th>
+                        <th className="th-r" style={{ width: "13%" }}>Unité</th>
+                        <th className="th-r" style={{ width: "10%" }}>Qté</th>
+                        <th className="th-r" style={{ width: "18%" }}>Prix unitaire</th>
+                        {tvaRate > 0 && <th className="th-r" style={{ width: "8%" }}>TVA</th>}
+                        <th className="th-r" style={{ width: tvaRate > 0 ? "11%" : "19%" }}>Montant</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -323,7 +344,8 @@ export default function PrintPage({
                                 </div>
                               </div>
                             </td>
-                            <td className="td-r">{fmt(l.quantity, 2)} U</td>
+                            <td className="td-r" style={{ fontSize: "9.5px", color: "#555" }}>{l.unit_label ?? "—"}</td>
+                            <td className="td-r">{fmt(l.quantity, 2)}</td>
                             <td className="td-r">{fmtAmt(l.unit_price, currency)} {cur}</td>
                             {tvaRate > 0 && <td className="td-r" style={{ fontSize: "9px", color: "#999" }}>{lineTva > 0 ? `${lineTva}%` : "—"}</td>}
                             <td className="td-r" style={{ fontWeight: 700 }}>{fmtAmt(sub, currency)} {cur}</td>
@@ -421,6 +443,33 @@ export default function PrintPage({
                   </div>
                 )}
               </div>
+
+              {docType !== "bon-livraison" && (() => {
+                const tc = termsConditions ?? DEFAULT_TC
+                const rows = [
+                  { label: "Prices", value: tc.prices },
+                  { label: "Payment Terms", value: tc.payment_terms },
+                  { label: "Quotation Validity", value: tc.validity },
+                  { label: "Delivery Lead Time", value: tc.lead_time },
+                  { label: "Delivery Location", value: tc.delivery_location },
+                ].filter(r => r.value)
+                if (!rows.length) return null
+                return (
+                  <div className="tc-section">
+                    <div className="tc-header">
+                      <span className="tc-header-text">TERMS &amp; CONDITIONS</span>
+                    </div>
+                    <div className="tc-body">
+                      {rows.map(r => (
+                        <div key={r.label} className="tc-item">
+                          <span className="tc-bullet">•</span>
+                          <span className="tc-label">{r.label}:</span> {r.value}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
 
               <div className="footer-bar">
                 {phone && <div className="footer-item"><span>📞</span><strong>{phone}</strong></div>}

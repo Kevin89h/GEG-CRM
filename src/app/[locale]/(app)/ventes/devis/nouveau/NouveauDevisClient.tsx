@@ -238,6 +238,10 @@ export default function NouveauDevisClient({
   const [saving, setSaving] = useState(false)
   const [error,  setError]  = useState<string | null>(null)
 
+  const DEFAULT_TC = { prices: "USD", payment_terms: "100% before delivery", validity: "7 days", lead_time: "5–7 days", delivery_location: "To be discussed" }
+  const [tc, setTc] = useState(DEFAULT_TC)
+  const setTcField = (key: keyof typeof DEFAULT_TC, val: string) => setTc(prev => ({ ...prev, [key]: val }))
+
   const today = new Date().toISOString().split("T")[0]
   const [form, setForm] = useState({
     account_id: "", contact_id: "", salesperson_id: "",
@@ -424,6 +428,7 @@ export default function NouveauDevisClient({
           project_code: form.project_code || null,
           commission_client: form.commission_client ? parseFloat(form.commission_client) : null,
           conditions_generales: form.conditions_generales || null,
+          terms_conditions: tc,
         },
         lines: lines.map((l, i) => ({
           product_id: l.product_id || null,
@@ -433,6 +438,7 @@ export default function NouveauDevisClient({
           discount: parseFloat(l.discount) || 0,
           position: i,
           tva_exempt: l.tva_exempt,
+          unit_id: l.unit_id || null,
         })),
         user_id: user.id,
       }),
@@ -808,6 +814,28 @@ export default function NouveauDevisClient({
                     placeholder="Ex: Livraison sous 30 jours, franco de port…"
                     className="w-full text-sm text-gray-600 outline-none bg-transparent border border-gray-100 rounded-lg resize-none p-2 focus:border-gray-300 placeholder-gray-300"
                   />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">Terms &amp; Conditions (PDF)</label>
+                  <div className="border border-gray-100 rounded-lg overflow-hidden">
+                    {([
+                      { key: "prices" as const, label: "Prices" },
+                      { key: "payment_terms" as const, label: "Payment Terms" },
+                      { key: "validity" as const, label: "Quotation Validity" },
+                      { key: "lead_time" as const, label: "Delivery Lead Time" },
+                      { key: "delivery_location" as const, label: "Delivery Location" },
+                    ]).map(({ key, label }, i) => (
+                      <div key={key} className={`flex items-center gap-2 px-3 py-1.5 ${i > 0 ? "border-t border-gray-50" : ""}`}>
+                        <span className="text-xs font-semibold text-gray-500 w-36 shrink-0">{label}</span>
+                        <input
+                          type="text"
+                          value={tc[key]}
+                          onChange={e => setTcField(key, e.target.value)}
+                          className="flex-1 text-xs text-gray-600 bg-transparent outline-none py-0.5 border-b border-transparent focus:border-gray-300"
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Notes internes</label>

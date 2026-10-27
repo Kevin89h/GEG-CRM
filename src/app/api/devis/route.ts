@@ -10,6 +10,7 @@ interface DevisLine {
   discount: number
   position: number
   tva_exempt: boolean
+  unit_id?: string | null
 }
 
 export async function POST(req: NextRequest)  {
