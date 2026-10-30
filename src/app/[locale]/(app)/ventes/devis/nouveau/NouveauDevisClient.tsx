@@ -401,7 +401,7 @@ export default function NouveauDevisClient({
     if (!form.account_id) { setError(t("veuillezselectionnerclient")); return }
     const productLines = lines.filter(l => l.kind === "product")
     if (productLines.length === 0) { setError(t("ajoutezAuMoinsUnProduit")); return }
-    if (productLines.some(l => !l.description.trim())) { setError(t("chaqueLineProduitDescription")); return }
+    if (productLines.some(l => !l.description.trim() && !l.product_id)) { setError(t("chaqueLineProduitDescription")); return }
 
     setSaving(true); setError(null)
     const { supabase } = getCompanyClientBrowser()
@@ -432,7 +432,7 @@ export default function NouveauDevisClient({
         },
         lines: lines.map((l, i) => ({
           product_id: l.product_id || null,
-          description: l.description,
+          description: l.description.trim() || (l.product_id ? (products.find(p => p.id === l.product_id)?.name ?? "") : ""),
           quantity: parseFloat(l.quantity) || 1,
           unit_price: parseFloat(l.unit_price) || 0,
           discount: parseFloat(l.discount) || 0,
