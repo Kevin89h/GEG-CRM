@@ -24,9 +24,9 @@ export async function POST(req: NextRequest)  {
 
     const { db, schema } = await createCompanyClient()
 
-    const now = new Date()
-    const year = now.getFullYear()
-    const month = String(now.getMonth() + 1).padStart(2, "0")
+    const issueDate = invoiceData.issue_date ? new Date(invoiceData.issue_date as string) : new Date()
+    const year = issueDate.getFullYear()
+    const month = String(issueDate.getMonth() + 1).padStart(2, "0")
     const { count } = await db.from("invoices").select("*", { count: "exact", head: true })
     const seq = String((count ?? 0) + 1).padStart(4, "0")
     const number = `FAC-${year}-${month}-${seq}`
