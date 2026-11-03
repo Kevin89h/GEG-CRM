@@ -12,6 +12,7 @@ import { formatDate, formatNumber } from "@/lib/utils"
 import DocumentLayout from "@/components/print/DocumentLayout"
 import ActivityLog from "@/components/ActivityLog"
 import ShareButton from "@/components/ShareButton"
+import { PROJECT_OPTIONS } from "@/lib/projects"
 
 interface Line {
   id: string
@@ -82,6 +83,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
     valid_until: order.valid_until ?? "",
     client_order_ref: order.client_order_ref ?? "",
     currency: order.currency ?? "GNF",
+    project_code: order.project_code ?? "",
   })
   const [notes, setNotes] = useState(order.notes ?? "")
   const [notesSaving, setNotesSaving] = useState(false)
@@ -656,7 +658,20 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                 <p className="text-sm text-gray-900 font-medium">{orderFields.currency}</p>
               )}
             </div>
-            {order.project_code && <Field label="Projet" value={order.project_code} />}
+            {/* The project only classifies the quote for reporting: editable at any status */}
+            <div>
+              <p className="text-xs text-gray-400 mb-0.5">Projet</p>
+              <select
+                className="text-sm text-gray-900 bg-transparent border-b border-gray-200 hover:border-gray-400 focus:border-blue-500 focus:outline-none py-0.5 w-full"
+                value={orderFields.project_code}
+                onChange={e => updateOrderField("project_code", e.target.value)}
+              >
+                <option value="">—</option>
+                {PROJECT_OPTIONS.map(p => (
+                  <option key={p.value} value={p.value}>{p.label}</option>
+                ))}
+              </select>
+            </div>
             {order.commission_client != null && <Field label="Commission client" value={`${order.commission_client}%`} />}
           </div>
         </div>

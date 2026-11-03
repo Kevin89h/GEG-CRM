@@ -7,6 +7,7 @@ import Link from "next/link"
 import { useTranslations } from "next-intl"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { formatNumber } from "@/lib/utils"
+import { PROJECT_OPTIONS } from "@/lib/projects"
 
 /* --- Types ----------------------------------------------- */
 interface Account  { id: string; name: string; salesperson_id: string | null; cgv_text?: string | null }
@@ -626,10 +627,9 @@ export default function NouveauDevisClient({
                   className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px]"
                 >
                   <option value="">—</option>
-                  <option value="GEG-GUI">GEG-Guinée</option>
-                  <option value="GEG-SING">GEG-Singapour</option>
-                  <option value="VALOIL">ValOil</option>
-                  <option value="AUTRE">Autre</option>
+                  {PROJECT_OPTIONS.map(p => (
+                    <option key={p.value} value={p.value}>{p.label}</option>
+                  ))}
                 </select>
               </div>
 
