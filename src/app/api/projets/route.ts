@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { createCompanyClient } from "@/lib/company"
-import { errorResponse, getAccess, hasCapability } from "@/lib/access"
+import { errorResponse } from "@/lib/access"
 
 export async function GET() {
   try {
@@ -148,17 +148,7 @@ export async function GET() {
       .filter(p => (p.devis?.length ?? 0) > 0 || (p.achats?.length ?? 0) > 0)
       .sort((a, b) => b.ca_ht - a.ca_ht)
 
-    // Commercials see sales and purchases, never the purchase costs nor the margins (decision of 04/11/2026)
-    const showMargins = hasCapability(await getAccess(), "purchases.write")
-    if (!showMargins) {
-      for (const p of projects) {
-        p.cout_achat = 0
-        p.marge = 0
-        p.achats = (p.achats ?? []).map(po => ({ ...po, freight_cost: null, insurance_cost: null }))
-      }
-    }
-
-    return NextResponse.json({ projects, showMargins })
+    return NextResponse.json({ projects })
   } catch (err) {
     return errorResponse(err)
   }

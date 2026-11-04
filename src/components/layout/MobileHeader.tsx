@@ -109,7 +109,7 @@ export default function MobileHeader({ locale, profile, companies, currentSchema
         <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
           <NavLinks
             locale={locale}
-            access={{ role: profile?.role, schemas: companies.map(c => c.schema_name) }}
+            access={{ role: profile?.role, permissions: profile?.permissions, schemas: companies.map(c => c.schema_name) }}
             large
             onNavigate={() => setOpen(false)}
           />

@@ -1,6 +1,5 @@
 "use client"
 
-import { can } from "@/lib/permissions"
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Plus, Send, Printer, CheckCircle, ArrowLeft, Truck, RotateCcw, X, TrendingDown } from "lucide-react"
@@ -62,7 +61,7 @@ interface Invoice {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-interface Props { invoice: Invoice; locale: string; treasuryAccounts: TreasuryAccount[]; warehouses: Warehouse[]; deliveryNotes: DeliveryNote[]; docSettings?: Record<string, any>; role: string }
+interface Props { invoice: Invoice; locale: string; treasuryAccounts: TreasuryAccount[]; warehouses: Warehouse[]; deliveryNotes: DeliveryNote[]; docSettings?: Record<string, any> }
 
 const statusColor: Record<string, string> = {
   draft: "bg-gray-100 text-gray-600",
@@ -72,7 +71,7 @@ const statusColor: Record<string, string> = {
   cancelled: "bg-red-100 text-red-600",
 }
 
-export default function FactureDetailClient({ invoice: initial, locale, treasuryAccounts, warehouses, deliveryNotes: initialDNs, docSettings = {}, role }: Props) {
+export default function FactureDetailClient({ invoice: initial, locale, treasuryAccounts, warehouses, deliveryNotes: initialDNs, docSettings = {} }: Props) {
   const router = useRouter()
   const t = useTranslations("factures")
   const [invoice, setInvoice] = useState(initial)
@@ -141,11 +140,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
   const isCancelled = invoice.status === "cancelled"
   const isDraft = invoice.status === "draft"
   const hasDeliveredBL = deliveryNotes.some(dn => dn.status === "delivered")
-  // Emitted invoices are locked (D1): only drafts can be edited; corrections go through a credit note
-  const canEdit = isDraft && !hasDeliveredBL
-  const canPay = can(role, "payments.write")
-  const canCorrect = can(role, "sales.correct")
-  const canCancel = isDraft ? can(role, "sales.write") : canCorrect
+  const canEdit = !isCancelled && !hasDeliveredBL
   const [duplicating, setDuplicating] = useState(false)
 
   async function duplicateInvoice() {
@@ -541,7 +536,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3 mb-4 flex flex-wrap items-center justify-between gap-3">
         {/* Boutons gauche */}
         <div className="flex flex-wrap items-center gap-2">
-          {false && (
+          {["sent", "partial", "paid", "cancelled"].includes(invoice.status) && (
             <Button variant="secondary" onClick={() => setResetToDraftModalOpen(true)} disabled={saving}>
               <RotateCcw className="w-4 h-4" /> {t("resetToDraft")}
             </Button>
@@ -549,7 +544,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
           <Button variant="secondary" onClick={duplicateInvoice} disabled={duplicating}>
             <Plus className="w-4 h-4" /> {duplicating ? "Duplication..." : "Dupliquer"}
           </Button>
-          {["draft", "sent", "partial"].includes(invoice.status) && canCancel && (
+          {["draft", "sent", "partial"].includes(invoice.status) && (
             <Button variant="danger" onClick={() => setCancelModalOpen(true)} disabled={saving}>
               <X className="w-4 h-4" /> {t("cancel")}
             </Button>
@@ -559,12 +554,12 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
               <Send className="w-4 h-4" /> {t("confirmAndSend")}
             </Button>
           )}
-          {!isPaid && !isCancelled && invoice.status !== "draft" && canPay && (
+          {!isPaid && !isCancelled && invoice.status !== "draft" && (
             <Button onClick={() => setModalOpen(true)}>
               <Plus className="w-4 h-4" /> {t("registerPayment")}
             </Button>
           )}
-          {canRecordFxLoss && canPay && (
+          {canRecordFxLoss && (
             <button
               onClick={saveFxLoss}
               disabled={saving}
@@ -573,7 +568,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
               <TrendingDown className="w-4 h-4" /> Perte sur change
             </button>
           )}
-          {["sent", "partial", "paid"].includes(invoice.status) && canCorrect && (
+          {["sent", "partial", "paid"].includes(invoice.status) && (
             <Button variant="secondary" onClick={() => setCreditNoteModalOpen(true)}>
               Créer un avoir
             </Button>
@@ -672,7 +667,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
           ) : (
             <button
               disabled={isCancelled}
-              onClick={() => { if (isDraft) { setEditingAccount(true); searchAccounts("") } }}
+              onClick={() => { if (!isCancelled) { setEditingAccount(true); searchAccounts("") } }}
               className={`text-sm text-left ${isCancelled ? "text-gray-400 cursor-default" : "text-gray-500 hover:text-blue-600 hover:underline cursor-pointer"} group`}
             >
               {invoice.account?.name ?? "—"}
@@ -784,7 +779,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
             <>
               <div
                 className={`group ${!isCancelled ? "cursor-pointer" : ""}`}
-                onClick={() => { if (isDraft) { setDateForm({ issue_date: invoice.issue_date?.split("T")[0] ?? "", due_date: invoice.due_date?.split("T")[0] ?? "" }); setEditingDates(true) } }}
+                onClick={() => { if (!isCancelled) { setDateForm({ issue_date: invoice.issue_date?.split("T")[0] ?? "", due_date: invoice.due_date?.split("T")[0] ?? "" }); setEditingDates(true) } }}
               >
                 <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">{t("issueDate")}</p>
                 <p className={`font-semibold text-gray-900 ${!isCancelled ? "group-hover:text-blue-600 transition" : ""}`}>
@@ -794,7 +789,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
               </div>
               <div
                 className={`group ${!isCancelled ? "cursor-pointer" : ""}`}
-                onClick={() => { if (isDraft) { setDateForm({ issue_date: invoice.issue_date?.split("T")[0] ?? "", due_date: invoice.due_date?.split("T")[0] ?? "" }); setEditingDates(true) } }}
+                onClick={() => { if (!isCancelled) { setDateForm({ issue_date: invoice.issue_date?.split("T")[0] ?? "", due_date: invoice.due_date?.split("T")[0] ?? "" }); setEditingDates(true) } }}
               >
                 <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">{t("dueDate")}</p>
                 <p className={`font-semibold ${invoice.due_date && new Date(invoice.due_date) < new Date() && !isPaid ? "text-red-600" : "text-gray-900"} ${!isCancelled ? "group-hover:text-blue-600 transition" : ""}`}>
@@ -983,13 +978,13 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      {can(role, "delete") && <button
+                      <button
                         onClick={() => deletePayment(p.id, p.amount, p.amount_in_invoice_currency)}
                         className="text-red-400 hover:text-red-600 transition-colors p-1 rounded hover:bg-red-50"
                         title="Annuler ce paiement"
                       >
                         <X className="w-4 h-4" />
-                      </button>}
+                      </button>
                     </td>
                   </tr>
                 )

@@ -1,6 +1,5 @@
 import { createCompanyClient } from "@/lib/company"
 import { NextResponse } from "next/server"
-import { lockedInvoiceResponse } from "@/lib/invoice-lock"
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -9,8 +8,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const { description, quantity, unit_price, discount, tva_rate, position } = body
 
     const { db } = await createCompanyClient()
-    const locked = await lockedInvoiceResponse(db, id)
-    if (locked) return locked
     const { data, error } = await db.from("invoice_lines").insert([{
       invoice_id: id,
       description: description ?? "",

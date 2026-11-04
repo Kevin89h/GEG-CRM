@@ -96,12 +96,11 @@ export default function ProjetsClient() {
   const [loading, setLoading]   = useState(true)
   const [selected, setSelected] = useState<string | null>(null)
   const [tab, setTab] = useState<"devis" | "achats">("devis")
-  const [showMargins, setShowMargins] = useState(false)
 
   useEffect(() => {
     fetch("/api/projets")
       .then(r => r.json())
-      .then(d => { setProjects(d.projects ?? []); setShowMargins(!!d.showMargins); setLoading(false) })
+      .then(d => { setProjects(d.projects ?? []); setLoading(false) })
       .catch(() => setLoading(false))
   }, [])
 
@@ -130,12 +129,12 @@ export default function ProjetsClient() {
       </div>
 
       {/* KPIs globaux */}
-      <div className={`grid ${showMargins ? "grid-cols-3" : "grid-cols-1 max-w-xs"} gap-4 mb-8`}>
+      <div className="grid grid-cols-3 gap-4 mb-8">
         {[
           { label: "CA HT cumulé",    value: fmt(totalCA),    color: "text-blue-700",    bg: "bg-blue-50",    icon: TrendingUp },
           { label: "Coût achats",     value: fmt(totalCout),  color: "text-orange-700",  bg: "bg-orange-50",  icon: ShoppingBag },
           { label: "Marge brute",     value: fmt(totalMarge), color: totalMarge >= 0 ? "text-emerald-700" : "text-red-600", bg: totalMarge >= 0 ? "bg-emerald-50" : "bg-red-50", icon: BarChart3 },
-        ].slice(0, showMargins ? 3 : 1).map(({ label, value, color, bg, icon: Icon }) => (
+        ].map(({ label, value, color, bg, icon: Icon }) => (
           <div key={label} className={`${bg} rounded-xl p-4 border border-white`}>
             <div className="flex items-center gap-2 mb-1">
               <Icon className={`w-4 h-4 ${color}`} />
@@ -182,11 +181,11 @@ export default function ProjetsClient() {
                 </div>
                 <div className="bg-white rounded-lg px-2 py-1.5 border border-gray-100">
                   <p className="text-gray-400">Achats</p>
-                  <p className="font-semibold text-gray-800">{p.achats.length}{showMargins && <> · {fmt(p.cout_achat)}</>}</p>
+                  <p className="font-semibold text-gray-800">{p.achats.length} · {fmt(p.cout_achat)}</p>
                 </div>
               </div>
 
-              {showMargins && <MargeBar ca={p.ca_ht} cout={p.cout_achat} />}
+              <MargeBar ca={p.ca_ht} cout={p.cout_achat} />
             </button>
           ))}
         </div>
@@ -207,7 +206,7 @@ export default function ProjetsClient() {
                     <span className="text-xs font-bold text-blue-500 uppercase tracking-widest">{activeProject.code}</span>
                     <h2 className="text-xl font-bold text-gray-900">{activeProject.label}</h2>
                   </div>
-                  {showMargins && <div className="text-right">
+                  <div className="text-right">
                     <p className="text-xs text-gray-400">Marge brute estimée</p>
                     <p className={`text-2xl font-black ${activeProject.marge >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                       {activeProject.marge >= 0 ? "+" : ""}{fmt(activeProject.marge)}
@@ -217,13 +216,13 @@ export default function ProjetsClient() {
                         sur {fmt(activeProject.ca_ht)} CA HT
                       </p>
                     )}
-                  </div>}
+                  </div>
                 </div>
 
                 {/* Barre marge détaillée */}
-                {showMargins && <div className="mt-4">
+                <div className="mt-4">
                   <MargeBar ca={activeProject.ca_ht} cout={activeProject.cout_achat} />
-                </div>}
+                </div>
 
                 {/* KPIs projet */}
                 <div className="grid grid-cols-3 gap-3 mt-4">
@@ -231,7 +230,7 @@ export default function ProjetsClient() {
                     { label: "CA HT",      value: fmt(activeProject.ca_ht),    color: "text-blue-700" },
                     { label: "Encaissé",   value: fmt(activeProject.encaisse), color: "text-purple-700" },
                     { label: "Coût achat", value: fmt(activeProject.cout_achat), color: "text-orange-600" },
-                  ].slice(0, showMargins ? 3 : 2).map(({ label, value, color }) => (
+                  ].map(({ label, value, color }) => (
                     <div key={label} className="bg-white rounded-lg px-3 py-2 border border-gray-100 text-center">
                       <p className="text-xs text-gray-400">{label}</p>
                       <p className={`font-bold ${color}`}>{value}</p>

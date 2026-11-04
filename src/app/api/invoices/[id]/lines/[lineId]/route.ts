@@ -1,10 +1,9 @@
 import { createCompanyClient } from "@/lib/company"
 import { NextResponse } from "next/server"
-import { lockedInvoiceResponse } from "@/lib/invoice-lock"
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string; lineId: string }> }) {
   try {
-    const { id, lineId } = await params
+    const { lineId } = await params
     const body = await req.json()
 
     const allowed = ["description", "quantity", "unit_price", "discount", "tva_rate"]
@@ -18,9 +17,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
 
     const { db } = await createCompanyClient()
-    const locked = await lockedInvoiceResponse(db, id)
-    if (locked) return locked
-    const { error } = await db.from("invoice_lines").update(updates).eq("id", lineId).eq("invoice_id", id)
+    const { error } = await db.from("invoice_lines").update(updates).eq("id", lineId)
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ success: true })
@@ -32,11 +29,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string; lineId: string }> }) {
   try {
-    const { id, lineId } = await params
+    const { lineId } = await params
     const { db } = await createCompanyClient()
-    const locked = await lockedInvoiceResponse(db, id)
-    if (locked) return locked
-    const { error } = await db.from("invoice_lines").delete().eq("id", lineId).eq("invoice_id", id)
+    const { error } = await db.from("invoice_lines").delete().eq("id", lineId)
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ success: true })

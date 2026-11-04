@@ -1,17 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import Anthropic from "@anthropic-ai/sdk"
 import { createCompanyClient } from "@/lib/company"
-import { requireUser } from "@/lib/access"
-import { can, type Capability } from "@/lib/permissions"
-
-// The assistant acts with the rights of the person using it: each tool needs the same right as the screen
-const TOOL_RIGHTS: Record<string, Capability | null> = {
-  search_accounts: null,
-  search_products: null,
-  create_draft_devis: "sales.write",
-  get_stats: null,
-  list_pending_orders: null,
-}
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -100,11 +89,7 @@ const TOOLS: Anthropic.Tool[] = [
   },
 ]
 
-async function executeTool(name: string, input: Record<string, unknown>, role: string) {
-  const right = TOOL_RIGHTS[name]
-  if (right === undefined) return { error: "Outil inconnu" }
-  if (right && !can(role, right)) return { error: "Le rôle de l'utilisateur ne permet pas cette action" }
-  if ((input.type === "achats") && !can(role, "purchases.view")) return { error: "Le rôle de l'utilisateur ne permet pas de consulter les achats" }
+async function executeTool(name: string, input: Record<string, unknown>) {
   const { db } = await createCompanyClient()
 
   if (name === "search_accounts") {
@@ -272,7 +257,6 @@ async function executeTool(name: string, input: Record<string, unknown>, role: s
 export async function POST(req: NextRequest) {
   try {
     const { messages } = await req.json()
-    const access = await requireUser()
 
     const systemPrompt = `Tu es l'assistant IA du CRM GEG Guinée. Tu aides l'équipe commerciale et logistique de Global Energy Group en Guinée.
 
@@ -315,7 +299,7 @@ Pour créer un devis :
 
       const toolResults: Anthropic.ToolResultBlockParam[] = []
       for (const toolUse of toolUseBlocks) {
-        const result = await executeTool(toolUse.name, toolUse.input as Record<string, unknown>, access.role)
+        const result = await executeTool(toolUse.name, toolUse.input as Record<string, unknown>)
         toolResults.push({
           type: "tool_result",
           tool_use_id: toolUse.id,

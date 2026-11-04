@@ -3,7 +3,6 @@ import { createClient } from "@/lib/supabase/server"
 import { getCompanySchema } from "@/lib/company"
 import { notFound } from "next/navigation"
 import FactureDetailClient from "./FactureDetailClient"
-import { getAccess } from "@/lib/access"
 
 export default async function FactureDetailPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params
@@ -112,7 +111,6 @@ export default async function FactureDetailPage({ params }: { params: Promise<{ 
       warehouses={warehouses}
       deliveryNotes={deliveryNotes}
       docSettings={docSettings ?? {}}
-      role={(await getAccess())?.role ?? ""}
     />
   )
 }

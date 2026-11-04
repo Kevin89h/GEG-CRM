@@ -3,7 +3,6 @@ import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { isAdminRole, isSuperAdmin } from "@/lib/roles"
-import { can, type Capability } from "@/lib/permissions"
 
 export const COMPANY_SCHEMAS = ["geg_guinee", "geg_singapore"]
 
@@ -20,8 +19,6 @@ export interface Access {
   schemas: string[]
   /** Ids of those same companies (public.companies.id) */
   companyIds: string[]
-  /** Blocked account (profiles.is_blocked): no right at all, refused everywhere */
-  blocked: boolean
 }
 
 /**
@@ -35,18 +32,16 @@ export const getAccess = cache(async (): Promise<Access | null> => {
 
   const admin = createAdminClient()
   const [{ data: profile }, { data: companies }] = await Promise.all([
-    admin.from("profiles").select("role, company_access, is_blocked").eq("id", user.id).single(),
+    admin.from("profiles").select("role, company_access").eq("id", user.id).single(),
     admin.from("companies").select("id, schema_name").eq("is_active", true),
   ])
 
-  const blocked = !!profile?.is_blocked
-  const allowedIds = new Set<string>(blocked ? [] : profile?.company_access ?? [])
+  const allowedIds = new Set<string>(profile?.company_access ?? [])
   const allowed = (companies ?? []).filter(c => allowedIds.has(c.id) && COMPANY_SCHEMAS.includes(c.schema_name))
 
   return {
     userId: user.id,
-    role: blocked ? "" : profile?.role ?? "",
-    blocked,
+    role: profile?.role ?? "",
     schemas: allowed.map(c => c.schema_name),
     companyIds: allowed.map(c => c.id),
   }
@@ -55,19 +50,7 @@ export const getAccess = cache(async (): Promise<Access | null> => {
 export async function requireUser(): Promise<Access> {
   const access = await getAccess()
   if (!access) throw new AccessError(401, "Non authentifié")
-  if (access.blocked) throw new AccessError(403, "Compte bloqué")
   return access
-}
-
-/** The role of the current user must give this right (see src/lib/permissions.ts). */
-export async function requireCapability(capability: Capability): Promise<Access> {
-  const access = await requireUser()
-  if (!can(access.role, capability)) throw new AccessError(403, "Votre rôle ne permet pas cette action")
-  return access
-}
-
-export function hasCapability(access: Access | null, capability: Capability): boolean {
-  return !!access && can(access.role, capability, access.blocked)
 }
 
 export async function requireAdmin(): Promise<Access> {

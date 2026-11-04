@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin"
-import { getAccess, hasCapability, requireSchemaPage } from "@/lib/access"
+import { requireSchemaPage } from "@/lib/access"
 import ProduitsClient from "./ProduitsClient"
 
 export default async function ProduitsPage() {
@@ -15,13 +15,6 @@ export default async function ProduitsPage() {
     supabase.from("units").select("*").order("name"),
   ])
 
-  // Products are created and edited by Managers and above; commercials see no purchase price (D4)
-  const canWrite = hasCapability(await getAccess(), "products.write")
-  const visible = canWrite ? products ?? [] : (products ?? []).map(p => ({
-    ...p,
-    buy_price: null,
-    packaging: (p.packaging ?? []).map((k: Record<string, unknown>) => ({ ...k, buy_price: null })),
-  }))
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return <ProduitsClient products={visible as any} categories={categories ?? []} units={units ?? []} canWrite={canWrite} />
+  return <ProduitsClient products={(products ?? []) as any} categories={categories ?? []} units={units ?? []} />
 }

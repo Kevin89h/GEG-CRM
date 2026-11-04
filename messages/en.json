@@ -24,7 +24,6 @@
     "password": "Password",
     "loginButton": "Sign in",
     "loginError": "Invalid email or password",
-    "blocked": "Your account is blocked. Please contact an administrator.",
     "welcomeBack": "Welcome back",
     "loginToContinue": "Sign in to access your CRM",
     "noCompanyTitle": "No company assigned",

@@ -75,11 +75,7 @@ export default function DevisClient({ orders, schema }: Props) {
       body: JSON.stringify({ devis_ids: Array.from(selected) }),
     })
     setBulkCancelLoading(false)
-    if (res.ok) {
-      const json = await res.json().catch(() => ({}))
-      if (json.skipped?.length) alert(`${json.count} devis annulé(s). Non annulés car déjà facturés ou annulés : ${json.skipped.join(", ")}`)
-      setSelected(new Set()); window.location.reload()
-    }
+    if (res.ok) { setSelected(new Set()); window.location.reload() }
     else { const json = await res.json(); alert(json.error ?? "Erreur lors de l'annulation") }
   }
 
