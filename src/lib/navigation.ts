@@ -42,7 +42,8 @@ export interface NavAccess {
 
 export function isNavLocked(item: NavItem, access: NavAccess): boolean {
   if (item.company && !access.schemas.includes(item.company)) return true
-  if (isAdminRole(access.role) || !item.permission) return false
+  // Super admins, admins and managers open every business module; only commercials follow their grid
+  if (isAdminRole(access.role) || access.role === "manager" || !item.permission) return false
   // A module missing from the grid stays open, as before
   const perm = access.permissions?.[item.permission]
   return !!perm && !perm.view

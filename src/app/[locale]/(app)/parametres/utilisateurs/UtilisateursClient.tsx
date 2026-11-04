@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Users, Plus, X, Shield, ChevronDown, ChevronUp, Check, Mail, Loader2, Trash2, RefreshCw, AlertTriangle, UserPlus, Eye, EyeOff, Lock } from "lucide-react"
 import { Badge } from "@/components/ui/Badge"
 import { ROLES, roleLabel, defaultPermissionsFor, type Permission, type Permissions } from "@/lib/roles"
@@ -21,12 +21,24 @@ interface Company {
   name: string
 }
 
+/** Access request opened from a notification (see /api/access-request) */
+export interface AccessRequest {
+  userId: string
+  name: string
+  role: string
+  module: string
+  /** "role": a business module, granted by a role change; "company": needs a company (GEG Singapore) */
+  kind: "role" | "company"
+  granted: boolean
+}
+
 interface Props {
   users: UserProfile[]
   companies: Company[]
   currentUserId: string
   assignableRoles: string[]
   canAssignCompanies: boolean
+  accessRequest: AccessRequest | null
 }
 
 const MODULES = [
@@ -53,10 +65,18 @@ const roleColor: Record<string, "blue" | "green" | "yellow" | "gray"> = {
   super_admin: "blue", admin: "blue", manager: "green", sales_rep: "yellow",
 }
 
-export default function UtilisateursClient({ users: initial, companies, currentUserId, assignableRoles, canAssignCompanies }: Props) {
+export default function UtilisateursClient({ users: initial, companies, currentUserId, assignableRoles, canAssignCompanies, accessRequest }: Props) {
   const roleOptions = ROLES.filter(r => assignableRoles.includes(r.value))
+  const requester = accessRequest ? initial.find(u => u.id === accessRequest.userId) : undefined
   const [users, setUsers] = useState(initial)
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(
+    accessRequest && !accessRequest.granted && requester?.manageable ? accessRequest.userId : null
+  )
+
+  // Bring the requester's card into view when arriving from an access-request notification
+  useEffect(() => {
+    if (accessRequest) document.getElementById(`user-${accessRequest.userId}`)?.scrollIntoView({ behavior: "smooth", block: "center" })
+  }, [accessRequest])
   const [saving, setSaving] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<{ id: string; message: string } | null>(null)
   const [newCompanyIds, setNewCompanyIds] = useState<string[]>([])
@@ -411,6 +431,36 @@ export default function UtilisateursClient({ users: initial, companies, currentU
         </button>
       </div>
 
+      {/* Access request coming from a notification */}
+      {accessRequest && (
+        <div className={`mb-5 rounded-xl border px-4 py-3 text-sm ${accessRequest.granted ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-amber-50 border-amber-200 text-amber-900"}`}>
+          {accessRequest.granted ? (
+            <p className="flex items-center gap-2">
+              <Check className="w-4 h-4 flex-shrink-0" />
+              <span><strong>{accessRequest.name}</strong> a déjà accès à « {accessRequest.module} ».</span>
+            </p>
+          ) : (
+            <>
+              <p className="flex items-center gap-2 font-medium">
+                <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+                <span><strong>{accessRequest.name}</strong> ({accessRequest.role}) demande l&apos;accès à « {accessRequest.module} ».</span>
+              </p>
+              <p className="mt-1.5 pl-6">
+                {accessRequest.kind === "company" ? (
+                  canAssignCompanies
+                    ? <>Pour l&apos;autoriser : cochez la société <strong>GEG Singapore</strong> dans sa fiche ci-dessous, puis enregistrez.</>
+                    : <>Seul un <strong>super admin</strong> peut lui attribuer la société GEG Singapore.</>
+                ) : requester && !requester.manageable ? (
+                  <>Vous ne pouvez pas modifier ce compte : demandez à un <strong>super admin</strong>.</>
+                ) : (
+                  <>Pour l&apos;autoriser : passez son rôle à <strong>Manager</strong> (accès à tous les modules métier), ou à <strong>Admin</strong> s&apos;il doit aussi gérer les comptes de sa société. Le rôle se change dans sa fiche, ouverte ci-dessous, puis « Sauvegarder ».</>
+                )}
+              </p>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Confirm delete modal */}
       {confirmDeleteId && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
@@ -446,7 +496,8 @@ export default function UtilisateursClient({ users: initial, companies, currentU
       {/* User list */}
       <div className="space-y-3">
         {users.map(user => (
-          <div key={user.id} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          <div key={user.id} id={`user-${user.id}`}
+            className={`bg-white rounded-xl border shadow-sm overflow-hidden ${accessRequest?.userId === user.id ? "border-amber-300 ring-2 ring-amber-200" : "border-gray-100"}`}>
             {/* User row */}
             <div className="flex items-center gap-4 p-4">
               <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
