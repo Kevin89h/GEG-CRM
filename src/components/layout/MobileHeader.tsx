@@ -2,19 +2,15 @@
 
 import { useState } from "react"
 import Image from "next/image"
-import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
-import {
-  LayoutDashboard, Building2, Users, TrendingUp, CalendarCheck,
-  ShoppingCart, ShoppingBag, Package, Landmark, LogOut, Globe,
-  Settings, UserCheck, FolderOpen, Sparkles, Menu, X,
-} from "lucide-react"
+import { LogOut, Globe, Menu, X } from "lucide-react"
 import { cn, initials } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import type { Profile } from "@/types"
 import { roleLabel } from "@/lib/roles"
 import CompanySwitcher from "./CompanySwitcher"
+import NavLinks from "./NavLinks"
 
 interface Company {
   id: string
@@ -30,21 +26,6 @@ interface Props {
   currentSchema: string
 }
 
-const navItems = [
-  { key: "dashboard", icon: LayoutDashboard, path: "dashboard" },
-  { key: "accounts", icon: Building2, path: "accounts" },
-  { key: "contacts", icon: Users, path: "contacts" },
-  { key: "deals", icon: TrendingUp, path: "deals" },
-  { key: "activities", icon: CalendarCheck, path: "activities" },
-  { key: "ventes", icon: ShoppingCart, path: "ventes" },
-  { key: "achats", icon: ShoppingBag, path: "achats" },
-  { key: "stock", icon: Package, path: "stock" },
-  { key: "comptabilite", icon: Landmark, path: "comptabilite" },
-  { key: "employes", icon: UserCheck, path: "employes" },
-  { key: "documents", icon: FolderOpen, path: "documents" },
-  { key: "ai", icon: Sparkles, path: "ai" },
-  { key: "settings", icon: Settings, path: "parametres/taux-de-change" },
-] as const
 
 export default function MobileHeader({ locale, profile, companies, currentSchema }: Props) {
   const [open, setOpen] = useState(false)
@@ -126,26 +107,12 @@ export default function MobileHeader({ locale, profile, companies, currentSchema
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
-          {navItems.map(({ key, icon: Icon, path }) => {
-            const href = `/${locale}/${path}`
-            const active = pathname.startsWith(href)
-            return (
-              <Link
-                key={key}
-                href={href}
-                onClick={() => setOpen(false)}
-                className={cn(
-                  "flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors",
-                  active
-                    ? "bg-blue-600 text-white"
-                    : "text-slate-400 hover:text-white hover:bg-slate-800"
-                )}
-              >
-                <Icon className="w-5 h-5 flex-shrink-0" />
-                {t(key)}
-              </Link>
-            )
-          })}
+          <NavLinks
+            locale={locale}
+            access={{ role: profile?.role, permissions: profile?.permissions, schemas: companies.map(c => c.schema_name) }}
+            large
+            onNavigate={() => setOpen(false)}
+          />
         </nav>
 
         {/* Bottom */}

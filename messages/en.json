@@ -789,5 +789,16 @@
     "cancel": "Cancel",
     "saving": "Saving…",
     "save": "Save"
+  },
+  "access": {
+    "title": "Access not allowed",
+    "message": "Your {role} role does not give access to the “{module}” module.",
+    "companyMessage": "Your account has no access to GEG Singapore, which “{module}” requires.",
+    "adminMessage": "This page is reserved for administrators.",
+    "request": "Request access",
+    "requested": "Your request has been sent to the super administrators.",
+    "alreadyRequested": "You already sent this request today. The super administrators have been notified.",
+    "error": "The request could not be sent. Please try again later.",
+    "back": "Back to dashboard"
   }
 }

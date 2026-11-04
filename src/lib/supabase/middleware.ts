@@ -1,5 +1,7 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
+import { ADMIN_AREA, isNavLocked, navAreaForPath } from "@/lib/navigation"
+import { isAdminRole } from "@/lib/roles"
 
 const COMPANY_COOKIE = "geg_company"
 
@@ -57,7 +59,7 @@ export async function updateSession(request: NextRequest, baseResponse?: ReturnT
 
   // Companies the user is allowed on, from profiles.company_access (never from the cookie)
   const [{ data: profile }, { data: companies }] = await Promise.all([
-    supabase.from("profiles").select("company_access").eq("id", user.id).single(),
+    supabase.from("profiles").select("role, permissions, company_access").eq("id", user.id).single(),
     supabase.from("companies").select("id, schema_name").eq("is_active", true),
   ])
   const allowedIds = new Set<string>(profile?.company_access ?? [])
@@ -78,6 +80,21 @@ export async function updateSession(request: NextRequest, baseResponse?: ReturnT
     const url = request.nextUrl.clone()
     url.pathname = `/${locale}/dashboard`
     return NextResponse.redirect(url)
+  }
+
+  // Pages of a module the user can't open lead to the "access denied" page (the menu shows them with a lock)
+  if (!isApi && !isAuthPage) {
+    const area = navAreaForPath(pathname.split("/").slice(2).join("/"))
+    const access = { role: profile?.role, permissions: profile?.permissions, schemas: allowedSchemas }
+    const deniedKey = area === ADMIN_AREA
+      ? (isAdminRole(profile?.role) ? null : ADMIN_AREA)
+      : area && isNavLocked(area, access) ? area.key : null
+    if (deniedKey) {
+      const url = request.nextUrl.clone()
+      url.pathname = `/${locale}/acces-refuse`
+      url.search = `?m=${encodeURIComponent(deniedKey)}`
+      return NextResponse.redirect(url)
+    }
   }
 
   // The company cookie is only a preference: if it names a company the user can't access,
