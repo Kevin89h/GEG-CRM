@@ -18,6 +18,7 @@ begin
       execute format('drop policy if exists perm_insert on %I.%I', s, t.r);
       execute format('drop policy if exists perm_update on %I.%I', s, t.r);
       execute format('drop policy if exists perm_select on %I.%I', s, t.r);
+      execute format('drop policy if exists company_guard on %I.%I', s, t.r);
     end loop;
   end loop;
 end $$;

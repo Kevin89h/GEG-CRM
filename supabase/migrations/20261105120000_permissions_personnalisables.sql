@@ -487,13 +487,13 @@ begin
     execute format(
       'select count(*) from %I.treasury_transactions t
         where t.account_id = $1 and t.amount = $2 and coalesce(t.currency, '''') = coalesce($3, '''')
-          and t.date = ($4)::date and t.type = $5 and t.category = $6
+          and (t.date at time zone ''UTC'')::date = ($4 at time zone ''UTC'')::date and t.type = $5 and t.category = $6
           and t.payment_id is null and t.supplier_payment_id is null', p_schema)
       into n_candidates using (pay ->> 'treasury_account_id')::uuid, (pay ->> 'amount')::numeric, pay ->> 'currency',
                               (pay ->> 'paid_at')::timestamptz, v_type, v_category;
     execute format(
-      'select (select count(*) from %1$I.payments where treasury_account_id = $1 and amount = $2 and coalesce(currency, '''') = coalesce($3, '''') and paid_at::date = ($4)::date)
-            + (select count(*) from %1$I.supplier_payments where treasury_account_id = $1 and amount = $2 and coalesce(currency, '''') = coalesce($3, '''') and paid_at::date = ($4)::date)', p_schema)
+      'select (select count(*) from %1$I.payments where treasury_account_id = $1 and amount = $2 and coalesce(currency, '''') = coalesce($3, '''') and (paid_at at time zone ''UTC'')::date = ($4 at time zone ''UTC'')::date)
+            + (select count(*) from %1$I.supplier_payments where treasury_account_id = $1 and amount = $2 and coalesce(currency, '''') = coalesce($3, '''') and (paid_at at time zone ''UTC'')::date = ($4 at time zone ''UTC'')::date)', p_schema)
       into n_rivals using (pay ->> 'treasury_account_id')::uuid, (pay ->> 'amount')::numeric, pay ->> 'currency', (pay ->> 'paid_at')::timestamptz;
     if n_candidates <> 1 then
       raise exception 'Suppression refusée : impossible d''identifier avec certitude l''opération de trésorerie de ce paiement (% correspondance(s))', n_candidates;
@@ -504,7 +504,7 @@ begin
     execute format(
       'select to_jsonb(t) from %I.treasury_transactions t
         where t.account_id = $1 and t.amount = $2 and coalesce(t.currency, '''') = coalesce($3, '''')
-          and t.date = ($4)::date and t.type = $5 and t.category = $6
+          and (t.date at time zone ''UTC'')::date = ($4 at time zone ''UTC'')::date and t.type = $5 and t.category = $6
           and t.payment_id is null and t.supplier_payment_id is null for update', p_schema)
       into tx using (pay ->> 'treasury_account_id')::uuid, (pay ->> 'amount')::numeric, pay ->> 'currency',
                     (pay ->> 'paid_at')::timestamptz, v_type, v_category;
@@ -526,7 +526,7 @@ begin
       execute format('update %I.invoices set status = $1 where id = $2', p_schema) using v_new_status, p_invoice_id;
     end if;
   else
-    execute format('select coalesce(sum(case when currency is not null and currency <> coalesce(si.currency, ''GNF'') and exchange_rate is not null and exchange_rate <> 0 then amount / exchange_rate else amount end), 0)
+    execute format('select coalesce(sum(case when sp.currency is not null and sp.currency <> coalesce(si.currency, ''GNF'') and sp.exchange_rate is not null and sp.exchange_rate <> 0 then sp.amount / sp.exchange_rate else sp.amount end), 0)
                      from %1$I.supplier_payments sp, %1$I.supplier_invoices si where sp.supplier_invoice_id = $1 and si.id = $1', p_schema)
       into v_paid using p_invoice_id;
     execute format('select total_ttc, status from %I.supplier_invoices where id = $1', p_schema) into v_total, v_status using p_invoice_id;
@@ -707,6 +707,11 @@ begin
     execute format('drop policy if exists perm_insert on %I.%I', t.s, t.r);
     execute format('drop policy if exists perm_update on %I.%I', t.s, t.r);
     execute format('drop policy if exists perm_select on %I.%I', t.s, t.r);
+    execute format('drop policy if exists company_guard on %I.%I', t.s, t.r);
+
+    -- Every company table: the company must be assigned and the account not blocked, whatever the older
+    -- permissive policies say (several GEG Guinée tables had their own check without the blocking test)
+    execute format('create policy company_guard on %1$I.%2$I as restrictive for all to authenticated using ((select public.has_company_access(%1$L))) with check ((select public.has_company_access(%1$L)))', t.s, t.r);
 
     if t.r not in ('chat_messages', 'chat_read_receipts', 'chat_rooms') then
       keys := coalesce(delete_keys -> t.r, '["suppression"]');
