@@ -8,6 +8,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const body = await req.json()
   const { db, schema } = await createCompanyClient()
 
+  // The order date can only change while the quote is neither invoiced nor cancelled
+  if ("date_order" in body) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(body.date_order))) {
+      return NextResponse.json({ error: "Date de commande invalide" }, { status: 400 })
+    }
+    const { data: current } = await db.from("sales_orders").select("status").eq("id", id).single()
+    if (!current) return NextResponse.json({ error: "Devis introuvable" }, { status: 404 })
+    if (current.status === "invoiced" || current.status === "cancelled") {
+      return NextResponse.json({ error: "La date de commande d'un devis facturé ou annulé ne peut plus être modifiée" }, { status: 400 })
+    }
+  }
+
   const { data, error } = await db
     .from("sales_orders")
     .update(body)

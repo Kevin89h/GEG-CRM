@@ -84,6 +84,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
     client_order_ref: order.client_order_ref ?? "",
     currency: order.currency ?? "GNF",
     project_code: order.project_code ?? "",
+    date_order: order.date_order ?? order.created_at.slice(0, 10),
   })
   const [notes, setNotes] = useState(order.notes ?? "")
   const [notesSaving, setNotesSaving] = useState(false)
@@ -610,7 +611,21 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
             </div>
           </div>
           <div className="space-y-4">
-            <Field label={t("fieldOrderDate")} value={order.date_order ? formatDate(order.date_order, locale) : formatDate(order.created_at, locale)} />
+            {/* Order date stays editable until the quote is invoiced (or cancelled) */}
+            {isDraft ? (
+              <div>
+                <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-0.5">{t("fieldOrderDate")}</p>
+                <input
+                  type="date"
+                  className="text-sm font-semibold text-gray-900 bg-transparent border-b border-gray-200 hover:border-gray-400 focus:border-blue-500 focus:outline-none py-0.5"
+                  value={orderFields.date_order}
+                  onChange={e => setOrderFields(p => ({ ...p, date_order: e.target.value }))}
+                  onBlur={e => { if (e.target.value) updateOrderField("date_order", e.target.value) }}
+                />
+              </div>
+            ) : (
+              <Field label={t("fieldOrderDate")} value={order.date_order ? formatDate(order.date_order, locale) : formatDate(order.created_at, locale)} />
+            )}
             <div>
               <p className="text-xs text-gray-400 mb-0.5">{t("fieldExpiry")}</p>
               {isDraft ? (
