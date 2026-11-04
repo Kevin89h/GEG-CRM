@@ -3,7 +3,6 @@ import { createSchemaClient } from "@/lib/supabase/admin"
 import { getSchemaFromRequest } from "@/lib/company"
 import { logActivity } from "@/lib/activity-logger"
 import { NextRequest, NextResponse } from "next/server"
-import { isAdminRole } from "@/lib/roles"
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -13,16 +12,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     if (!amount || amount <= 0) return NextResponse.json({ error: "Montant invalide" }, { status: 400 })
 
-    // Check user has permission to create payments (ventes.create)
+    // Permission "paiements_clients.enregistrer" in the active company: checked by the middleware
     const supabaseAuth = await createClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
     if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 })
-
-    const { data: profile } = await supabaseAuth.from("profiles").select("role, permissions").eq("id", user.id).single()
-    if (!isAdminRole(profile?.role)) {
-      const perm = profile?.permissions?.ventes
-      if (perm && !perm.create) return NextResponse.json({ error: "Accès refusé" }, { status: 403 })
-    }
 
     const schema = await getSchemaFromRequest(req)
     const db = createSchemaClient(schema)
@@ -47,6 +40,27 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     if (payErr || !payment) return NextResponse.json({ error: payErr?.message ?? "Erreur" }, { status: 500 })
 
+    // Treasury operation explicitly linked to this payment (payment_id); if it fails, the payment is withdrawn
+    if (treasury_account_id) {
+      const { data: invoice } = await db.from("invoices").select("number").eq("id", id).single()
+      const { error: txErr } = await createSchemaClient(schema).from("treasury_transactions").insert([{
+        account_id: treasury_account_id,
+        type: "credit",
+        amount,
+        currency,
+        description: `Paiement facture client — ${invoice?.number ?? id}${reference ? ` (${reference})` : ""}`,
+        reference: reference || null,
+        category: "invoice_payment",
+        date: new Date(paid_at).toISOString(),
+        user_id: user.id,
+        payment_id: payment.id,
+      }])
+      if (txErr) {
+        await db.from("payments").delete().eq("id", payment.id)
+        return NextResponse.json({ error: `Opération de trésorerie impossible, paiement non enregistré : ${txErr.message}` }, { status: 500 })
+      }
+    }
+
     // Recalculate balance using amount_in_invoice_currency when currencies differ
     const { data: allPayments } = await db
       .from("payments")
@@ -65,23 +79,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }, 0)
     const newStatus = totalPaid >= totalTTC ? "paid" : totalPaid > 0 ? "partial" : "sent"
     await db.from("invoices").update({ status: newStatus }).eq("id", id)
-
-    // Créer une transaction trésorerie (crédit) via le client admin (bypass RLS)
-    if (treasury_account_id) {
-      const { data: invoice } = await db.from("invoices").select("number").eq("id", id).single()
-      const { error: txErr } = await createSchemaClient(schema).from("treasury_transactions").insert([{
-        account_id: treasury_account_id,
-        type: "credit",
-        amount,
-        currency,
-        description: `Paiement facture client — ${invoice?.number ?? id}${reference ? ` (${reference})` : ""}`,
-        reference: reference || null,
-        category: "invoice_payment",
-        date: new Date(paid_at).toISOString(),
-        user_id: user.id,
-      }])
-      if (txErr) console.error("Treasury insert error:", txErr.message)
-    }
 
     logActivity({ action: "payment", resource: "invoice", resourceId: id, label: `Paiement de ${amount} ${currency ?? ""} enregistré sur facture`, details: { amount, currency, method } })
     return NextResponse.json({ payment })

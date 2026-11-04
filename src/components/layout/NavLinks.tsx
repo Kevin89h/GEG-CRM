@@ -9,7 +9,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { isAdminRole } from "@/lib/roles"
+import { allows } from "@/lib/permissions"
 import { NAV_ITEMS, accessDeniedPath, isNavLocked, type NavAccess } from "@/lib/navigation"
 
 const ICONS: Record<string, LucideIcon> = {
@@ -60,12 +60,12 @@ export default function NavLinks({ locale, access, large = false, onNavigate }: 
         )
       })}
 
-      {/* Activity log: administration page, admins only */}
-      {isAdminRole(access.role) && (
-        <Link href={`/${locale}/parametres/activite`} onClick={onNavigate}
-          className={itemClass(pathname.startsWith(`/${locale}/parametres/activite`), false)}>
+      {/* Audit log: administration page (journal.voir) */}
+      {allows(access.perms, "journal.voir") && (
+        <Link href={`/${locale}/parametres/audit`} onClick={onNavigate}
+          className={itemClass(pathname.startsWith(`/${locale}/parametres/audit`), false)}>
           <Activity className={iconClass} />
-          <span className="flex-1">Journal d&apos;activité</span>
+          <span className="flex-1">Journal d&apos;audit</span>
         </Link>
       )}
     </>

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient as createAdminSupabase } from "@supabase/supabase-js"
+import { createAdminClient as createAdminSupabase } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
 import { getCompanySchema } from "@/lib/company"
 
@@ -40,10 +40,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { data: { user } } = await supabase.auth.getUser()
 
   const schema = await getCompanySchema()
-  const adminDb = createAdminSupabase(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  ).schema(schema)
+  const adminDb = createAdminSupabase().schema(schema)
 
   // 1. Créer le bon de réception (admin pour bypasser RLS)
   const { data: order } = await adminDb.from("purchase_orders").select("number").eq("id", id).single()

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { guard, requireSchemaAccess } from "@/lib/access"
+import { guard, requirePermission, requireSchemaAccess } from "@/lib/access"
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const denied = await guard(() => requireSchemaAccess("geg_singapore"))
@@ -15,8 +15,8 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
 // Transfer Singapore → Guinée: the user needs both companies
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const denied = await guard(async () => {
-    await requireSchemaAccess("geg_singapore")
-    await requireSchemaAccess("geg_guinee")
+    await requirePermission("opportunites.transferer", "geg_singapore")
+    await requirePermission("opportunites.transferer", "geg_guinee")
   })
   if (denied) return denied
   const { id } = await params

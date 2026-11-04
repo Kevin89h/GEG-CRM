@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
+import { currentPerms } from "@/lib/current-perms"
+import { allows } from "@/lib/permissions"
 import { createCompanyClient } from "@/lib/company"
 
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
@@ -23,6 +25,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   if (fetchErr || !order) {
     return NextResponse.json({ error: "Commande introuvable" }, { status: 404 })
+  }
+
+  // Voiding needs "achats.annuler" and no reception (B1); receiving needs "achats.receptionner"
+  const perms = await currentPerms()
+  const need = body.status === "cancelled" ? "achats.annuler" : ["partial", "received"].includes(body.status) ? "achats.receptionner" : "achats.modifier"
+  if (!allows(perms, need)) return NextResponse.json({ error: "Vos permissions ne permettent pas cette action" }, { status: 403 })
+  if (body.status === "cancelled") {
+    const { count } = await db.from("purchase_receptions").select("id", { count: "exact", head: true }).eq("order_id", id)
+    if (count || ["partial", "received"].includes(order.status))
+      return NextResponse.json({ error: "Commande déjà réceptionnée : elle ne peut pas être annulée" }, { status: 409 })
   }
 
   const allowed = ALLOWED_TRANSITIONS[order.status] ?? []

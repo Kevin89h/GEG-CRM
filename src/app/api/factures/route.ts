@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server"
 import { createCompanyClient } from "@/lib/company"
 import { logActivity } from "@/lib/activity-logger"
 import { errorResponse } from "@/lib/access"
+import { currentPerms } from "@/lib/current-perms"
+import { invoiceTransitionError } from "@/lib/invoice-lock"
 
 interface InvoiceLine {
   product_id: string | null
@@ -31,8 +33,11 @@ export async function POST(req: NextRequest)  {
     const seq = String((count ?? 0) + 1).padStart(4, "0")
     const number = `FAC-${year}-${month}-${seq}`
 
+    // Lines can only be written on a draft: create as draft, emit afterwards if asked
+    const requestedStatus = (invoiceData.status as string | undefined) ?? "draft"
     const { data: invoice, error: invErr } = await db.from("invoices").insert([{
       ...invoiceData,
+      status: "draft",
       number,
       user_id,
     }]).select("id").single()
@@ -44,6 +49,13 @@ export async function POST(req: NextRequest)  {
         lines.map(l => ({ ...l, invoice_id: invoice.id }))
       )
       if (lineErr) return NextResponse.json({ error: lineErr.message }, { status: 400 })
+    }
+
+    if (requestedStatus !== "draft") {
+      const refused = invoiceTransitionError(await currentPerms(), "draft", requestedStatus)
+      if (refused) return NextResponse.json({ error: refused, id: invoice.id }, { status: 403 })
+      const { error: stErr } = await db.from("invoices").update({ status: requestedStatus }).eq("id", invoice.id)
+      if (stErr) return NextResponse.json({ error: stErr.message }, { status: 400 })
     }
 
     logActivity({ action: "create", resource: "invoice", resourceId: invoice.id, label: `Facture ${number} créée`, details: { number } })

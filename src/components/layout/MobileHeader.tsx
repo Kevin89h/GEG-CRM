@@ -24,10 +24,12 @@ interface Props {
   profile: Profile | null
   companies: Company[]
   currentSchema: string
+  /** Effective permissions in the active company */
+  perms: string[]
 }
 
 
-export default function MobileHeader({ locale, profile, companies, currentSchema }: Props) {
+export default function MobileHeader({ locale, profile, companies, currentSchema, perms }: Props) {
   const [open, setOpen] = useState(false)
   const t = useTranslations("nav")
   const pathname = usePathname()
@@ -109,7 +111,7 @@ export default function MobileHeader({ locale, profile, companies, currentSchema
         <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
           <NavLinks
             locale={locale}
-            access={{ role: profile?.role, permissions: profile?.permissions, schemas: companies.map(c => c.schema_name) }}
+            access={{ role: profile?.role, schemas: companies.map(c => c.schema_name), perms }}
             large
             onNavigate={() => setOpen(false)}
           />

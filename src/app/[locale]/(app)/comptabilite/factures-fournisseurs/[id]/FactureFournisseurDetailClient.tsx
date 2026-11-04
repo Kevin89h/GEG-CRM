@@ -119,6 +119,8 @@ export default function FactureFournisseurDetailClient({
     const res = await fetch(`/api/supplier-invoices/${invoice.id}/payments/${paymentId}`, { method: "DELETE" })
     const json = await res.json()
     if (!res.ok) { alert(json.error ?? "Erreur"); return }
+    // Totals and treasury are recomputed by the database: reload the invoice
+    window.location.reload(); return
     setPayments(prev => prev.filter(p => p.id !== paymentId))
     setInvoice(prev => ({
       ...prev,

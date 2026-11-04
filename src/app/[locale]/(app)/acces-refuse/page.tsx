@@ -8,10 +8,10 @@ import RequestAccessButton from "./RequestAccessButton"
 
 export default async function AccessDeniedPage({ params, searchParams }: {
   params: Promise<{ locale: string }>
-  searchParams: Promise<{ m?: string }>
+  searchParams: Promise<{ m?: string; p?: string }>
 }) {
   const { locale } = await params
-  const { m } = await searchParams
+  const { m, p } = await searchParams
   const [t, tNav, access] = await Promise.all([getTranslations("access"), getTranslations("nav"), getAccess()])
 
   const item = NAV_ITEMS.find(i => i.key === m)
@@ -30,7 +30,7 @@ export default async function AccessDeniedPage({ params, searchParams }: {
       <h1 className="text-lg font-semibold text-gray-900 mb-2">{t("title")}</h1>
       <p className="text-sm text-gray-600 mb-6">{message}</p>
       <div className="flex flex-col items-center gap-3">
-        {item && <RequestAccessButton moduleKey={item.key} />}
+        {item && <RequestAccessButton moduleKey={item.key} permission={p} />}
         <Link href={`/${locale}/dashboard`} className="text-sm text-gray-500 hover:text-blue-600">
           {t("back")}
         </Link>

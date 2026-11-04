@@ -20,7 +20,9 @@ export default function LoginPage() {
   useEffect(() => {
     const saved = localStorage.getItem("crm_remembered_email")
     if (saved) setEmail(saved)
-  }, [])
+    // Sent back here by the middleware after the account was blocked
+    if (new URLSearchParams(window.location.search).get("bloque")) setError(t("blocked"))
+  }, [t])
 
   // Detect invite token in URL hash and redirect to accept-invite page
   useState(() => {
@@ -40,7 +42,7 @@ export default function LoginPage() {
     const authEmail = email.includes("@") ? email : `${email.toLowerCase().replace(/[^a-z0-9._-]/g, "_")}@geg.internal`
     const { error: authError } = await supabase.auth.signInWithPassword({ email: authEmail, password })
     if (authError) {
-      setError(t("loginError"))
+      setError(/banned/i.test(authError.message) ? t("blocked") : t("loginError"))
       setLoading(false)
       return
     }

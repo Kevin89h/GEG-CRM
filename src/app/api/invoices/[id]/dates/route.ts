@@ -1,5 +1,6 @@
 import { createCompanyClient } from "@/lib/company"
 import { NextResponse } from "next/server"
+import { lockedInvoiceResponse } from "@/lib/invoice-lock"
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -9,6 +10,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (!issue_date) return NextResponse.json({ error: "issue_date requis" }, { status: 400 })
 
   const { db } = await createCompanyClient()
+  const locked = await lockedInvoiceResponse(db, id)
+  if (locked) return locked
   const { error } = await db
     .from("invoices")
     .update({ issue_date, due_date: due_date || null })

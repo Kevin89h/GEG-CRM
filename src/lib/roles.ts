@@ -22,10 +22,11 @@ export function isSuperAdmin(role: string | null | undefined): boolean {
   return role === "super_admin"
 }
 
-/** Roles an actor may give: only a super admin can create another super admin. */
+/** Roles an actor may give (decision Q3). */
 export function assignableRoles(actorRole: string | null | undefined): Role[] {
   if (isSuperAdmin(actorRole)) return ROLES.map(r => r.value)
-  if (actorRole === "admin") return ["admin", "manager", "sales_rep"]
+  // Q3: only a super admin creates or manages Admins; an admin manages Managers and Commercials
+  if (actorRole === "admin") return ["manager", "sales_rep"]
   return []
 }
 

@@ -42,6 +42,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     if (payErr || !payment) return NextResponse.json({ error: payErr?.message ?? "Erreur" }, { status: 500 })
 
+    // Treasury operation explicitly linked to this payment (supplier_payment_id); if it fails, the payment is withdrawn
+    if (treasury_account_id) {
+      const { error: txErr } = await createSchemaClient(schema).from("treasury_transactions").insert([{
+        account_id: treasury_account_id,
+        type: "debit",
+        amount,
+        currency,
+        description: `Paiement facture fournisseur — ${invoice.number ?? id}${reference ? ` (${reference})` : ""}`,
+        date: new Date(paid_at).toISOString(),
+        reference: reference || null,
+        category: "supplier_payment",
+        supplier_payment_id: payment.id,
+      }])
+      if (txErr) {
+        await db.from("supplier_payments").delete().eq("id", payment.id)
+        return NextResponse.json({ error: `Opération de trésorerie impossible, paiement non enregistré : ${txErr.message}` }, { status: 500 })
+      }
+    }
+
     const { data: allPayments } = await db
       .from("supplier_payments")
       .select("amount, currency, exchange_rate")
@@ -58,20 +77,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const balance = Number(invoice.total_ttc) - totalPaid
     const newStatus = balance <= 0 ? "paid" : totalPaid > 0 ? "partial" : "pending"
     await db.from("supplier_invoices").update({ status: newStatus }).eq("id", id)
-
-    if (treasury_account_id) {
-      const { error: txErr } = await createSchemaClient(schema).from("treasury_transactions").insert([{
-        account_id: treasury_account_id,
-        type: "debit",
-        amount,
-        currency,
-        description: `Paiement facture fournisseur — ${invoice.number ?? id}${reference ? ` (${reference})` : ""}`,
-        date: new Date(paid_at).toISOString(),
-        reference: reference || null,
-        category: "supplier_payment",
-      }])
-      if (txErr) console.error("Treasury insert error:", txErr.message)
-    }
 
     logActivity({ action: "payment", resource: "achat", resourceId: id, label: `Paiement de ${Number(amount).toLocaleString("fr")} ${currency} enregistré — ${invoice.number ?? id}`, details: { amount, currency, method } })
     return NextResponse.json({ payment, newStatus, balance })

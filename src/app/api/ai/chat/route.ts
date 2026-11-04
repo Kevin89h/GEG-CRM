@@ -1,6 +1,20 @@
 import { NextRequest, NextResponse } from "next/server"
 import Anthropic from "@anthropic-ai/sdk"
 import { createCompanyClient } from "@/lib/company"
+import { currentPerms } from "@/lib/current-perms"
+import { allows } from "@/lib/permissions"
+
+// The assistant acts with the effective permissions of the person using it, in the active company
+const TOOL_RIGHTS: Record<string, string | null> = {
+  search_accounts: "comptes.voir",
+  search_products: "produits.voir",
+  create_draft_devis: "devis.creer",
+  get_stats: null,
+  list_pending_orders: null,
+}
+const TYPE_RIGHTS: Record<string, string> = {
+  ventes: "devis.voir", devis: "devis.voir", achats: "achats.voir", stock: "stock.voir", clients: "comptes.voir", factures: "factures.voir",
+}
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -89,7 +103,12 @@ const TOOLS: Anthropic.Tool[] = [
   },
 ]
 
-async function executeTool(name: string, input: Record<string, unknown>) {
+async function executeTool(name: string, input: Record<string, unknown>, perms: string[]) {
+  if (!(name in TOOL_RIGHTS)) return { error: "Outil inconnu" }
+  const right = TOOL_RIGHTS[name]
+  if (right && !allows(perms, right)) return { error: "Les permissions de l'utilisateur ne permettent pas cette action" }
+  const typeRight = TYPE_RIGHTS[String(input.type ?? "")]
+  if (typeRight && !allows(perms, typeRight)) return { error: "Les permissions de l'utilisateur ne permettent pas de consulter ces données" }
   const { db } = await createCompanyClient()
 
   if (name === "search_accounts") {
@@ -257,6 +276,7 @@ async function executeTool(name: string, input: Record<string, unknown>) {
 export async function POST(req: NextRequest) {
   try {
     const { messages } = await req.json()
+    const perms = await currentPerms()
 
     const systemPrompt = `Tu es l'assistant IA du CRM GEG Guinée. Tu aides l'équipe commerciale et logistique de Global Energy Group en Guinée.
 
@@ -299,7 +319,7 @@ Pour créer un devis :
 
       const toolResults: Anthropic.ToolResultBlockParam[] = []
       for (const toolUse of toolUseBlocks) {
-        const result = await executeTool(toolUse.name, toolUse.input as Record<string, unknown>)
+        const result = await executeTool(toolUse.name, toolUse.input as Record<string, unknown>, perms)
         toolResults.push({
           type: "tool_result",
           tool_use_id: toolUse.id,

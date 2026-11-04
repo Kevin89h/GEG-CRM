@@ -41,6 +41,8 @@ interface ProductRow {
 }
 
 interface Props {
+  /** "produits.gerer": create products */
+  canWrite: boolean
   products: ProductRow[]
   categories: ProductCategory[]
   units: Unit[]
@@ -50,7 +52,7 @@ const colorMap: Record<string, "blue" | "yellow" | "gray" | "green" | "purple"> 
   blue: "blue", yellow: "yellow", gray: "gray", green: "green", purple: "purple",
 }
 
-export default function ProduitsClient({ products: initial, categories, units }: Props) {
+export default function ProduitsClient({ products: initial, categories, units, canWrite }: Props) {
   const t = useTranslations("produits")
   const params = useParams()
   const locale = params.locale as string
@@ -191,10 +193,12 @@ export default function ProduitsClient({ products: initial, categories, units }:
           >
             <Download className="w-4 h-4" /> Export XLS
           </button>
-          <Button onClick={() => setModalOpen(true)}>
-            <Plus className="w-4 h-4" />
-            {t("nouveauProduit")}
-          </Button>
+          {canWrite && (
+            <Button onClick={() => setModalOpen(true)}>
+              <Plus className="w-4 h-4" />
+              {t("nouveauProduit")}
+            </Button>
+          )}
         </div>
       </div>
 

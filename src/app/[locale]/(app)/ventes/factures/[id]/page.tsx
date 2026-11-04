@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { getCompanySchema } from "@/lib/company"
 import { notFound } from "next/navigation"
 import FactureDetailClient from "./FactureDetailClient"
+import { currentPerms } from "@/lib/current-perms"
 
 export default async function FactureDetailPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params
@@ -111,6 +112,7 @@ export default async function FactureDetailPage({ params }: { params: Promise<{ 
       warehouses={warehouses}
       deliveryNotes={deliveryNotes}
       docSettings={docSettings ?? {}}
+      perms={await currentPerms()}
     />
   )
 }

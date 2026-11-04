@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useTranslations } from "next-intl"
 import { Check, Loader2, Send } from "lucide-react"
 
-export default function RequestAccessButton({ moduleKey }: { moduleKey: string }) {
+export default function RequestAccessButton({ moduleKey, permission }: { moduleKey: string; permission?: string }) {
   const t = useTranslations("access")
   const [state, setState] = useState<"idle" | "sending" | "sent" | "already" | "error">("idle")
 
@@ -14,7 +14,7 @@ export default function RequestAccessButton({ moduleKey }: { moduleKey: string }
       const res = await fetch("/api/access-request", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ module: moduleKey }),
+        body: JSON.stringify({ module: moduleKey, permission }),
       })
       const body = await res.json().catch(() => ({}))
       setState(!res.ok ? "error" : body.already ? "already" : "sent")

@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin"
-import { requireSchemaPage } from "@/lib/access"
+import { hasPermission, requireSchemaPage } from "@/lib/access"
 import ProduitsClient from "./ProduitsClient"
 
 export default async function ProduitsPage() {
@@ -15,6 +15,13 @@ export default async function ProduitsPage() {
     supabase.from("units").select("*").order("name"),
   ])
 
+  // Creation and editing: "produits.gerer"; purchase prices: "produits.prix_achat" (D4, Q6)
+  const [canWrite, seeBuyPrice] = await Promise.all([hasPermission("produits.gerer"), hasPermission("produits.prix_achat")])
+  const visible = seeBuyPrice ? products ?? [] : (products ?? []).map(p => ({
+    ...p,
+    buy_price: null,
+    packaging: (p.packaging ?? []).map((k: Record<string, unknown>) => ({ ...k, buy_price: null })),
+  }))
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return <ProduitsClient products={(products ?? []) as any} categories={categories ?? []} units={units ?? []} />
+  return <ProduitsClient products={visible as any} categories={categories ?? []} units={units ?? []} canWrite={canWrite} />
 }

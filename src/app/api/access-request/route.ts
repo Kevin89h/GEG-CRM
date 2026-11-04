@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { errorResponse, requireUser } from "@/lib/access"
+import { activeSchema, errorResponse, requireUser } from "@/lib/access"
 import { NAV_ITEMS } from "@/lib/navigation"
 import { roleLabel } from "@/lib/roles"
 import { sendPushToUser } from "@/lib/webpush"
@@ -11,12 +11,16 @@ import messages from "../../../../messages/fr.json"
 export async function POST(req: Request) {
   try {
     const actor = await requireUser()
-    const { module } = await req.json()
+    const { module, permission } = await req.json()
     const item = NAV_ITEMS.find(i => i.key === module)
     if (!item) return NextResponse.json({ error: "Module inconnu" }, { status: 400 })
 
     const admin = createAdminClient()
-    const link = `/parametres/utilisateurs?demande=${actor.userId}&module=${item.key}`
+    const schema = item.company ?? await activeSchema(actor).catch(() => "geg_guinee")
+    const { data: perm } = typeof permission === "string"
+      ? await admin.from("permission_catalog").select("key, label").eq("key", permission).maybeSingle()
+      : { data: null }
+    const link = `/parametres/utilisateurs?demande=${actor.userId}&module=${item.key}&societe=${schema}${perm ? `&permission=${perm.key}` : ""}`
 
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
     const { count } = await admin
@@ -41,7 +45,7 @@ export async function POST(req: Request) {
     const who = requester?.full_name || requester?.email || "Un utilisateur"
     const label = (messages.nav as Record<string, string>)[item.key] ?? item.key
     const title = `Demande d'accès : ${label}`
-    const body = `${who} (${roleLabel(actor.role)}, ${(companies ?? []).map(c => c.name).join(" + ") || "aucune société"}) demande l'accès à « ${label} ».`
+    const body = `${who} (${roleLabel(actor.role)}, ${(companies ?? []).map(c => c.name).join(" + ") || "aucune société"}) demande l'accès à « ${label} »${perm ? ` (permission « ${perm.label} »)` : ""}.`
 
     const { error } = await admin.from("notifications").insert(
       recipients.map(r => ({ user_id: r.id, type: "access_request", title, body, link, read: false }))

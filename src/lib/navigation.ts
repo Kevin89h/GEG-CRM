@@ -1,56 +1,51 @@
 // Main menu of the CRM, shared by the desktop sidebar, the mobile menu and the middleware.
 // No React or server-only imports: this file runs everywhere.
-import { isAdminRole } from "@/lib/roles"
+import { allows, pagePermissions, type PermissionSet } from "@/lib/permissions"
 
 export interface NavItem {
   /** Translation key in messages.nav, and the value used in /acces-refuse?m=... */
   key: string
   path: string
-  /** Module of profiles.permissions whose "view" right opens the item */
-  permission?: string
   /** Company schema the user must have access to */
   company?: string
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { key: "dashboard", path: "dashboard", permission: "dashboard" },
-  { key: "accounts", path: "accounts", permission: "accounts" },
-  { key: "contacts", path: "contacts", permission: "contacts" },
-  { key: "deals", path: "deals", permission: "deals" },
-  { key: "activities", path: "activities", permission: "activities" },
-  { key: "ventes", path: "ventes", permission: "ventes" },
-  { key: "achats", path: "achats", permission: "achats" },
-  { key: "stock", path: "stock", permission: "stock" },
-  { key: "comptabilite", path: "comptabilite", permission: "comptabilite" },
-  { key: "employes", path: "employes", permission: "employes" },
-  { key: "documents", path: "documents", permission: "documents" },
+  { key: "dashboard", path: "dashboard" },
+  { key: "accounts", path: "accounts" },
+  { key: "contacts", path: "contacts" },
+  { key: "deals", path: "deals" },
+  { key: "activities", path: "activities" },
+  { key: "ventes", path: "ventes" },
+  { key: "achats", path: "achats" },
+  { key: "stock", path: "stock" },
+  { key: "comptabilite", path: "comptabilite" },
+  { key: "employes", path: "employes" },
+  { key: "documents", path: "documents" },
   { key: "projets", path: "projets" },
   { key: "tracking", path: "tracking" },
   { key: "ai", path: "ai" },
-  { key: "settings", path: "parametres/taux-de-change", permission: "parametres" },
+  { key: "settings", path: "parametres/taux-de-change" },
   { key: "singapore-leads", path: "singapore-leads", company: "geg_singapore" },
 ]
 
-/** Key used for administration pages (users, activity log, duplicates): hidden from the menu of non-admins */
+/** Key used for administration pages (users, audit, duplicates): hidden from the menu of non-admins */
 export const ADMIN_AREA = "admin"
+const ADMIN_PATHS = ["parametres/utilisateurs", "parametres/activite", "parametres/audit", "comptes/doublons"]
+const PATH_ALIASES: Record<string, string> = { comptes: "accounts", parametres: "settings" }
 
 export interface NavAccess {
   role: string | null | undefined
-  permissions: Record<string, { view?: boolean } | undefined> | null | undefined
   schemas: string[]
+  /** Effective permissions in the active company */
+  perms: PermissionSet
 }
 
 export function isNavLocked(item: NavItem, access: NavAccess): boolean {
   if (item.company && !access.schemas.includes(item.company)) return true
-  // Super admins, admins and managers open every business module; only commercials follow their grid
-  if (isAdminRole(access.role) || access.role === "manager" || !item.permission) return false
-  // A module missing from the grid stays open, as before
-  const perm = access.permissions?.[item.permission]
-  return !!perm && !perm.view
+  const keys = pagePermissions(item.path)
+  return !!keys && !allows(access.perms, keys)
 }
-
-const ADMIN_PATHS = ["parametres/utilisateurs", "parametres/activite", "comptes/doublons"]
-const PATH_ALIASES: Record<string, string> = { comptes: "accounts", parametres: "settings" }
 
 /**
  * Menu item (or the admin area) a page belongs to, from its path without the locale
@@ -64,6 +59,19 @@ export function navAreaForPath(path: string): NavItem | typeof ADMIN_AREA | null
   return NAV_ITEMS.find(i => i.key === key) ?? null
 }
 
-export function accessDeniedPath(locale: string, key: string): string {
-  return `/${locale}/acces-refuse?m=${encodeURIComponent(key)}`
+/** What the "access denied" page should show: menu key and the first missing permission */
+export interface Denial { key: string; permission?: string }
+
+/** Null when the page can be opened, otherwise the menu key and the missing permission. */
+export function deniedForPath(path: string, access: NavAccess): Denial | null {
+  const area = navAreaForPath(path)
+  if (area && area !== ADMIN_AREA && area.company && !access.schemas.includes(area.company)) return { key: area.key }
+  const keys = pagePermissions(path)
+  if (!keys || allows(access.perms, keys)) return null
+  if (area === ADMIN_AREA) return { key: ADMIN_AREA }
+  return { key: area?.key ?? "dashboard", permission: keys[0] }
+}
+
+export function accessDeniedPath(locale: string, key: string, permission?: string): string {
+  return `/${locale}/acces-refuse?m=${encodeURIComponent(key)}${permission ? `&p=${encodeURIComponent(permission)}` : ""}`
 }

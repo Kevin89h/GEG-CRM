@@ -24,6 +24,7 @@
     "password": "Mot de passe",
     "loginButton": "Se connecter",
     "loginError": "Email ou mot de passe incorrect",
+    "blocked": "Votre compte est bloqué. Contactez un administrateur.",
     "welcomeBack": "Bon retour",
     "loginToContinue": "Connectez-vous pour accéder à votre CRM",
     "noCompanyTitle": "Aucune société attribuée",

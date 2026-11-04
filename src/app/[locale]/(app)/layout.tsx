@@ -41,6 +41,7 @@ export default async function AppLayout({ children, params }: Props) {
     profile,
     companies: companies ?? [],
     currentSchema,
+    perms: access.perms[currentSchema] ?? [],
   }
 
   return (

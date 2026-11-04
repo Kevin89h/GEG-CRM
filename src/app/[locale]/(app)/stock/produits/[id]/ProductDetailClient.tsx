@@ -331,7 +331,7 @@ export default function ProductDetailClient({
                 <Save className="w-4 h-4" /> {saving ? "…" : <span className="hidden sm:inline">{t("btnEnregistrer")}</span>}
               </Button>
             </>
-          ) : (
+          ) : isAdmin && (
             <>
               <button onClick={() => setConfirmDelete(true)}
                 className="p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition">
