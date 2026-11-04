@@ -1,33 +1,33 @@
 // Main menu of the CRM, shared by the desktop sidebar, the mobile menu and the middleware.
 // No React or server-only imports: this file runs everywhere.
-import { isAdminRole } from "@/lib/roles"
+import { can, pageCapability, type Capability } from "@/lib/permissions"
 
 export interface NavItem {
   /** Translation key in messages.nav, and the value used in /acces-refuse?m=... */
   key: string
   path: string
-  /** Module of profiles.permissions whose "view" right opens the item */
-  permission?: string
+  /** Right needed to open the module (see src/lib/permissions.ts); none = every role */
+  capability?: Capability
   /** Company schema the user must have access to */
   company?: string
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { key: "dashboard", path: "dashboard", permission: "dashboard" },
-  { key: "accounts", path: "accounts", permission: "accounts" },
-  { key: "contacts", path: "contacts", permission: "contacts" },
-  { key: "deals", path: "deals", permission: "deals" },
-  { key: "activities", path: "activities", permission: "activities" },
-  { key: "ventes", path: "ventes", permission: "ventes" },
-  { key: "achats", path: "achats", permission: "achats" },
-  { key: "stock", path: "stock", permission: "stock" },
-  { key: "comptabilite", path: "comptabilite", permission: "comptabilite" },
-  { key: "employes", path: "employes", permission: "employes" },
-  { key: "documents", path: "documents", permission: "documents" },
+  { key: "dashboard", path: "dashboard" },
+  { key: "accounts", path: "accounts" },
+  { key: "contacts", path: "contacts" },
+  { key: "deals", path: "deals" },
+  { key: "activities", path: "activities" },
+  { key: "ventes", path: "ventes" },
+  { key: "achats", path: "achats" },
+  { key: "stock", path: "stock" },
+  { key: "comptabilite", path: "comptabilite", capability: "treasury.view" },
+  { key: "employes", path: "employes" },
+  { key: "documents", path: "documents" },
   { key: "projets", path: "projets" },
   { key: "tracking", path: "tracking" },
   { key: "ai", path: "ai" },
-  { key: "settings", path: "parametres/taux-de-change", permission: "parametres" },
+  { key: "settings", path: "parametres/taux-de-change", capability: "settings.write" },
   { key: "singapore-leads", path: "singapore-leads", company: "geg_singapore" },
 ]
 
@@ -36,17 +36,12 @@ export const ADMIN_AREA = "admin"
 
 export interface NavAccess {
   role: string | null | undefined
-  permissions: Record<string, { view?: boolean } | undefined> | null | undefined
   schemas: string[]
 }
 
 export function isNavLocked(item: NavItem, access: NavAccess): boolean {
   if (item.company && !access.schemas.includes(item.company)) return true
-  // Super admins, admins and managers open every business module; only commercials follow their grid
-  if (isAdminRole(access.role) || access.role === "manager" || !item.permission) return false
-  // A module missing from the grid stays open, as before
-  const perm = access.permissions?.[item.permission]
-  return !!perm && !perm.view
+  return !!item.capability && !can(access.role, item.capability)
 }
 
 const ADMIN_PATHS = ["parametres/utilisateurs", "parametres/activite", "comptes/doublons"]
@@ -62,6 +57,19 @@ export function navAreaForPath(path: string): NavItem | typeof ADMIN_AREA | null
   const first = clean.split("/")[0]
   const key = PATH_ALIASES[first] ?? first
   return NAV_ITEMS.find(i => i.key === key) ?? null
+}
+
+/**
+ * Menu key to show on the "access denied" page when this page can't be opened, null when it can.
+ * Checks the company, the module and the page itself (e.g. "new purchase" inside the open Purchases module).
+ */
+export function deniedAreaForPath(path: string, access: NavAccess, isAdmin: boolean): string | null {
+  const area = navAreaForPath(path)
+  if (area === ADMIN_AREA) return isAdmin ? null : ADMIN_AREA
+  if (area && isNavLocked(area, access)) return area.key
+  const cap = pageCapability(path)
+  if (cap && !can(access.role, cap)) return area?.key ?? "dashboard"
+  return null
 }
 
 export function accessDeniedPath(locale: string, key: string): string {

@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { errorResponse, requireCanManageUser } from "@/lib/access"
+import { errorResponse, requireCanManageUser, requireSuperAdmin } from "@/lib/access"
 
 export async function DELETE(req: Request) {
   try {
     const { userId } = await req.json()
     if (!userId) return NextResponse.json({ error: "userId requis" }, { status: 400 })
 
+    // Accounts are blocked, not deleted, so that their history stays linked (D7).
+    // Deletion stays possible for a super admin only, for accounts created by mistake.
+    await requireSuperAdmin()
     const { actor } = await requireCanManageUser(userId)
     if (userId === actor.userId) return NextResponse.json({ error: "Vous ne pouvez pas supprimer votre propre compte" }, { status: 400 })
 

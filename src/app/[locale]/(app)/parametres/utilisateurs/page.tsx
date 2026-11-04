@@ -20,7 +20,7 @@ export default async function UtilisateursPage({ params, searchParams }: {
 
   const admin = createAdminClient()
   const [{ data: users }, { data: companies }] = await Promise.all([
-    admin.from("profiles").select("id, full_name, email, role, permissions, company_access").order("full_name"),
+    admin.from("profiles").select("id, full_name, email, role, company_access, is_blocked").order("full_name"),
     admin.from("companies").select("id, name, schema_name").eq("is_active", true).order("name"),
   ])
 
@@ -37,13 +37,13 @@ export default async function UtilisateursPage({ params, searchParams }: {
       role: roleLabel(requester.role),
       module: tNav(item.key),
       kind: item.company ? "company" : "role",
-      granted: !isNavLocked(item, { role: requester.role, permissions: requester.permissions, schemas }),
+      granted: !isNavLocked(item, { role: requester.role, schemas }),
     }
   }
 
   return (
     <UtilisateursClient
-      users={(users ?? []).map(u => ({ ...u, company_access: u.company_access ?? [], manageable: canManageUser(access, u) }))}
+      users={(users ?? []).map(u => ({ ...u, company_access: u.company_access ?? [], is_blocked: !!u.is_blocked, manageable: canManageUser(access, u) }))}
       companies={(companies ?? []).map(({ id, name }) => ({ id, name }))}
       currentUserId={access.userId}
       assignableRoles={assignableRoles(access.role)}

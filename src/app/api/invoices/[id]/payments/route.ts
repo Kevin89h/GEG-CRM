@@ -3,7 +3,7 @@ import { createSchemaClient } from "@/lib/supabase/admin"
 import { getSchemaFromRequest } from "@/lib/company"
 import { logActivity } from "@/lib/activity-logger"
 import { NextRequest, NextResponse } from "next/server"
-import { isAdminRole } from "@/lib/roles"
+import { can } from "@/lib/permissions"
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -13,16 +13,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     if (!amount || amount <= 0) return NextResponse.json({ error: "Montant invalide" }, { status: 400 })
 
-    // Check user has permission to create payments (ventes.create)
+    // Customer payments: Manager and above (commercials see them, never record them)
     const supabaseAuth = await createClient()
     const { data: { user } } = await supabaseAuth.auth.getUser()
     if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 })
 
-    const { data: profile } = await supabaseAuth.from("profiles").select("role, permissions").eq("id", user.id).single()
-    if (!isAdminRole(profile?.role)) {
-      const perm = profile?.permissions?.ventes
-      if (perm && !perm.create) return NextResponse.json({ error: "Accès refusé" }, { status: 403 })
-    }
+    const { data: profile } = await supabaseAuth.from("profiles").select("role, is_blocked").eq("id", user.id).single()
+    if (!can(profile?.role, "payments.write", profile?.is_blocked)) return NextResponse.json({ error: "Accès refusé" }, { status: 403 })
 
     const schema = await getSchemaFromRequest(req)
     const db = createSchemaClient(schema)

@@ -1,6 +1,7 @@
 import { createCompanyClient } from "@/lib/company"
 import { getTranslations } from "next-intl/server"
-import { Building2, TrendingUp, CalendarCheck, Receipt, Landmark, Package } from "lucide-react"
+import { Building2, TrendingUp, CalendarCheck, Receipt, Landmark, Package, FileText, BadgeCheck } from "lucide-react"
+import { getAccess, hasCapability } from "@/lib/access"
 import { Badge } from "@/components/ui/Badge"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import type { DealStage } from "@/types"
@@ -19,6 +20,9 @@ function formatByCurrency(byCurrency: Record<string, number>): string {
 
 export default async function DashboardPage() {
   const { db: supabase } = await createCompanyClient()
+  // Commercial dashboard (D3): no treasury and no stock value, sales indicators instead
+  const showFinance = hasCapability(await getAccess(), "treasury.view")
+  const none = Promise.resolve({ data: null, count: null })
   const t = await getTranslations()
   const td = await getTranslations("dashboard")
 
@@ -56,8 +60,8 @@ export default async function DashboardPage() {
       .order("follow_up_date")
       .limit(5),
     supabase.from("invoice_totals").select("balance, currency").in("status", ["sent", "partial"]),
-    supabase.from("treasury_balances").select("balance, currency").eq("is_active", true),
-    supabase.from("stock_levels").select("quantity, product:products(buy_price, currency)"),
+    showFinance ? supabase.from("treasury_balances").select("balance, currency").eq("is_active", true) : none,
+    showFinance ? supabase.from("stock_levels").select("quantity, product:products(buy_price, currency)") : none,
     supabase.from("invoice_totals").select("status"),
     supabase.from("invoice_totals")
       .select("total_ht, currency, issue_date")
@@ -194,7 +198,39 @@ export default async function DashboardPage() {
     value: invoiceByStatus[status] ?? 0,
   }))
 
-  const erpStats = [
+  // Sales indicators for commercials: quotes and orders in progress, invoiced this month
+  type Stat = { label: string; value: string; sub: string; Icon: typeof Receipt; color: string; bg: string }
+  let salesStats: Stat[] = []
+  if (!showFinance) {
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]
+    const [{ data: openOrders }, { data: monthInvoices }] = await Promise.all([
+      supabase.from("sales_order_totals").select("status, total_ht, currency").in("status", ["draft", "confirmed"]),
+      supabase.from("invoice_totals").select("total_ht, currency").neq("status", "cancelled").neq("status", "draft").gte("issue_date", monthStart),
+    ])
+    const sum = (rows: Array<Record<string, unknown>> | null) => (rows ?? []).reduce<Record<string, number>>((acc, r) => {
+      const cur = r.currency as string
+      acc[cur] = (acc[cur] ?? 0) + Number(r.total_ht ?? 0)
+      return acc
+    }, {})
+    const orders = (openOrders ?? []) as Array<Record<string, unknown>>
+    const confirmedOrders = orders.filter(o => o.status === "confirmed")
+    salesStats = [
+      {
+        label: "Commandes à facturer",
+        value: formatByCurrency(sum(confirmedOrders)),
+        sub: `${confirmedOrders.length} commande${confirmedOrders.length !== 1 ? "s" : ""} · ${orders.length - confirmedOrders.length} devis en cours`,
+        Icon: FileText, color: "text-blue-600", bg: "bg-blue-50",
+      },
+      {
+        label: "Facturé ce mois",
+        value: formatByCurrency(sum(monthInvoices as Array<Record<string, unknown>> | null)),
+        sub: `${monthInvoices?.length ?? 0} facture${(monthInvoices?.length ?? 0) !== 1 ? "s" : ""} émise${(monthInvoices?.length ?? 0) !== 1 ? "s" : ""}`,
+        Icon: BadgeCheck, color: "text-emerald-600", bg: "bg-emerald-50",
+      },
+    ]
+  }
+
+  const financeStats = [
     {
       label: "Factures ouvertes",
       value: formatByCurrency(openInvoicesByCurrency),
@@ -214,6 +250,7 @@ export default async function DashboardPage() {
       Icon: Package, color: "text-blue-600", bg: "bg-blue-50",
     },
   ]
+  const erpStats = showFinance ? financeStats : [financeStats[0], ...salesStats]
 
   const crmStats = [
     { label: td("totalAccounts"), value: String(accountsCount ?? 0), Icon: Building2, color: "text-blue-600", bg: "bg-blue-50" },

@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
-import { ADMIN_AREA, isNavLocked, navAreaForPath } from "@/lib/navigation"
+import { deniedAreaForPath } from "@/lib/navigation"
+import { apiCapability, can } from "@/lib/permissions"
 import { isAdminRole } from "@/lib/roles"
 
 const COMPANY_COOKIE = "geg_company"
@@ -59,9 +60,22 @@ export async function updateSession(request: NextRequest, baseResponse?: ReturnT
 
   // Companies the user is allowed on, from profiles.company_access (never from the cookie)
   const [{ data: profile }, { data: companies }] = await Promise.all([
-    supabase.from("profiles").select("role, permissions, company_access").eq("id", user.id).single(),
+    supabase.from("profiles").select("role, company_access, is_blocked").eq("id", user.id).single(),
     supabase.from("companies").select("id, schema_name").eq("is_active", true),
   ])
+  // Blocked account: refused at once, even with a session still open
+  if (profile?.is_blocked) {
+    if (isApi) return NextResponse.json({ error: "Compte bloqué" }, { status: 403 })
+    if (isAuthPage) return supabaseResponse
+    await supabase.auth.signOut()
+    const url = request.nextUrl.clone()
+    url.pathname = `/${locale}/login`
+    url.search = "?bloque=1"
+    const res = NextResponse.redirect(url)
+    supabaseResponse.cookies.getAll().forEach(c => res.cookies.set(c))
+    return res
+  }
+
   const allowedIds = new Set<string>(profile?.company_access ?? [])
   const allowedSchemas = (companies ?? []).filter(c => allowedIds.has(c.id)).map(c => c.schema_name as string)
 
@@ -82,13 +96,21 @@ export async function updateSession(request: NextRequest, baseResponse?: ReturnT
     return NextResponse.redirect(url)
   }
 
-  // Pages of a module the user can't open lead to the "access denied" page (the menu shows them with a lock)
+  // API calls: the role must have the right needed by this route and method (src/lib/permissions.ts)
+  if (isApi) {
+    const cap = apiCapability(pathname, request.method)
+    if (cap && !can(profile?.role, cap)) {
+      return NextResponse.json({ error: "Votre rôle ne permet pas cette action" }, { status: 403 })
+    }
+  }
+
+  // Pages the user can't open lead to the "access denied" page (the menu shows them with a lock)
   if (!isApi && !isAuthPage) {
-    const area = navAreaForPath(pathname.split("/").slice(2).join("/"))
-    const access = { role: profile?.role, permissions: profile?.permissions, schemas: allowedSchemas }
-    const deniedKey = area === ADMIN_AREA
-      ? (isAdminRole(profile?.role) ? null : ADMIN_AREA)
-      : area && isNavLocked(area, access) ? area.key : null
+    const deniedKey = deniedAreaForPath(
+      pathname.split("/").slice(2).join("/"),
+      { role: profile?.role, schemas: allowedSchemas },
+      isAdminRole(profile?.role),
+    )
     if (deniedKey) {
       const url = request.nextUrl.clone()
       url.pathname = `/${locale}/acces-refuse`

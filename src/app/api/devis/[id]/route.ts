@@ -20,6 +20,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   }
 
+  // An invoiced quote keeps its status; a quote linked to a live invoice can't be cancelled (D2, D6)
+  if ("status" in body) {
+    const { data: current } = await db.from("sales_orders").select("status").eq("id", id).single()
+    if (!current) return NextResponse.json({ error: "Devis introuvable" }, { status: 404 })
+    if (current.status === "invoiced" && body.status !== "invoiced") {
+      return NextResponse.json({ error: "Un devis facturé ne peut plus changer de statut" }, { status: 400 })
+    }
+    if (body.status === "cancelled") {
+      const { count } = await db.from("invoices").select("id", { count: "exact", head: true }).eq("order_id", id).neq("status", "cancelled")
+      if (count) return NextResponse.json({ error: "Ce devis a une facture : il ne peut pas être annulé" }, { status: 400 })
+    }
+  }
+
   const { data, error } = await db
     .from("sales_orders")
     .update(body)

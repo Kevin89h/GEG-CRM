@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { requireSchemaPage } from "@/lib/access"
 import { notFound } from "next/navigation"
 import ProductDetailClient from "./ProductDetailClient"
-import { isAdminRole } from "@/lib/roles"
+import { can } from "@/lib/permissions"
 
 export default async function ProductDetailPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params
@@ -13,9 +13,10 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
   const { data: { user } } = await supabase.auth.getUser()
   const { data: profile } = user
-    ? await supabase.from("profiles").select("role").eq("id", user.id).single()
+    ? await supabase.from("profiles").select("role, is_blocked").eq("id", user.id).single()
     : { data: null }
-  const isAdmin = isAdminRole(profile?.role)
+  // "isAdmin" here means: may edit products and see internal data (purchase price, references): Manager and above (D4)
+  const isAdmin = can(profile?.role, "products.write", profile?.is_blocked)
 
   const [
     { data: product },
@@ -55,7 +56,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
   return (
     <ProductDetailClient
-      product={product as Parameters<typeof ProductDetailClient>[0]["product"]}
+      product={(isAdmin ? product : { ...product, buy_price: null }) as Parameters<typeof ProductDetailClient>[0]["product"]}
       stockLevels={(stockLevels ?? []) as unknown as Parameters<typeof ProductDetailClient>[0]["stockLevels"]}
       moves={(moves ?? []) as unknown as Parameters<typeof ProductDetailClient>[0]["moves"]}
       documents={documents ?? []}

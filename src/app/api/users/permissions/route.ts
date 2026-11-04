@@ -4,16 +4,16 @@ import { errorResponse, requireCanManageUser } from "@/lib/access"
 import { assignableRoles, isSuperAdmin } from "@/lib/roles"
 import { validateCompanyIds } from "../companies"
 
-// PATCH { userId, role, permissions, company_ids? } — company_ids: super admin only
+// PATCH { userId, role, company_ids? } — company_ids: super admin only.
+// Rights come from the role (src/lib/permissions.ts): individual grids are no longer saved.
 export async function PATCH(req: Request)  {
   try {
-    const { userId, role, permissions, company_ids } = await req.json()
+    const { userId, role, company_ids } = await req.json()
     if (!userId) return NextResponse.json({ error: "userId requis" }, { status: 400 })
 
     const { actor, target } = await requireCanManageUser(userId)
 
     const update: Record<string, unknown> = {}
-    if (permissions !== undefined) update.permissions = permissions
 
     if (role !== undefined && role !== target.role) {
       if (userId === actor.userId) {
@@ -34,6 +34,7 @@ export async function PATCH(req: Request)  {
       update.company_access = companies
     }
 
+    if (Object.keys(update).length === 0) return NextResponse.json({ success: true })
     const { error } = await createAdminClient().from("profiles").update(update).eq("id", userId)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ success: true })
