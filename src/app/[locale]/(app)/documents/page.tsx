@@ -1,6 +1,7 @@
 import { createCompanyClient } from "@/lib/company"
 import { createClient } from "@/lib/supabase/server"
 import DocumentsClient from "./DocumentsClient"
+import { isAdminRole } from "@/lib/roles"
 
 export default async function DocumentsPage() {
   const supabase = await createClient()
@@ -11,7 +12,7 @@ export default async function DocumentsPage() {
     : { data: null }
 
   const userRole: string = profile?.role ?? "member"
-  const isAdmin = userRole === "admin"
+  const isAdmin = isAdminRole(userRole)
 
   const { db } = await createCompanyClient()
 

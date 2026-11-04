@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { createClient as createAdminClient } from "@supabase/supabase-js"
 import { NextResponse } from "next/server"
+import { isAdminRole } from "@/lib/roles"
 
 export async function GET(req: Request)  {
   try {
@@ -14,7 +15,7 @@ export async function GET(req: Request)  {
       .eq("id", user.id)
       .single()
 
-    if (profile?.role !== "admin") {
+    if (!isAdminRole(profile?.role)) {
       return NextResponse.json({ error: "Accès refusé" }, { status: 403 })
     }
 

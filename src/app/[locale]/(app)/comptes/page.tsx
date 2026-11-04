@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { createCompanyClient } from "@/lib/company"
 import AccountsClient from "./AccountsClient"
 import type { Account } from "@/types"
+import { isAdminRole } from "@/lib/roles"
 
 type AccountRow = Account & { contacts: [{ count: number }]; deals: [{ count: number }]; salesperson_id?: string | null }
 type EmployeeRow = { id: string; full_name: string }
@@ -14,7 +15,7 @@ export default async function AccountsPage({ params }: { params: Promise<{ local
   if (!user) redirect(`/${locale}/login`)
 
   const { data: profile } = await supabaseAuth.from("profiles").select("role, permissions").eq("id", user.id).single()
-  if (profile?.role !== "admin") {
+  if (!isAdminRole(profile?.role)) {
     const perm = profile?.permissions?.accounts
     if (perm && !perm.view) redirect(`/${locale}/dashboard`)
   }

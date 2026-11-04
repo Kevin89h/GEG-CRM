@@ -13,6 +13,7 @@ import {
 import { cn, initials } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import type { Profile } from "@/types"
+import { roleLabel } from "@/lib/roles"
 import CompanySwitcher from "./CompanySwitcher"
 
 interface Company {
@@ -176,7 +177,7 @@ export default function MobileHeader({ locale, profile, companies, currentSchema
                 <p className="text-white text-sm font-medium truncate">
                   {profile.full_name || profile.email}
                 </p>
-                <p className="text-slate-500 text-xs capitalize">{profile.role?.replace("_", " ")}</p>
+                <p className="text-slate-500 text-xs capitalize">{roleLabel(profile.role)}</p>
               </div>
             </div>
           )}

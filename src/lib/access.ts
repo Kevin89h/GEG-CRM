@@ -2,6 +2,7 @@ import { cache } from "react"
 import { notFound } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { isAdminRole, isSuperAdmin } from "@/lib/roles"
 
 export const COMPANY_SCHEMAS = ["geg_guinee", "geg_singapore"]
 
@@ -16,6 +17,8 @@ export interface Access {
   role: string
   /** Company schemas the user is allowed to read and write, from profiles.company_access */
   schemas: string[]
+  /** Ids of those same companies (public.companies.id) */
+  companyIds: string[]
 }
 
 /**
@@ -34,11 +37,14 @@ export const getAccess = cache(async (): Promise<Access | null> => {
   ])
 
   const allowedIds = new Set<string>(profile?.company_access ?? [])
-  const schemas = (companies ?? [])
-    .filter(c => allowedIds.has(c.id) && COMPANY_SCHEMAS.includes(c.schema_name))
-    .map(c => c.schema_name)
+  const allowed = (companies ?? []).filter(c => allowedIds.has(c.id) && COMPANY_SCHEMAS.includes(c.schema_name))
 
-  return { userId: user.id, role: profile?.role ?? "", schemas }
+  return {
+    userId: user.id,
+    role: profile?.role ?? "",
+    schemas: allowed.map(c => c.schema_name),
+    companyIds: allowed.map(c => c.id),
+  }
 })
 
 export async function requireUser(): Promise<Access> {
@@ -49,8 +55,38 @@ export async function requireUser(): Promise<Access> {
 
 export async function requireAdmin(): Promise<Access> {
   const access = await requireUser()
-  if (access.role !== "admin") throw new AccessError(403, "Accès refusé")
+  if (!isAdminRole(access.role)) throw new AccessError(403, "Accès refusé")
   return access
+}
+
+export async function requireSuperAdmin(): Promise<Access> {
+  const access = await requireUser()
+  if (!isSuperAdmin(access.role)) throw new AccessError(403, "Réservé aux super admins")
+  return access
+}
+
+/**
+ * A super admin manages everyone. An admin manages accounts that are not super admins
+ * and whose companies are all among the admin's own companies (an admin of GEG Guinée
+ * cannot touch an account that also has GEG Singapore).
+ */
+export function canManageUser(actor: Access, target: { role: string; company_access: string[] | null }): boolean {
+  if (isSuperAdmin(actor.role)) return true
+  if (!isAdminRole(actor.role) || isSuperAdmin(target.role)) return false
+  return (target.company_access ?? []).every(id => actor.companyIds.includes(id))
+}
+
+/** Admin check plus the right to manage this particular account. Returns the actor and the target profile. */
+export async function requireCanManageUser(targetId: string) {
+  const actor = await requireAdmin()
+  const { data: target } = await createAdminClient()
+    .from("profiles")
+    .select("id, email, role, company_access")
+    .eq("id", targetId)
+    .single()
+  if (!target) throw new AccessError(403, "Utilisateur introuvable")
+  if (!canManageUser(actor, target)) throw new AccessError(403, "Vous ne pouvez pas gérer ce compte")
+  return { actor, target }
 }
 
 export async function requireSchemaAccess(schema: string): Promise<Access> {

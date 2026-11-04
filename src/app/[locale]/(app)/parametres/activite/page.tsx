@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { createClient as createAdminClient } from "@supabase/supabase-js"
 import ActivityClient from "./ActivityClient"
+import { isAdminRole } from "@/lib/roles"
 
 export default async function ActivityPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params
@@ -16,7 +17,7 @@ export default async function ActivityPage({ params }: { params: Promise<{ local
     .eq("id", user.id)
     .single()
 
-  if (profile?.role !== "admin") redirect(`/${locale}/dashboard`)
+  if (!isAdminRole(profile?.role)) redirect(`/${locale}/dashboard`)
 
   // Fetch users list for filters
   const admin = createAdminClient(

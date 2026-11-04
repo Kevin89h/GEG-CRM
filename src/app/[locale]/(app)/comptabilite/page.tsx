@@ -2,8 +2,7 @@ import { createCompanyClient } from "@/lib/company"
 import { createClient as createAdminClient } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase/server"
 import ComptabiliteClient from "./ComptabiliteClient"
-
-const SUPER_ADMIN_EMAIL = "kevin@globalenergy.group"
+import { isSuperAdmin as isSuperAdminRole } from "@/lib/roles"
 
 export default async function ComptabilitePage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params
@@ -12,8 +11,8 @@ export default async function ComptabilitePage({ params }: { params: Promise<{ l
   // Vérifier si l'utilisateur connecté est super admin
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const { data: profile } = await supabase.from("profiles").select("email").eq("id", user?.id ?? "").single()
-  const isSuperAdmin = profile?.email === SUPER_ADMIN_EMAIL
+  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user?.id ?? "").single()
+  const isSuperAdmin = isSuperAdminRole(profile?.role)
 
   // Admin client for treasury_transactions (bypasses RLS)
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY

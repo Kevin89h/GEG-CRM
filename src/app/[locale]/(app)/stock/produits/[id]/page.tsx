@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server"
 import { requireSchemaPage } from "@/lib/access"
 import { notFound } from "next/navigation"
 import ProductDetailClient from "./ProductDetailClient"
+import { isAdminRole } from "@/lib/roles"
 
 export default async function ProductDetailPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params
@@ -14,7 +15,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
   const { data: profile } = user
     ? await supabase.from("profiles").select("role").eq("id", user.id).single()
     : { data: null }
-  const isAdmin = profile?.role === "admin"
+  const isAdmin = isAdminRole(profile?.role)
 
   const [
     { data: product },

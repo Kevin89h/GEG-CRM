@@ -1,62 +1,37 @@
-import { createClient } from "@/lib/supabase/server"
-import { createClient as createAdminClient } from "@supabase/supabase-js"
 import { NextResponse } from "next/server"
-
-const DEFAULT_PERMISSIONS = {
-  dashboard:    { view: true,  create: false, edit: false, delete: false },
-  accounts:     { view: true,  create: true,  edit: true,  delete: false },
-  contacts:     { view: true,  create: true,  edit: true,  delete: false },
-  deals:        { view: true,  create: true,  edit: true,  delete: false },
-  activities:   { view: true,  create: true,  edit: true,  delete: false },
-  ventes:       { view: true,  create: true,  edit: true,  delete: false },
-  achats:       { view: true,  create: true,  edit: true,  delete: false },
-  stock:        { view: true,  create: true,  edit: true,  delete: false },
-  comptabilite: { view: true,  create: false, edit: false, delete: false },
-  employes:     { view: true,  create: false, edit: false, delete: false },
-  documents:    { view: true,  create: true,  edit: true,  delete: false },
-  parametres:   { view: false, create: false, edit: false, delete: false },
-}
-
-const ADMIN_PERMISSIONS = Object.fromEntries(
-  Object.keys(DEFAULT_PERMISSIONS).map(k => [k, { view: true, create: true, edit: true, delete: true }])
-)
+import { createAdminClient } from "@/lib/supabase/admin"
+import { errorResponse, requireAdmin } from "@/lib/access"
+import { assignableRoles, defaultPermissionsFor, isSuperAdmin } from "@/lib/roles"
+import { resolveNewUserCompanies } from "../companies"
 
 export async function POST(req: Request) {
   try {
-    const supabase = await createClient()
+    const actor = await requireAdmin()
 
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 })
-
-    // Check admin role — allow if no profile found (first user scenario)
-    const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single()
-    if (profile && profile.role !== "admin") {
-      return NextResponse.json({ error: "Accès refusé" }, { status: 403 })
-    }
-
-    let body: { email?: string; role?: string }
+    let body: { email?: string; role?: string; company_ids?: unknown }
     try {
       body = await req.json()
     } catch {
       return NextResponse.json({ error: "Corps de requête invalide" }, { status: 400 })
     }
 
-    const { email, role } = body
+    const { email, company_ids } = body
+    const role = body.role ?? "sales_rep"
     if (!email) return NextResponse.json({ error: "Email requis" }, { status: 400 })
-
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-    if (!serviceKey) {
-      return NextResponse.json({ error: "Clé service non configurée" }, { status: 500 })
+    if (!assignableRoles(actor.role).includes(role as never)) {
+      return NextResponse.json({ error: "Vous ne pouvez pas attribuer ce rôle" }, { status: 403 })
     }
+    if (company_ids !== undefined && !isSuperAdmin(actor.role)) {
+      return NextResponse.json({ error: "Seul un super admin attribue les sociétés" }, { status: 403 })
+    }
+    const companies = await resolveNewUserCompanies(actor, company_ids)
+    if (companies instanceof NextResponse) return companies
 
-    const adminClient = createAdminClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      serviceKey
-    )
+    const adminClient = createAdminClient()
 
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://crm.gegoil.com"
     const { data, error } = await adminClient.auth.admin.inviteUserByEmail(email, {
-      data: { role: role ?? "member" },
+      data: { role },
       redirectTo: `${siteUrl}/fr/accept-invite`,
     })
 
@@ -66,17 +41,21 @@ export async function POST(req: Request) {
     }
 
     if (data.user) {
-      await adminClient.from("profiles").upsert({
+      const { error: profileError } = await adminClient.from("profiles").upsert({
         id: data.user.id,
         email,
-        role: role ?? "member",
-        permissions: role === "admin" ? ADMIN_PERMISSIONS : DEFAULT_PERMISSIONS,
+        role,
+        permissions: defaultPermissionsFor(role),
+        ...(companies ? { company_access: companies } : {}),
       }, { onConflict: "id" })
+      if (profileError) {
+        return NextResponse.json({ error: `Invitation envoyée mais profil non enregistré : ${profileError.message}` }, { status: 500 })
+      }
     }
 
     return NextResponse.json({ success: true, user: data.user })
   } catch (err) {
     console.error("Invite error:", err)
-    return NextResponse.json({ error: "Erreur serveur inattendue" }, { status: 500 })
+    return errorResponse(err)
   }
 }

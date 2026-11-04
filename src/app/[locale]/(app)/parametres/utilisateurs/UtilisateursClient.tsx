@@ -1,17 +1,9 @@
 "use client"
 
 import { useState } from "react"
-import { Users, Plus, X, Shield, ChevronDown, ChevronUp, Check, Mail, Loader2, Trash2, RefreshCw, AlertTriangle, UserPlus, Eye, EyeOff } from "lucide-react"
+import { Users, Plus, X, Shield, ChevronDown, ChevronUp, Check, Mail, Loader2, Trash2, RefreshCw, AlertTriangle, UserPlus, Eye, EyeOff, Lock } from "lucide-react"
 import { Badge } from "@/components/ui/Badge"
-
-interface Permission {
-  view: boolean
-  create: boolean
-  edit: boolean
-  delete: boolean
-}
-
-type Permissions = Record<string, Permission>
+import { ROLES, roleLabel, defaultPermissionsFor, type Permission, type Permissions } from "@/lib/roles"
 
 interface UserProfile {
   id: string
@@ -19,10 +11,22 @@ interface UserProfile {
   email: string
   role: string
   permissions: Permissions
+  company_access: string[]
+  /** Whether the current user may edit or delete this account (computed on the server) */
+  manageable: boolean
+}
+
+interface Company {
+  id: string
+  name: string
 }
 
 interface Props {
   users: UserProfile[]
+  companies: Company[]
+  currentUserId: string
+  assignableRoles: string[]
+  canAssignCompanies: boolean
 }
 
 const MODULES = [
@@ -45,40 +49,21 @@ const ACTION_LABELS: Record<string, string> = {
   view: "Voir", create: "Créer", edit: "Modifier", delete: "Supprimer"
 }
 
-const DEFAULT_PERMISSIONS: Permissions = {
-  dashboard:    { view: true,  create: false, edit: false, delete: false },
-  accounts:     { view: true,  create: true,  edit: true,  delete: false },
-  contacts:     { view: true,  create: true,  edit: true,  delete: false },
-  deals:        { view: true,  create: true,  edit: true,  delete: false },
-  activities:   { view: true,  create: true,  edit: true,  delete: false },
-  ventes:       { view: true,  create: true,  edit: true,  delete: false },
-  achats:       { view: true,  create: true,  edit: true,  delete: false },
-  stock:        { view: true,  create: true,  edit: true,  delete: false },
-  comptabilite: { view: true,  create: false, edit: false, delete: false },
-  employes:     { view: true,  create: false, edit: false, delete: false },
-  documents:    { view: true,  create: true,  edit: true,  delete: false },
-  parametres:   { view: false, create: false, edit: false, delete: false },
-}
-
-const ADMIN_PERMISSIONS: Permissions = Object.fromEntries(
-  MODULES.map(m => [m.key, { view: true, create: true, edit: true, delete: true }])
-)
-
 const roleColor: Record<string, "blue" | "green" | "yellow" | "gray"> = {
-  admin: "blue", manager: "green", sales: "yellow", user: "gray",
-}
-const roleLabel: Record<string, string> = {
-  admin: "Admin", manager: "Manager", sales: "Commercial", user: "Utilisateur",
+  super_admin: "blue", admin: "blue", manager: "green", sales_rep: "yellow",
 }
 
-export default function UtilisateursClient({ users: initial }: Props) {
+export default function UtilisateursClient({ users: initial, companies, currentUserId, assignableRoles, canAssignCompanies }: Props) {
+  const roleOptions = ROLES.filter(r => assignableRoles.includes(r.value))
   const [users, setUsers] = useState(initial)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [saving, setSaving] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<{ id: string; message: string } | null>(null)
+  const [newCompanyIds, setNewCompanyIds] = useState<string[]>([])
   const [showInvite, setShowInvite] = useState(false)
   const [modalTab, setModalTab] = useState<"invite" | "create">("invite")
   const [inviteEmail, setInviteEmail] = useState("")
-  const [inviteRole, setInviteRole] = useState("user")
+  const [inviteRole, setInviteRole] = useState("sales_rep")
   const [inviting, setInviting] = useState(false)
   const [inviteError, setInviteError] = useState("")
   const [inviteSuccess, setInviteSuccess] = useState("")
@@ -88,7 +73,7 @@ export default function UtilisateursClient({ users: initial }: Props) {
   const [createName, setCreateName] = useState("")
   const [createPhone, setCreatePhone] = useState("")
   const [createJobTitle, setCreateJobTitle] = useState("")
-  const [createRole, setCreateRole] = useState("user")
+  const [createRole, setCreateRole] = useState("sales_rep")
   const [showPassword, setShowPassword] = useState(false)
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState("")
@@ -120,15 +105,32 @@ export default function UtilisateursClient({ users: initial }: Props) {
     }))
   }
 
+  function setUserField(userId: string, field: "role" | "company_access", value: string | string[]) {
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, [field]: value } : u))
+  }
+
+  function toggleCompany(ids: string[], id: string): string[] {
+    return ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id]
+  }
+
   async function savePermissions(user: UserProfile) {
     setSaving(user.id)
+    setSaveError(null)
     try {
       const res = await fetch("/api/users/permissions", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id, role: user.role, permissions: user.permissions }),
+        body: JSON.stringify({
+          userId: user.id,
+          role: user.role,
+          permissions: user.permissions,
+          ...(canAssignCompanies ? { company_ids: user.company_access } : {}),
+        }),
       })
-      if (!res.ok) throw new Error(await res.text())
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        setSaveError({ id: user.id, message: body.error ?? "Erreur lors de l'enregistrement" })
+      }
     } finally {
       setSaving(null)
     }
@@ -169,7 +171,11 @@ export default function UtilisateursClient({ users: initial }: Props) {
       const res = await fetch("/api/users/invite", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: inviteEmail.trim(), role: inviteRole }),
+        body: JSON.stringify({
+          email: inviteEmail.trim(),
+          role: inviteRole,
+          ...(canAssignCompanies && newCompanyIds.length ? { company_ids: newCompanyIds } : {}),
+        }),
       })
       const body = await res.json()
       if (!res.ok) throw new Error(body.error ?? "Erreur")
@@ -182,7 +188,9 @@ export default function UtilisateursClient({ users: initial }: Props) {
           email: body.user.email,
           full_name: null,
           role: inviteRole,
-          permissions: inviteRole === "admin" ? ADMIN_PERMISSIONS : DEFAULT_PERMISSIONS,
+          permissions: defaultPermissionsFor(inviteRole),
+          company_access: newCompanyIds,
+          manageable: true,
         }])
       }
     } catch (err: unknown) {
@@ -193,10 +201,10 @@ export default function UtilisateursClient({ users: initial }: Props) {
   }
 
   function resetModal() {
-    setInviteEmail(""); setInviteRole("user"); setInviteError(""); setInviteSuccess("")
+    setInviteEmail(""); setInviteRole("sales_rep"); setInviteError(""); setInviteSuccess("")
     setCreateUsername(""); setCreatePassword(""); setCreateName(""); setCreatePhone("")
-    setCreateJobTitle(""); setCreateRole("user"); setCreateError(""); setCreateSuccess("")
-    setShowPassword(false)
+    setCreateJobTitle(""); setCreateRole("sales_rep"); setCreateError(""); setCreateSuccess("")
+    setShowPassword(false); setNewCompanyIds([])
   }
 
   async function handleCreate() {
@@ -213,6 +221,7 @@ export default function UtilisateursClient({ users: initial }: Props) {
           phone: createPhone.trim() || null,
           job_title: createJobTitle.trim() || null,
           role: createRole,
+          ...(canAssignCompanies && newCompanyIds.length ? { company_ids: newCompanyIds } : {}),
         }),
       })
       const body = await res.json()
@@ -224,7 +233,9 @@ export default function UtilisateursClient({ users: initial }: Props) {
           email: body.user.email,
           full_name: createName.trim() || createUsername.trim(),
           role: createRole,
-          permissions: createRole === "admin" ? ADMIN_PERMISSIONS : DEFAULT_PERMISSIONS,
+          permissions: defaultPermissionsFor(createRole),
+          company_access: newCompanyIds,
+          manageable: true,
         }])
       }
       setCreateUsername(""); setCreatePassword(""); setCreateName("")
@@ -234,6 +245,23 @@ export default function UtilisateursClient({ users: initial }: Props) {
     } finally {
       setCreating(false)
     }
+  }
+
+  function companyPicker(selected: string[], onToggle: (id: string) => void) {
+    return (
+      <div>
+        <label className="block text-xs font-medium text-gray-700 mb-1">Sociétés</label>
+        <div className="flex flex-wrap gap-3">
+          {companies.map(c => (
+            <label key={c.id} className="flex items-center gap-1.5 text-sm text-gray-700">
+              <input type="checkbox" checked={selected.includes(c.id)} onChange={() => onToggle(c.id)} />
+              {c.name}
+            </label>
+          ))}
+        </div>
+        {selected.length === 0 && <p className="text-xs text-gray-400 mt-1">Aucune cochée : GEG Guinée par défaut.</p>}
+      </div>
+    )
   }
 
   return (
@@ -277,12 +305,10 @@ export default function UtilisateursClient({ users: initial }: Props) {
                   <label className="block text-xs font-medium text-gray-700 mb-1">Rôle</label>
                   <select value={inviteRole} onChange={e => setInviteRole(e.target.value)}
                     className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="user">Utilisateur</option>
-                    <option value="sales">Commercial</option>
-                    <option value="manager">Manager</option>
-                    <option value="admin">Admin</option>
+                    {roleOptions.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                   </select>
                 </div>
+                {canAssignCompanies && companyPicker(newCompanyIds, id => setNewCompanyIds(prev => toggleCompany(prev, id)))}
                 {inviteError && <p className="text-xs text-red-600">{inviteError}</p>}
                 {inviteSuccess && <p className="text-xs text-emerald-600 flex items-center gap-1"><Check className="w-3 h-3" />{inviteSuccess}</p>}
                 <div className="flex gap-3 pt-2">
@@ -349,12 +375,10 @@ export default function UtilisateursClient({ users: initial }: Props) {
                   <label className="block text-xs font-medium text-gray-700 mb-1">Rôle</label>
                   <select value={createRole} onChange={e => setCreateRole(e.target.value)}
                     className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="user">Utilisateur</option>
-                    <option value="sales">Commercial</option>
-                    <option value="manager">Manager</option>
-                    <option value="admin">Admin</option>
+                    {roleOptions.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                   </select>
                 </div>
+                {canAssignCompanies && companyPicker(newCompanyIds, id => setNewCompanyIds(prev => toggleCompany(prev, id)))}
                 {createError && <p className="text-xs text-red-600">{createError}</p>}
                 {createSuccess && <p className="text-xs text-emerald-600 flex items-center gap-1"><Check className="w-3 h-3" />{createSuccess}</p>}
                 <div className="flex gap-3 pt-2">
@@ -437,8 +461,18 @@ export default function UtilisateursClient({ users: initial }: Props) {
                     ? `@${user.email.replace("@geg.internal", "")}`
                     : user.email}
                 </p>
+                <p className="text-xs text-gray-400">
+                  {companies.filter(c => user.company_access.includes(c.id)).map(c => c.name).join(" + ") || "Aucune société"}
+                </p>
               </div>
-              <Badge variant={roleColor[user.role] ?? "gray"}>{roleLabel[user.role] ?? user.role}</Badge>
+              <Badge variant={roleColor[user.role] ?? "gray"}>{roleLabel(user.role)}</Badge>
+              {!user.manageable ? (
+                <span title="Vous ne pouvez pas gérer ce compte" className="flex items-center gap-1.5 text-xs text-gray-400 px-2 py-1.5">
+                  <Lock className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Protégé</span>
+                </span>
+              ) : (
+              <>
               <button onClick={() => toggleExpand(user.id)}
                 className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-blue-600 transition px-2 py-1.5 rounded-lg hover:bg-blue-50">
                 <Shield className="w-3.5 h-3.5" />
@@ -457,18 +491,38 @@ export default function UtilisateursClient({ users: initial }: Props) {
                   ? <Check className="w-3.5 h-3.5 text-emerald-500" />
                   : <RefreshCw className="w-3.5 h-3.5" />}
               </button>
-              <button
-                onClick={() => setConfirmDeleteId(user.id)}
-                title="Supprimer l'utilisateur"
-                className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
+              {user.id !== currentUserId && (
+                <button
+                  onClick={() => setConfirmDeleteId(user.id)}
+                  title="Supprimer l'utilisateur"
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+              </>
+              )}
             </div>
 
-            {/* Permissions table */}
-            {expandedId === user.id && (
+            {/* Role, companies and permissions */}
+            {expandedId === user.id && user.manageable && (
               <div className="border-t border-gray-100 px-4 pb-4">
+                <div className="flex flex-wrap items-start gap-6 mt-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Rôle</label>
+                    <select
+                      value={user.role}
+                      disabled={user.id === currentUserId}
+                      title={user.id === currentUserId ? "Vous ne pouvez pas changer votre propre rôle" : undefined}
+                      onChange={e => setUserField(user.id, "role", e.target.value)}
+                      className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
+                    >
+                      {!roleOptions.some(r => r.value === user.role) && <option value={user.role}>{roleLabel(user.role)}</option>}
+                      {roleOptions.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+                    </select>
+                  </div>
+                  {canAssignCompanies && companyPicker(user.company_access, id => setUserField(user.id, "company_access", toggleCompany(user.company_access, id)))}
+                </div>
                 <div className="overflow-x-auto mt-3">
                   <table className="w-full text-xs">
                     <thead>
@@ -505,7 +559,8 @@ export default function UtilisateursClient({ users: initial }: Props) {
                     </tbody>
                   </table>
                 </div>
-                <div className="flex justify-end mt-3">
+                <div className="flex items-center justify-end gap-3 mt-3">
+                  {saveError?.id === user.id && <p className="text-xs text-red-600">{saveError.message}</p>}
                   <button onClick={() => savePermissions(user)} disabled={saving === user.id}
                     className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-xl hover:bg-blue-700 transition disabled:opacity-50">
                     {saving === user.id ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Enregistrement...</> : <><Check className="w-3.5 h-3.5" /> Sauvegarder</>}

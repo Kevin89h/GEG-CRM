@@ -27,6 +27,7 @@ import {
 import { cn, initials } from "@/lib/utils"
 import { createClient } from "@/lib/supabase/client"
 import type { Profile } from "@/types"
+import { isAdminRole, roleLabel } from "@/lib/roles"
 import CompanySwitcher from "./CompanySwitcher"
 import NotificationBell from "./NotificationBell"
 
@@ -98,7 +99,7 @@ export default function Sidebar({ locale, profile, companies, currentSchema }: P
       <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
         {navItems.map(({ key, icon: Icon, path }) => {
           // Admins see everything; others need explicit view permission
-          if (profile?.role !== "admin") {
+          if (!isAdminRole(profile?.role)) {
             const perm = profile?.permissions?.[key]
             if (perm && !perm.view) return null
           }
@@ -122,7 +123,7 @@ export default function Sidebar({ locale, profile, companies, currentSchema }: P
         })}
 
         {/* Journal d'activité — admins only */}
-        {profile?.role === "admin" && (() => {
+        {isAdminRole(profile?.role) && (() => {
           const href = `/${locale}/parametres/activite`
           const active = pathname.startsWith(href)
           return (
@@ -186,7 +187,7 @@ export default function Sidebar({ locale, profile, companies, currentSchema }: P
               <p className="text-white text-xs font-medium truncate">
                 {profile.full_name || profile.email}
               </p>
-              <p className="text-slate-500 text-xs capitalize">{profile.role?.replace("_", " ")}</p>
+              <p className="text-slate-500 text-xs capitalize">{roleLabel(profile.role)}</p>
             </div>
           </Link>
         )}

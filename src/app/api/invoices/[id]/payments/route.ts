@@ -3,6 +3,7 @@ import { createSchemaClient } from "@/lib/supabase/admin"
 import { getSchemaFromRequest } from "@/lib/company"
 import { logActivity } from "@/lib/activity-logger"
 import { NextRequest, NextResponse } from "next/server"
+import { isAdminRole } from "@/lib/roles"
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -18,7 +19,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (!user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 })
 
     const { data: profile } = await supabaseAuth.from("profiles").select("role, permissions").eq("id", user.id).single()
-    if (profile?.role !== "admin") {
+    if (!isAdminRole(profile?.role)) {
       const perm = profile?.permissions?.ventes
       if (perm && !perm.create) return NextResponse.json({ error: "Accès refusé" }, { status: 403 })
     }
