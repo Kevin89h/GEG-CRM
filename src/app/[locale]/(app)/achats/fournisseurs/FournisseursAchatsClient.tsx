@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Search, Building2, Phone, Mail, MapPin, Pencil, X, CreditCard, Download } from "lucide-react"
+import { Plus, Search, Building2, Phone, Mail, MapPin, Pencil, X, CreditCard, Download, Ban, RotateCcw } from "lucide-react"
 import { exportToXls } from "@/lib/exportXls"
 import { usePerms } from "@/components/PermissionsProvider"
 
@@ -52,18 +52,22 @@ interface Props {
 
 export default function FournisseursAchatsClient({ suppliers: initial, locale }: Props) {
   const { can } = usePerms()
-  // Display only (D2): POST/PATCH /api/suppliers need "fournisseurs.gerer", DELETE (unlisted) needs "suppression"
+  // Display only (D2/E3): POST/PATCH, deactivation (DELETE, only sets is_active = false) and reactivation
+  // all need "fournisseurs.gerer" (checked again by the API)
   const canManage = can("fournisseurs.gerer")
-  const canDelete = can("suppression")
   const [suppliers, setSuppliers] = useState(initial)
   const [search, setSearch] = useState("")
+  const [showInactive, setShowInactive] = useState(false)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
-  const filtered = suppliers.filter(s =>
+  const inactiveCount = suppliers.filter(s => !s.is_active).length
+  const filtered = suppliers.filter(s => (showInactive || s.is_active) &&
     `${s.name} ${s.city ?? ""} ${s.country ?? ""} ${s.email ?? ""}`.toLowerCase().includes(search.toLowerCase())
   )
 
@@ -134,10 +138,27 @@ export default function FournisseursAchatsClient({ suppliers: initial, locale }:
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Désactiver ce fournisseur ?")) return
-    const res = await fetch(`/api/suppliers/${id}`, { method: "DELETE" })
-    if (res.ok) setSuppliers(list => list.filter(s => s.id !== id))
+  // Deactivation / reactivation (E3): the row changes state only when the server confirmed it (A1)
+  async function setActive(s: Supplier, active: boolean) {
+    if (!active && !confirm(`Désactiver le fournisseur « ${s.name} » ?\n\nIl ne sera plus proposé dans les nouveaux documents. Son historique est conservé et il pourra être réactivé.`)) return
+    const action = active ? "Réactivation" : "Désactivation"
+    setBusyId(s.id)
+    setActionError(null)
+    try {
+      const res = active
+        ? await fetch(`/api/suppliers/${s.id}/reactivate`, { method: "POST" })
+        : await fetch(`/api/suppliers/${s.id}`, { method: "DELETE" })
+      if (!res.ok) {
+        const json = await res.json().catch(() => null) as { error?: string } | null
+        setActionError(`${action} de « ${s.name} » impossible : ${json?.error ?? `erreur ${res.status}`}`)
+        return
+      }
+      setSuppliers(list => list.map(x => x.id === s.id ? { ...x, is_active: active } : x))
+    } catch {
+      setActionError(`${action} de « ${s.name} » impossible : erreur réseau, veuillez réessayer`)
+    } finally {
+      setBusyId(null)
+    }
   }
 
   const ptLabel = (pt: string | null) => PAYMENT_TERMS_OPTIONS.find(o => o.value === pt)?.label ?? pt ?? "—"
@@ -154,7 +175,11 @@ export default function FournisseursAchatsClient({ suppliers: initial, locale }:
             <Plus className="w-3.5 h-3.5" /> Nouveau fournisseur
           </button>
         )}
-        <div className="relative ml-auto">
+        <label className="ml-auto flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+          <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} className="rounded border-gray-300" />
+          Afficher les fournisseurs désactivés{inactiveCount > 0 ? ` (${inactiveCount})` : ""}
+        </label>
+        <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
           <input
             value={search}
@@ -186,6 +211,12 @@ export default function FournisseursAchatsClient({ suppliers: initial, locale }:
 
       {/* Table */}
       <div className="px-4 md:px-6 py-4">
+        {actionError && (
+          <div className="mb-4 flex items-start justify-between gap-3 text-sm text-red-700 bg-red-50 border border-red-100 px-3 py-2 rounded-lg">
+            <span>{actionError}</span>
+            <button onClick={() => setActionError(null)} className="text-xs text-red-400 hover:text-red-600">Fermer</button>
+          </div>
+        )}
         {filtered.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-200 py-20 text-center text-gray-400">
             <Building2 className="w-10 h-10 mx-auto mb-3 opacity-30" />
@@ -208,9 +239,12 @@ export default function FournisseursAchatsClient({ suppliers: initial, locale }:
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {filtered.map(s => (
-                  <tr key={s.id} className="hover:bg-blue-50/20 transition-colors">
+                  <tr key={s.id} className={`hover:bg-blue-50/20 transition-colors ${s.is_active ? "" : "bg-gray-50/60"}`}>
                     <td className="px-4 py-3">
-                      <div className="font-medium text-gray-900">{s.name}</div>
+                      <div className="flex items-center gap-2">
+                        <span className={`font-medium ${s.is_active ? "text-gray-900" : "text-gray-500"}`}>{s.name}</span>
+                        {!s.is_active && <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-600">Désactivé</span>}
+                      </div>
                       {s.city && <div className="text-xs text-gray-400 flex items-center gap-1 mt-0.5"><MapPin className="w-3 h-3" />{s.city}</div>}
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell text-gray-600 text-xs">{s.country ?? "—"}</td>
@@ -234,13 +268,20 @@ export default function FournisseursAchatsClient({ suppliers: initial, locale }:
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
                         {canManage && (
-                          <button onClick={() => openEdit(s)} className="p-1.5 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition">
+                          <button onClick={() => openEdit(s)} title="Modifier" className="p-1.5 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition">
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
                         )}
-                        {canDelete && (
-                          <button onClick={() => handleDelete(s.id)} className="p-1.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition">
-                            <X className="w-3.5 h-3.5" />
+                        {canManage && s.is_active && (
+                          <button onClick={() => setActive(s, false)} disabled={busyId === s.id}
+                            className="flex items-center gap-1 px-2 py-1 rounded text-xs text-gray-500 hover:text-red-600 hover:bg-red-50 transition disabled:opacity-50">
+                            <Ban className="w-3.5 h-3.5" /> Désactiver
+                          </button>
+                        )}
+                        {canManage && !s.is_active && (
+                          <button onClick={() => setActive(s, true)} disabled={busyId === s.id}
+                            className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium text-emerald-700 hover:bg-emerald-50 transition disabled:opacity-50">
+                            <RotateCcw className="w-3.5 h-3.5" /> Réactiver
                           </button>
                         )}
                       </div>

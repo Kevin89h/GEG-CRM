@@ -43,10 +43,9 @@ export default function NouveauMouvementClient({ warehouses, products, stockLeve
   const router = useRouter()
   const t = useTranslations("mouvements")
   // Display only (D2): the page is reserved to "stock.mouvement_manuel", the API checks it again;
-  // internal references need "produits.prix_achat"
+  // E5: the product reference is commercial, visible to everyone
   const { can } = usePerms()
   const canSave = can("stock.mouvement_manuel")
-  const seeReference = can("produits.prix_achat")
 
   const typeConfig: Record<MoveType, { label: string; icon: React.ElementType; color: string; description: string; needsFrom: boolean; needsTo: boolean }> = {
     in: {
@@ -265,7 +264,7 @@ export default function NouveauMouvementClient({ warehouses, products, stockLeve
           onChange={e => set("product_id", e.target.value)}
           options={products.map(p => ({
             value: p.id,
-            label: seeReference && p.reference ? `${p.name} (${p.reference})` : p.name,
+            label: p.reference ? `${p.name} (${p.reference})` : p.name,
           }))}
         />
 

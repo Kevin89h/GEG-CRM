@@ -22,8 +22,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   // Purchase price and internal references need "produits.prix_achat" (D4); never returned without it
   const seeBuy = await hasPermission("produits.prix_achat")
-  if (!seeBuy && ["buy_price", "buy_price_currency", "reference", "sku", "internal_notes"].some(k => k in update)) {
-    return NextResponse.json({ error: "Vos permissions ne permettent pas de modifier le prix d'achat ou les références internes" }, { status: 403 })
+  if (!seeBuy && ["buy_price", "buy_price_currency", "sku", "internal_notes"].some(k => k in update)) {
+    return NextResponse.json({ error: "Vos permissions ne permettent pas de modifier le prix d'achat, le SKU ou les notes internes" }, { status: 403 })
   }
 
   const { data, error } = await db

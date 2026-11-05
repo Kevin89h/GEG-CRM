@@ -17,6 +17,9 @@ import { formatCurrency, formatDate } from "@/lib/utils"
 import DocumentLayout from "@/components/print/DocumentLayout"
 import { usePerms } from "@/components/PermissionsProvider"
 
+/** Internal note of a purchase order (A4), returned by GET /api/achats/[id]/notes */
+interface OrderNote { id: string; text: string; created_at: string; author: string }
+
 interface LandedLine {
   line_id: string
   product_id: string | null
@@ -120,9 +123,45 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
   const [receiveConfirmOpen, setReceiveConfirmOpen] = useState(false)
   const [newCost, setNewCost] = useState({ type: "transport_maritime", label: t("costTypeTransportMaritime"), amount: "", currency: order.currency })
   const [chatMsg, setChatMsg] = useState("")
+  // Internal notes of the order (A4): stored by /api/achats/[id]/notes, no e-mail is sent
+  const [notes, setNotes] = useState<OrderNote[]>([])
+  const [notesLoading, setNotesLoading] = useState(true)
+  const [notesLoadError, setNotesLoadError] = useState<string | null>(null)
+  const [noteSaving, setNoteSaving] = useState(false)
+  const [noteFeedback, setNoteFeedback] = useState<{ ok: boolean; text: string } | null>(null)
+  const noteInputRef = useRef<HTMLTextAreaElement>(null)
   const [attachments, setAttachments] = useState<{ name: string; url: string; size: number }[]>([])
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Fetches the internal notes (newest first): { notes } on success, { error } otherwise
+  async function fetchNotes(orderId: string): Promise<{ notes?: OrderNote[]; error?: string }> {
+    try {
+      const res = await fetch(`/api/achats/${orderId}/notes`)
+      const json = await res.json().catch(() => null) as { notes?: OrderNote[]; error?: string } | null
+      if (!res.ok) return { error: json?.error ?? `Erreur ${res.status}` }
+      return { notes: json?.notes ?? [] }
+    } catch {
+      return { error: "Erreur réseau" }
+    }
+  }
+
+  function applyNotes(result: { notes?: OrderNote[]; error?: string }) {
+    if (result.notes) { setNotes(result.notes); setNotesLoadError(null) }
+    else setNotesLoadError(result.error ?? "Erreur")
+    setNotesLoading(false)
+  }
+
+  // Load the internal notes on mount
+  useEffect(() => {
+    let cancelled = false
+    async function loadNotes() {
+      const result = await fetchNotes(order.id)
+      if (!cancelled) applyNotes(result)
+    }
+    loadNotes()
+    return () => { cancelled = true }
+  }, [order.id])
 
   // Load existing attachments from storage on mount
   useEffect(() => {
@@ -220,10 +259,36 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
     window.open(`/${locale}/achats/${order.id}/pdf`, "_blank")
   }
 
-  async function sendMessage() {
-    if (!chatMsg.trim()) return
-    setChatMsg("")
-    setStatusMsg(t("messageRegistered"))
+  // Saves an internal note (A4). Feedback "Note enregistrée" only when the server confirmed it.
+  async function saveNote() {
+    if (!canModify || noteSaving) return
+    const text = chatMsg.trim()
+    if (!text) {
+      noteInputRef.current?.focus()
+      setNoteFeedback({ ok: false, text: "Saisissez le texte de la note." })
+      return
+    }
+    setNoteSaving(true)
+    setNoteFeedback(null)
+    try {
+      const res = await fetch(`/api/achats/${order.id}/notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      })
+      const json = await res.json().catch(() => null) as { error?: string } | null
+      if (!res.ok) {
+        setNoteFeedback({ ok: false, text: `Note non enregistrée : ${json?.error ?? `erreur ${res.status}`}` })
+        return
+      }
+      setChatMsg("")
+      setNoteFeedback({ ok: true, text: "Note enregistrée" })
+      applyNotes(await fetchNotes(order.id))
+    } catch {
+      setNoteFeedback({ ok: false, text: "Note non enregistrée : erreur réseau, veuillez réessayer" })
+    } finally {
+      setNoteSaving(false)
+    }
   }
 
   function goToNewInvoice() {
@@ -565,12 +630,17 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
 
         {/* Right panel actions */}
         <div className="flex items-center gap-1 ml-4 border-l border-gray-200 pl-4">
-          <button onClick={sendMessage} className="px-2.5 py-1.5 text-xs font-semibold rounded bg-[#7c3aed] text-white hover:bg-[#6d28d9] transition flex items-center gap-1.5">
-            <MessageSquare className="w-3.5 h-3.5" /> {t("sendMessage")}
-          </button>
-          <button onClick={() => setChatMsg("📝 Note : ")} className="px-2.5 py-1.5 text-xs font-medium rounded border border-gray-200 text-gray-600 hover:bg-gray-50 transition">
-            {t("note")}
-          </button>
+          {canModify && (
+            <button onClick={saveNote} disabled={noteSaving} title="Enregistre une note interne sur la commande (aucun e-mail n'est envoyé)"
+              className="px-2.5 py-1.5 text-xs font-semibold rounded bg-[#7c3aed] text-white hover:bg-[#6d28d9] transition flex items-center gap-1.5 disabled:opacity-50">
+              <MessageSquare className="w-3.5 h-3.5" /> {noteSaving ? "Enregistrement…" : "Enregistrer la note interne"}
+            </button>
+          )}
+          {canModify && (
+            <button onClick={() => noteInputRef.current?.focus()} className="px-2.5 py-1.5 text-xs font-medium rounded border border-gray-200 text-gray-600 hover:bg-gray-50 transition">
+              {t("note")}
+            </button>
+          )}
           <button onClick={() => router.push(`/${locale}/activities`)} className="px-2.5 py-1.5 text-xs font-medium rounded border border-gray-200 text-gray-600 hover:bg-gray-50 transition">
             {t("activity")}
           </button>
@@ -1122,18 +1192,32 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
 
         {/* Right: Chatter */}
         <div className="w-80 bg-white border-l border-gray-200 flex flex-col overflow-hidden flex-shrink-0">
-          {/* Message input */}
+          {/* Internal note input (A4): saved on the order, visible to the team, no e-mail sent */}
           <div className="p-4 border-b border-gray-100">
-            <textarea
-              value={chatMsg}
-              onChange={e => setChatMsg(e.target.value)}
-              placeholder={t("sendMessagePlaceholder")}
-              className="w-full h-20 text-xs border border-gray-200 rounded p-2.5 resize-none focus:outline-none focus:ring-1 focus:ring-purple-400 placeholder:text-gray-300"
-            />
+            {canModify ? (
+              <>
+                <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Note interne</p>
+                <textarea
+                  ref={noteInputRef}
+                  value={chatMsg}
+                  onChange={e => { setChatMsg(e.target.value); if (noteFeedback) setNoteFeedback(null) }}
+                  placeholder="Ajouter une note interne (visible par l'équipe, aucun e-mail envoyé)…"
+                  maxLength={4000}
+                  className="w-full h-20 text-xs border border-gray-200 rounded p-2.5 resize-none focus:outline-none focus:ring-1 focus:ring-purple-400 placeholder:text-gray-300"
+                />
+              </>
+            ) : (
+              <p className="text-[11px] text-gray-400 italic">Vous n&apos;avez pas le droit d&apos;ajouter des notes sur cette commande.</p>
+            )}
+            {noteFeedback && (
+              <p className={`mt-1.5 text-[11px] px-2 py-1 rounded ${noteFeedback.ok ? "text-emerald-700 bg-emerald-50" : "text-red-600 bg-red-50"}`}>
+                {noteFeedback.text}
+              </p>
+            )}
             <div className="mt-2 flex items-center gap-2">
-              {chatMsg && (
-                <button className="px-3 py-1.5 text-xs font-medium bg-[#7c3aed] text-white rounded hover:bg-[#6d28d9] transition">
-                  {t("send")}
+              {canModify && chatMsg.trim() && (
+                <button onClick={saveNote} disabled={noteSaving} className="px-3 py-1.5 text-xs font-medium bg-[#7c3aed] text-white rounded hover:bg-[#6d28d9] transition disabled:opacity-50">
+                  {noteSaving ? "Enregistrement…" : "Enregistrer la note"}
                 </button>
               )}
               {canAddDocument && <button
@@ -1178,6 +1262,27 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
 
           {/* Activity log */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {/* Internal notes, newest first */}
+            {notesLoading && <p className="text-[11px] text-gray-400 text-center">Chargement des notes…</p>}
+            {notesLoadError && <p className="text-[11px] text-red-600 bg-red-50 px-2 py-1 rounded">Notes non chargées : {notesLoadError}</p>}
+            {notes.map(n => (
+              <div key={n.id} className="flex gap-2.5">
+                <div className="w-7 h-7 rounded-full bg-purple-600 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 mt-0.5">
+                  {(n.author || "?").charAt(0).toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-baseline gap-1.5 flex-wrap">
+                    <span className="text-xs font-semibold text-gray-800">{n.author}</span>
+                    <span className="text-[10px] text-gray-400">
+                      {new Date(n.created_at).toLocaleString("fr-FR", { dateStyle: "short", timeStyle: "short" })}
+                    </span>
+                    <span className="text-[9px] uppercase tracking-wide text-purple-600 bg-purple-50 px-1 rounded">Note interne</span>
+                  </div>
+                  <p className="text-xs text-gray-700 mt-0.5 whitespace-pre-wrap break-words">{n.text}</p>
+                </div>
+              </div>
+            ))}
+
             <div className="text-center text-[10px] text-gray-400 font-medium py-1">
               {formatDate(new Date().toISOString(), locale)}
             </div>

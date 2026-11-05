@@ -153,10 +153,17 @@ export default function NouvelAchatClient({ products: initialProducts, suppliers
   const refreshProducts = useCallback(async () => {
     setRefreshing(true)
     try {
-      const { supabase } = getCompanyClientBrowser()
-      const { data } = await supabase
-        .from("products").select("id, name, reference, buy_price").eq("is_active", true).order("name")
-      if (data) setProducts(data)
+      // Goes through the API: the database refuses buy_price to user sessions, the API blanks it
+      // (null) for users without "produits.prix_achat"
+      const res = await fetch("/api/stock/produits")
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(json.error ?? "Impossible d'actualiser la liste des produits")
+        return
+      }
+      if (Array.isArray(json.products)) setProducts(json.products as Product[])
+    } catch {
+      setError("Erreur réseau lors de l'actualisation des produits")
     } finally { setRefreshing(false) }
   }, [])
 

@@ -22,6 +22,14 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   }
 
+  // E1: an invoiced quote is frozen; only its project stays editable (audited by the database)
+  {
+    const { data: cur } = await db.from("sales_orders").select("status").eq("id", id).single()
+    if (cur?.status === "invoiced" && Object.keys(body).some(k => k !== "project_code")) {
+      return NextResponse.json({ error: "Devis facturé : seul le projet reste modifiable" }, { status: 409 })
+    }
+  }
+
   // Status changes need their own permission; an invoiced quote keeps its status (D2, Q2)
   if ("status" in body) {
     const perms = await currentPerms()

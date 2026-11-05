@@ -57,7 +57,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
 
   return (
     <ProductDetailClient
-      product={(seeBuyPrice ? product : { ...product, buy_price: null }) as Parameters<typeof ProductDetailClient>[0]["product"]}
+      product={(seeBuyPrice ? product : { ...product, buy_price: null, buy_price_currency: null, sku: null, internal_notes: null }) as Parameters<typeof ProductDetailClient>[0]["product"]}
       stockLevels={(stockLevels ?? []) as unknown as Parameters<typeof ProductDetailClient>[0]["stockLevels"]}
       moves={(moves ?? []) as unknown as Parameters<typeof ProductDetailClient>[0]["moves"]}
       documents={documents ?? []}

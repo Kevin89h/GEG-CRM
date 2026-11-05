@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Search, Building2, Phone, Mail, MapPin, Pencil, Trash2, Check, Users, Briefcase } from "lucide-react"
+import { Plus, Search, Building2, Phone, Mail, MapPin, Pencil, Ban, RotateCcw, Check, Users, Briefcase } from "lucide-react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { Button } from "@/components/ui/Button"
@@ -33,12 +33,15 @@ const EMPTY_FORM = {
 interface Props { fournisseurs: Supplier[] }
 
 export default function FournisseursClient({ fournisseurs: initial }: Props) {
-  // Display only (D2): create/edit need "fournisseurs.gerer", the DELETE route "suppression" (checked again by the API)
+  // Display only (D2/E3): create, edit, deactivate (DELETE route, only sets is_active = false) and
+  // reactivate all need "fournisseurs.gerer" (checked again by the API)
   const { can } = usePerms()
   const canManage = can("fournisseurs.gerer")
-  const canDelete = can("suppression")
   const [fournisseurs, setFournisseurs] = useState(initial)
   const [search, setSearch] = useState("")
+  const [showInactive, setShowInactive] = useState(false)
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
@@ -47,7 +50,8 @@ export default function FournisseursClient({ fournisseurs: initial }: Props) {
   const params = useParams()
   const locale = params.locale as string
 
-  const filtered = fournisseurs.filter(f =>
+  const inactiveCount = fournisseurs.filter(f => !f.is_active).length
+  const filtered = fournisseurs.filter(f => (showInactive || f.is_active) &&
     `${f.name} ${f.city ?? ""} ${f.country ?? ""} ${f.email ?? ""}`.toLowerCase().includes(search.toLowerCase())
   )
 
@@ -104,10 +108,27 @@ export default function FournisseursClient({ fournisseurs: initial }: Props) {
     setSaving(false)
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Désactiver ce fournisseur ?")) return
-    await fetch(`/api/suppliers/${id}`, { method: "DELETE" })
-    setFournisseurs(prev => prev.filter(f => f.id !== id))
+  // Deactivation / reactivation (E3): the row changes state only when the server confirmed it (A1)
+  async function setActive(f: Supplier, active: boolean) {
+    if (!active && !confirm(`Désactiver le fournisseur « ${f.name} » ?\n\nIl ne sera plus proposé dans les nouveaux documents. Son historique est conservé et il pourra être réactivé.`)) return
+    const action = active ? "Réactivation" : "Désactivation"
+    setBusyId(f.id)
+    setActionError(null)
+    try {
+      const res = active
+        ? await fetch(`/api/suppliers/${f.id}/reactivate`, { method: "POST" })
+        : await fetch(`/api/suppliers/${f.id}`, { method: "DELETE" })
+      if (!res.ok) {
+        const json = await res.json().catch(() => null) as { error?: string } | null
+        setActionError(`${action} de « ${f.name} » impossible : ${json?.error ?? `erreur ${res.status}`}`)
+        return
+      }
+      setFournisseurs(prev => prev.map(x => x.id === f.id ? { ...x, is_active: active } : x))
+    } catch {
+      setActionError(`${action} de « ${f.name} » impossible : erreur réseau, veuillez réessayer`)
+    } finally {
+      setBusyId(null)
+    }
   }
 
   const currencyColors: Record<string, string> = {
@@ -145,12 +166,25 @@ export default function FournisseursClient({ fournisseurs: initial }: Props) {
         )}
       </div>
 
-      <div className="relative mb-6 max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-        <input value={search} onChange={e => setSearch(e.target.value)}
-          placeholder="Rechercher un fournisseur…"
-          className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
+      <div className="flex flex-wrap items-center gap-4 mb-6">
+        <div className="relative w-full max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Rechercher un fournisseur…"
+            className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
+        </div>
+        <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+          <input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} className="rounded border-gray-300" />
+          Afficher les fournisseurs désactivés{inactiveCount > 0 ? ` (${inactiveCount})` : ""}
+        </label>
       </div>
+
+      {actionError && (
+        <div className="mb-4 flex items-start justify-between gap-3 text-sm text-red-700 bg-red-50 border border-red-100 px-3 py-2 rounded-lg">
+          <span>{actionError}</span>
+          <button onClick={() => setActionError(null)} className="text-xs text-red-400 hover:text-red-600">Fermer</button>
+        </div>
+      )}
 
       {filtered.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
@@ -178,7 +212,8 @@ export default function FournisseursClient({ fournisseurs: initial }: Props) {
                       <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
                         <span className="text-indigo-700 text-xs font-bold">{f.name.charAt(0).toUpperCase()}</span>
                       </div>
-                      <span className="font-semibold text-gray-900">{f.name}</span>
+                      <span className={`font-semibold ${f.is_active ? "text-gray-900" : "text-gray-500"}`}>{f.name}</span>
+                      {!f.is_active && <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-200 text-gray-600">Désactivé</span>}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-gray-500">
@@ -202,15 +237,22 @@ export default function FournisseursClient({ fournisseurs: initial }: Props) {
                   </td>
                   <td className="px-4 py-3 text-xs text-gray-400">{f.payment_terms}</td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                    <div className={`flex items-center justify-end gap-1 transition ${f.is_active ? "opacity-0 group-hover:opacity-100" : ""}`}>
                       {canManage && (
-                      <button onClick={() => openEdit(f)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition">
+                      <button onClick={() => openEdit(f)} title="Modifier" className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition">
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
                       )}
-                      {canDelete && (
-                      <button onClick={() => handleDelete(f.id)} className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 transition">
-                        <Trash2 className="w-3.5 h-3.5" />
+                      {canManage && f.is_active && (
+                      <button onClick={() => setActive(f, false)} disabled={busyId === f.id} title="Désactiver (le fournisseur n'est pas supprimé)"
+                        className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 transition disabled:opacity-50">
+                        <Ban className="w-3.5 h-3.5" />
+                      </button>
+                      )}
+                      {canManage && !f.is_active && (
+                      <button onClick={() => setActive(f, true)} disabled={busyId === f.id}
+                        className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium text-emerald-700 hover:bg-emerald-50 transition disabled:opacity-50">
+                        <RotateCcw className="w-3.5 h-3.5" /> Réactiver
                       </button>
                       )}
                     </div>

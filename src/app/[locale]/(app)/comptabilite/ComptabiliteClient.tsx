@@ -39,9 +39,16 @@ interface Props {
     draft: PurchaseStat[]; toPay: PurchaseStat[]
     draftAmount: number; toPayAmount: number
   }
+  /** Customer invoices still due, by due-date bucket (A3, computed on the server) */
+  invoiceAgeing: ChartBucket[]
+  /** Supplier invoices of the last 6 months, cancelled excluded (A3, computed on the server) */
+  purchaseMonths: ChartBucket[]
   accounts: TreasuryAccount[]
   transactions: Transaction[]
 }
+
+/** One bar: number of documents and amounts per currency (never added across currencies) */
+interface ChartBucket { label: string; count: number; amounts: Record<string, number> }
 
 const colorGradient: Record<string, string> = {
   blue:   "from-blue-500 to-blue-600",
@@ -61,7 +68,7 @@ const txTypeConfig = {
 }
 
 /* ─── Carte "Factures clients" style Odoo ─────────────── */
-function InvoiceCard({ locale, stats }: { locale: string; stats: Props["clientStats"] }) {
+function InvoiceCard({ locale, stats, ageing }: { locale: string; stats: Props["clientStats"]; ageing: ChartBucket[] }) {
   const { can } = usePerms()
   const total = stats.draft.length + stats.unpaid.length
   return (
@@ -120,14 +127,18 @@ function InvoiceCard({ locale, stats }: { locale: string; stats: Props["clientSt
         </div>
       )}
 
-      {/* Mini bar chart style Odoo */}
-      <MiniBarChart invoices={stats.unpaid} />
+      {/* Remaining due by due date (real data) */}
+      <BucketChart
+        buckets={ageing}
+        colors={["bg-red-400", "bg-amber-300", "bg-blue-300", "bg-teal-300", "bg-emerald-300", "bg-gray-300"]}
+        caption="Factures à encaisser par échéance"
+      />
     </div>
   )
 }
 
 /* ─── Carte "Factures fournisseurs" style Odoo ────────── */
-function PurchaseCard({ locale, stats }: { locale: string; stats: Props["purchaseStats"] }) {
+function PurchaseCard({ locale, stats, months }: { locale: string; stats: Props["purchaseStats"]; months: ChartBucket[] }) {
   const { can } = usePerms()
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
@@ -174,47 +185,53 @@ function PurchaseCard({ locale, stats }: { locale: string; stats: Props["purchas
         )}
       </div>
 
-      <div className="flex-1 px-5 pb-5 pt-2">
-        <div className="h-20 flex items-end gap-1.5">
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className={`flex-1 rounded-t-sm bg-purple-100`} style={{ height: `${20 + Math.random() * 60}%` }} />
-          ))}
-        </div>
-      </div>
+      {/* Supplier invoices of the last 6 months (real data) */}
+      <BucketChart buckets={months} colors={["bg-purple-300"]} caption="Factures fournisseurs des 6 derniers mois" />
     </div>
   )
 }
 
-/* ─── Mini bar chart ──────────────────────────────────── */
-function MiniBarChart({ invoices }: { invoices: InvoiceStat[] }) {
-  const buckets = [
-    { label: "Dû",            color: "bg-red-400" },
-    { label: "15-21 juin",    color: "bg-amber-300" },
-    { label: "Cette semaine", color: "bg-blue-300" },
-    { label: "29 juin-5 jul", color: "bg-teal-300" },
-    { label: "6-12 jul",      color: "bg-emerald-300" },
-    { label: "Pas dû",        color: "bg-gray-200" },
-  ]
-  // Valeurs simulées basées sur le nombre de factures
-  const base = invoices.length
-  const heights = [base * 15, base * 8, base * 5, base * 3, base * 2, base * 1].map(h => Math.min(100, h + 10))
+/* ─── Mini bar chart (A3: real data only) ─────────────── */
+// Bar height = document count relative to the largest bucket. Amounts are only listed per currency in the
+// tooltip: they are never added across currencies.
+function BucketChart({ buckets, colors, caption }: { buckets: ChartBucket[]; colors: string[]; caption: string }) {
+  const max = Math.max(0, ...buckets.map(b => b.count))
+  const tooltip = (b: ChartBucket) => {
+    const amounts = Object.entries(b.amounts)
+      .filter(([, v]) => v !== 0)
+      .map(([cur, v]) => formatCurrency(v, cur))
+    return `${b.label} : ${b.count} facture${b.count > 1 ? "s" : ""}${amounts.length ? `\n${amounts.join("\n")}` : ""}`
+  }
 
   return (
     <div className="mt-auto px-5 pb-5 pt-2">
-      <div className="h-20 flex items-end gap-1.5">
-        {buckets.map((b, i) => (
-          <div key={b.label} className="flex-1 flex flex-col items-center gap-1">
-            <div className={`w-full rounded-t-sm ${b.color}`} style={{ height: `${heights[i]}%` }} />
+      <p className="text-[10px] text-gray-400 mb-1">{caption}</p>
+      {max === 0 ? (
+        <div className="h-20 flex items-center justify-center rounded-lg border border-dashed border-gray-200 text-xs text-gray-400">
+          Aucune facture à afficher
+        </div>
+      ) : (
+        <>
+          <div className="h-20 flex items-end gap-1.5">
+            {buckets.map((b, i) => (
+              <div key={b.label} title={tooltip(b)} className="flex-1 h-full flex flex-col justify-end items-center cursor-default">
+                {b.count > 0 && <span className="text-[9px] text-gray-500 leading-none mb-0.5">{b.count}</span>}
+                <div
+                  className={`w-full rounded-t-sm ${b.count > 0 ? colors[i % colors.length] : "bg-gray-100"}`}
+                  style={{ height: b.count > 0 ? `${Math.max(6, (b.count / max) * 85)}%` : "2px" }}
+                />
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
-      <div className="flex gap-1.5 mt-1">
-        {buckets.map(b => (
-          <div key={b.label} className="flex-1 text-center text-[9px] text-gray-400 leading-tight truncate">
-            {b.label}
+          <div className="flex gap-1.5 mt-1">
+            {buckets.map(b => (
+              <div key={b.label} title={tooltip(b)} className="flex-1 text-center text-[9px] text-gray-400 leading-tight truncate">
+                {b.label}
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        </>
+      )}
     </div>
   )
 }
@@ -702,7 +719,7 @@ function ConfigModal({ accountId, acc, form, setForm, onClose, onSaved, isSuperA
 }
 
 /* ─── Composant principal ────────────────────────────── */
-export default function ComptabiliteClient({ locale, isSuperAdmin, clientStats, purchaseStats, accounts, transactions }: Props) {
+export default function ComptabiliteClient({ locale, isSuperAdmin, clientStats, purchaseStats, invoiceAgeing, purchaseMonths, accounts, transactions }: Props) {
   const router = useRouter()
   const { can } = usePerms()
   // Display only (D2): the API checks the same keys again
@@ -851,8 +868,8 @@ export default function ComptabiliteClient({ locale, isSuperAdmin, clientStats, 
 
       {/* Ligne 1 : Factures clients | Factures fournisseurs | Opérations diverses */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-        <InvoiceCard locale={locale} stats={clientStats} />
-        <PurchaseCard locale={locale} stats={purchaseStats} />
+        <InvoiceCard locale={locale} stats={clientStats} ageing={invoiceAgeing} />
+        <PurchaseCard locale={locale} stats={purchaseStats} months={purchaseMonths} />
 
         {/* Opérations diverses */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
@@ -874,9 +891,9 @@ export default function ComptabiliteClient({ locale, isSuperAdmin, clientStats, 
                 <ArrowDownLeft className="w-4 h-4 text-emerald-500" /> Toutes les factures clients
               </Link>
             )}
-            {can("achats.voir") && (
+            {can("factures_fournisseurs.voir") && (
               <Link
-                href={`/${locale}/achats`}
+                href={`/${locale}/comptabilite/factures-fournisseurs`}
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700"
               >
                 <ArrowUpRight className="w-4 h-4 text-red-500" /> Toutes les factures fournisseurs

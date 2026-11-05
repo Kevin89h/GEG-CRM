@@ -1,3 +1,4 @@
+import { SENSITIVE, sensitiveFilter } from "@/lib/sensitive"
 import { createCompanyClient } from "@/lib/company"
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
@@ -41,7 +42,7 @@ export default async function DealsPage() {
 
   return (
     <DealsClient
-      deals={deals}
+      deals={(await sensitiveFilter(SENSITIVE.dealCost)).apply(deals)}
       accounts={accounts}
       profiles={(profiles ?? []) as { id: string; full_name: string | null; email: string }[]}
       currentUserId={user?.id ?? ""}

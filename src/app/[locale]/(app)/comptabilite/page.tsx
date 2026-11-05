@@ -4,6 +4,11 @@ import { createClient } from "@/lib/supabase/server"
 import ComptabiliteClient from "./ComptabiliteClient"
 import { isSuperAdmin as isSuperAdminRole } from "@/lib/roles"
 
+/** Customer invoices still due (sent or partially paid) */
+function allInvoicesForAgeing<T extends { status: string }>(rows: T[]): T[] {
+  return rows.filter(i => i.status === "sent" || i.status === "partial")
+}
+
 export default async function ComptabilitePage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params
   const { db, schema } = await createCompanyClient()
@@ -74,6 +79,39 @@ export default async function ComptabilitePage({ params }: { params: Promise<{ l
     overdueAmount: allInvoices.filter(i => (i.status === "sent" || i.status === "partial") && i.due_date && i.due_date < today).reduce((s, i) => s + Number(i.balance), 0),
   }
 
+  // A3: real chart data (no simulated value). Heights use counts, amounts are listed per currency (never added
+  // across currencies). Customer invoices: what remains due, by due date. Supplier invoices: last 6 months.
+  const dayMs = 86400000
+  const ageing = [
+    { key: "overdue", label: "En retard" },
+    { key: "d7", label: "≤ 7 jours" },
+    { key: "d30", label: "8–30 jours" },
+    { key: "d60", label: "31–60 jours" },
+    { key: "later", label: "> 60 jours" },
+    { key: "none", label: "Sans échéance" },
+  ].map(b => ({ ...b, count: 0, amounts: {} as Record<string, number> }))
+  for (const i of allInvoicesForAgeing(invoices ?? [])) {
+    const days = i.due_date ? Math.floor((Date.parse(i.due_date) - Date.parse(today)) / dayMs) : null
+    const b = days === null ? ageing[5] : days < 0 ? ageing[0] : days <= 7 ? ageing[1] : days <= 30 ? ageing[2] : days <= 60 ? ageing[3] : ageing[4]
+    b.count++
+    b.amounts[i.currency] = (b.amounts[i.currency] ?? 0) + Number(i.balance ?? 0)
+  }
+  const MONTHS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."]
+  const now = new Date()
+  const purchaseMonths = Array.from({ length: 6 }, (_, k) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (5 - k), 1)
+    return { key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, label: MONTHS[d.getMonth()], count: 0, amounts: {} as Record<string, number> }
+  })
+  const firstMonth = purchaseMonths[0].key + "-01"
+  const { data: purchasesForChart } = await db.from("supplier_invoice_totals")
+    .select("currency, total_ttc, invoice_date, status").gte("invoice_date", firstMonth).neq("status", "cancelled")
+  for (const p of purchasesForChart ?? []) {
+    const m = purchaseMonths.find(x => x.key === String(p.invoice_date ?? "").slice(0, 7))
+    if (!m) continue
+    m.count++
+    m.amounts[p.currency ?? "GNF"] = (m.amounts[p.currency ?? "GNF"] ?? 0) + Number(p.total_ttc ?? 0)
+  }
+
   // Calcul stats achats
   const allPurchases = purchases ?? []
   const purchaseStats = {
@@ -101,6 +139,8 @@ export default async function ComptabilitePage({ params }: { params: Promise<{ l
       locale={locale}
       clientStats={clientStats}
       purchaseStats={purchaseStats}
+      invoiceAgeing={ageing.map(({ label, count, amounts }) => ({ label, count, amounts }))}
+      purchaseMonths={purchaseMonths.map(({ label, count, amounts }) => ({ label, count, amounts }))}
       accounts={accounts}
       transactions={transactions ?? []}
       isSuperAdmin={isSuperAdmin}

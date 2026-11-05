@@ -22,6 +22,7 @@ export default function EntrepotsClient({ warehouses: initial }: Props) {
   const [saveError, setSaveError] = useState("")
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState("")
   const [form, setForm] = useState({ name: "", city: "", address: "" })
 
   async function handleSave() {
@@ -43,16 +44,33 @@ export default function EntrepotsClient({ warehouses: initial }: Props) {
     setSaving(false)
   }
 
+  // The card disappears only when the server confirmed the deactivation (A1); otherwise the modal stays open with the error
   async function handleDelete(id: string) {
     setDeleting(true)
-    await fetch("/api/warehouses", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
-    })
-    setWarehouses(prev => prev.filter(w => w.id !== id))
+    setDeleteError("")
+    try {
+      const res = await fetch("/api/warehouses", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      })
+      if (!res.ok) {
+        const json = await res.json().catch(() => null) as { error?: string } | null
+        setDeleteError(`Le site n'a pas été désactivé : ${json?.error ?? `erreur ${res.status}`}`)
+        return
+      }
+      setWarehouses(prev => prev.filter(w => w.id !== id))
+      setConfirmDeleteId(null)
+    } catch {
+      setDeleteError("Le site n'a pas été désactivé : erreur réseau, veuillez réessayer")
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  function closeDeleteModal() {
     setConfirmDeleteId(null)
-    setDeleting(false)
+    setDeleteError("")
   }
 
   return (
@@ -75,7 +93,7 @@ export default function EntrepotsClient({ warehouses: initial }: Props) {
           <div key={w.id} className="relative bg-white rounded-xl border border-gray-100 shadow-sm p-5">
             {canManage && (
             <button
-              onClick={() => setConfirmDeleteId(w.id)}
+              onClick={() => { setDeleteError(""); setConfirmDeleteId(w.id) }}
               className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full bg-red-100 text-red-500 hover:bg-red-200 transition-colors"
             >
               <X className="w-3.5 h-3.5" />
@@ -110,11 +128,14 @@ export default function EntrepotsClient({ warehouses: initial }: Props) {
         )}
       </div>
 
-      <Modal open={!!confirmDeleteId && canManage} onClose={() => setConfirmDeleteId(null)} title={t("confirmDeleteTitle")}>
+      <Modal open={!!confirmDeleteId && canManage} onClose={closeDeleteModal} title={t("confirmDeleteTitle")}>
         <div className="space-y-4">
           <p className="text-sm text-gray-600">{t("confirmDeleteDescription")}</p>
+          {deleteError && (
+            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{deleteError}</p>
+          )}
           <div className="flex justify-end gap-3">
-            <Button variant="secondary" onClick={() => setConfirmDeleteId(null)}>{t("cancel")}</Button>
+            <Button variant="secondary" onClick={closeDeleteModal}>{t("cancel")}</Button>
             <button
               onClick={() => confirmDeleteId && handleDelete(confirmDeleteId)}
               disabled={deleting}

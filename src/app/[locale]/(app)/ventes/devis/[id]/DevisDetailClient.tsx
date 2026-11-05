@@ -103,6 +103,26 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
   const [cancelModalOpen, setCancelModalOpen] = useState(false)
   const [resetToDraftModalOpen, setResetToDraftModalOpen] = useState(false)
 
+  // Sends a PATCH to the quote and shows the server error message on failure
+  async function patchOrder(body: Record<string, unknown>, url = `/api/devis/${order.id}`): Promise<boolean> {
+    try {
+      const res = await fetch(url, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        alert(json.error ?? `Erreur lors de l'enregistrement (${res.status})`)
+        return false
+      }
+      return true
+    } catch {
+      alert("Erreur réseau lors de l'enregistrement")
+      return false
+    }
+  }
+
   async function loadAccounts(q = "") {
     const res = await fetch(`/api/accounts?q=${encodeURIComponent(q)}`)
     if (res.ok) {
@@ -131,12 +151,8 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
 
   async function saveAccount(accountId: string, accountName: string) {
     setSavingAccount(true)
-    const res = await fetch(`/api/devis/${order.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ account_id: accountId }),
-    })
-    if (res.ok) {
+    const ok = await patchOrder({ account_id: accountId })
+    if (ok) {
       setCurrentAccount({ id: accountId, name: accountName, country: currentAccount?.country ?? null })
       setEditingAccount(false)
       setAccountSearch("")
@@ -150,27 +166,23 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
 
   async function saveNotes(value: string) {
     setNotesSaving(true)
-    await fetch(`/api/devis/${order.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ notes: value || null }),
-    })
+    await patchOrder({ notes: value || null })
     setNotesSaving(false)
   }
 
   async function saveAdditionalInfo(value: string) {
     setAdditionalInfoSaving(true)
-    await fetch(`/api/devis/${order.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ additional_info: value || null }),
-    })
+    await patchOrder({ additional_info: value || null })
     setAdditionalInfoSaving(false)
   }
-  const isDraft = order.status !== "invoiced" && order.status !== "cancelled"
+  const isInvoiced = order.status === "invoiced"
+  const isDraft = !isInvoiced && order.status !== "cancelled"
   // Display only (D2): fields and lines are editable only with "devis.modifier"
   const canModify = can("devis.modifier")
   const canEdit = isDraft && canModify
+  // E1: an invoiced quote is fully frozen, only the project stays editable
+  const canEditUnlessInvoiced = canModify && !isInvoiced
+  const canEditProject = canModify
 
   const PAYMENT_TERMS_LABELS: Record<string, string> = {
     immediate: t("paymentImmediate"),
@@ -221,35 +233,27 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
   }
 
   async function toggleTva() {
+    if (!canEditUnlessInvoiced) return
     const newVal = !tva
     setTva(newVal)
-    await fetch(`/api/devis/${order.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tva: newVal }),
-    })
+    const ok = await patchOrder({ tva: newVal })
+    if (!ok) setTva(!newVal)
   }
 
   async function toggleLineExempt(lineId: string) {
+    if (!canEditUnlessInvoiced) return
     const line = lines.find(l => l.id === lineId)
     if (!line) return
     const newVal = !line.tva_exempt
     setLines(prev => prev.map(l => l.id === lineId ? { ...l, tva_exempt: newVal } : l))
-    await fetch(`/api/devis/${order.id}/lines/${lineId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tva_exempt: newVal }),
-    })
+    const ok = await patchOrder({ tva_exempt: newVal }, `/api/devis/${order.id}/lines/${lineId}`)
+    if (!ok) setLines(prev => prev.map(l => l.id === lineId ? { ...l, tva_exempt: !newVal } : l))
   }
 
   async function updateLine(lineId: string, field: "description" | "quantity" | "unit_price" | "discount", value: string) {
     const numVal = field !== "description" ? parseFloat(value) || 0 : 0
     setLines(prev => prev.map(l => l.id === lineId ? { ...l, [field]: field === "description" ? value : numVal } : l))
-    await fetch(`/api/devis/${order.id}/lines/${lineId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ [field]: field === "description" ? value : numVal }),
-    })
+    await patchOrder({ [field]: field === "description" ? value : numVal }, `/api/devis/${order.id}/lines/${lineId}`)
   }
 
   async function deleteLine(lineId: string) {
@@ -293,20 +297,13 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
       product: { name: p.name, reference: p.reference },
       unit: p.unit,
     } : l))
-    await fetch(`/api/devis/${order.id}/lines/${lineId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ product_id: productId, description: p.name, unit_price: p.sale_price ?? 0 }),
-    })
+    await patchOrder({ product_id: productId, description: p.name, unit_price: p.sale_price ?? 0 }, `/api/devis/${order.id}/lines/${lineId}`)
   }
 
+  // Sends only the changed field: for project_code the body is exactly { project_code }
   async function updateOrderField(field: string, value: string) {
     setOrderFields(prev => ({ ...prev, [field]: value }))
-    await fetch(`/api/devis/${order.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ [field]: value || null }),
-    })
+    await patchOrder({ [field]: value || null })
   }
 
   async function confirm() {
@@ -587,7 +584,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                   </div>
                   <button onClick={() => { setEditingAccount(false); setAccountSearch(""); setCreatingAccount(false) }} className="ml-2 text-xs text-gray-400 hover:text-gray-600">Annuler</button>
                 </div>
-              ) : !canModify ? (
+              ) : !canEditUnlessInvoiced ? (
                 <p className="text-sm text-gray-900">{currentAccount?.name ?? "—"}</p>
               ) : (
                 <button
@@ -683,14 +680,14 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                 <p className="text-sm text-gray-900 font-medium">{orderFields.currency}</p>
               )}
             </div>
-            {/* The project only classifies the quote for reporting: editable at any status */}
+            {/* The project only classifies the quote for reporting: editable at any status, even invoiced (E1) */}
             <div>
               <p className="text-xs text-gray-400 mb-0.5">Projet</p>
               <select
                 className="text-sm text-gray-900 bg-transparent border-b border-gray-200 hover:border-gray-400 focus:border-blue-500 focus:outline-none py-0.5 w-full disabled:border-transparent disabled:appearance-none"
                 value={orderFields.project_code}
                 onChange={e => updateOrderField("project_code", e.target.value)}
-                disabled={!canModify}
+                disabled={!canEditProject}
               >
                 <option value="">—</option>
                 {PROJECT_OPTIONS.map(p => (
@@ -870,7 +867,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                       <td className="px-4 py-2 text-center">
                         <button
                           onClick={() => toggleLineExempt(l.id)}
-                          disabled={!canModify}
+                          disabled={!canEditUnlessInvoiced}
                           title={l.tva_exempt ? "Cliquer pour appliquer la TVA" : "Cliquer pour exempter de TVA"}
                           className={`w-8 h-4 rounded-full transition-colors relative inline-flex items-center ${l.tva_exempt ? "bg-amber-400" : "bg-gray-200"}`}
                         >
@@ -913,7 +910,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
               <div className="flex items-center gap-2">
                 <button
                   onClick={toggleTva}
-                  disabled={!canModify}
+                  disabled={!canEditUnlessInvoiced}
                   className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 ${tva ? "bg-blue-600" : "bg-gray-200"}`}
                 >
                   <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${tva ? "translate-x-4" : "translate-x-0.5"}`} />
@@ -957,8 +954,8 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
             <textarea
               value={additionalInfo}
               onChange={e => setAdditionalInfo(e.target.value)}
-              onBlur={e => { if (canModify) saveAdditionalInfo(e.target.value) }}
-              readOnly={!canModify}
+              onBlur={e => { if (canEditUnlessInvoiced) saveAdditionalInfo(e.target.value) }}
+              readOnly={!canEditUnlessInvoiced}
               rows={6}
               placeholder="Conditions générales, termes de livraison, remarques..."
               className="w-full text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
@@ -974,8 +971,8 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
             <textarea
               value={notes}
               onChange={e => setNotes(e.target.value)}
-              onBlur={e => { if (canModify) saveNotes(e.target.value) }}
-              readOnly={!canModify}
+              onBlur={e => { if (canEditUnlessInvoiced) saveNotes(e.target.value) }}
+              readOnly={!canEditUnlessInvoiced}
               rows={6}
               placeholder={t("noNotes")}
               className="w-full text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"

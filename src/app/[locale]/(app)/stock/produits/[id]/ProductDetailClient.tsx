@@ -97,8 +97,9 @@ export default function ProductDetailClient({
 }: Props) {
   const t = useTranslations("produits")
   const router = useRouter()
-  // Display only (D2): isAdmin = "produits.gerer" (edit, image, documents); purchase price and internal
-  // references need "produits.prix_achat", the stock value "stock.valeur", the deletion "suppression"
+  // Display only (D2): isAdmin = "produits.gerer" (edit, image, documents); purchase price, SKU and internal
+  // notes need "produits.prix_achat" (E5: "reference" is commercial and visible to everyone), the stock
+  // value "stock.valeur", the deletion "suppression"
   const { can } = usePerms()
   const seeBuyPrice = can("produits.prix_achat")
   const seeStockValue = can("stock.valeur")
@@ -198,10 +199,13 @@ export default function ProductDetailClient({
       tva_achat: form.tva_achat ? parseFloat(form.tva_achat) : null,
       barcode: form.barcode || null,
     }
+    // "reference" is a commercial reference (printed on quotes and invoices): sent whenever the user can edit
+    if (isAdmin) {
+      updateData.reference = form.reference || null
+    }
     // Purchase price and internal references: only sent when the user can see them (hidden fields are
     // blanked by the page, sending them back would erase the stored values)
     if (seeBuyPrice) {
-      updateData.reference = form.reference || null
       updateData.buy_price = form.buy_price ? parseFloat(form.buy_price) : null
       updateData.buy_price_currency = form.buy_price_currency
     }
@@ -403,6 +407,12 @@ export default function ProductDetailClient({
                       {product.product_code}
                     </span>
                   )}
+                  {/* Commercial reference (printed on quotes and invoices): visible to everyone */}
+                  {(editing ? form.reference : product.reference) && (
+                    <span className="text-xs text-gray-700 font-mono bg-gray-100 px-2 py-0.5 rounded">
+                      Réf. {editing ? form.reference : product.reference}
+                    </span>
+                  )}
                   {(editing ? form.merchant_reference : product.merchant_reference) && (
                     <span className="text-xs text-gray-500 font-mono bg-gray-100 px-2 py-0.5 rounded">
                       <Eye className="w-3 h-3 inline mr-1 text-gray-400" />
@@ -524,6 +534,20 @@ export default function ProductDetailClient({
                   )}
                 </div>
 
+                {/* E5: commercial reference, visible to everyone, editable with "produits.gerer" */}
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                    Référence
+                    <span className="ml-1.5 text-xs text-gray-400 normal-case font-normal">(imprimée sur devis et factures)</span>
+                  </label>
+                  {editing && isAdmin ? (
+                    <input value={form.reference} onChange={e => setF("reference", e.target.value)}
+                      className={inputCls} placeholder="INT-001" />
+                  ) : (
+                    <p className="text-sm font-mono text-gray-800">{product.reference ?? "—"}</p>
+                  )}
+                </div>
+
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
                     {t("labelRefMarchande")}
@@ -575,16 +599,6 @@ export default function ProductDetailClient({
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-5">
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t("labelRefInterne")}</label>
-                    {editing ? (
-                      <input value={form.reference} onChange={e => setF("reference", e.target.value)}
-                        className={inputCls} placeholder="INT-001" />
-                    ) : (
-                      <p className="text-sm font-mono text-gray-800">{product.reference ?? "—"}</p>
-                    )}
-                  </div>
-
                   <div>
                     <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t("labelSku")}</label>
                     {editing ? (

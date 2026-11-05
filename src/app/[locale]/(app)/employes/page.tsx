@@ -1,3 +1,5 @@
+import { hasPermission } from "@/lib/access"
+import { SENSITIVE, sensitiveFilter } from "@/lib/sensitive"
 import { createCompanyClient } from "@/lib/company"
 import { createClient } from "@/lib/supabase/server"
 import EmployesClient from "./EmployesClient"
@@ -6,6 +8,8 @@ export default async function EmployesPage() {
   const { db: supabase } = await createCompanyClient()
   const authClient = await createClient()
 
+  // Salaries (E4) and commissions are removed on the server for users without the permission
+  const [salary, canCommissions] = await Promise.all([sensitiveFilter(SENSITIVE.salary), hasPermission("commissions.gerer")])
   const [{ data: employees }, { data: treasury }, { data: profiles }] = await Promise.all([
     supabase
       .from("employees")
@@ -24,9 +28,11 @@ export default async function EmployesPage() {
   return (
     <EmployesClient
       employees={(employees ?? []).map((e: Record<string, unknown>) => ({
-        ...e,
-        commissions: Array.isArray(e.commissions) ? e.commissions : [],
+        ...salary.apply(e),
+        // Commission amounts: "commissions.gerer" only (filtered on the server)
+        commissions: canCommissions && Array.isArray(e.commissions) ? e.commissions : [],
       })) as Parameters<typeof EmployesClient>[0]["employees"]}
+      canSeeSalaries={salary.allowed}
       treasuryAccounts={(treasury ?? []) as { id: string; name: string; currency: string }[]}
       profiles={(profiles ?? []) as { id: string; full_name: string | null; email: string }[]}
     />

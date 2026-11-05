@@ -35,10 +35,9 @@ export default function InventaireClient({ products, warehouses, levels }: Props
   const router = useRouter()
   const params = useParams()
   // Display only (D2): the page is reserved to "stock.inventaire", saving is checked again by the API;
-  // internal references need "produits.prix_achat"
+  // E5: the product reference is commercial, visible to everyone
   const { can } = usePerms()
   const canSave = can("stock.inventaire")
-  const seeReference = can("produits.prix_achat")
 
   // Build initial map: productId -> warehouseId -> quantity
   const initialMap = useMemo(() => {
@@ -198,7 +197,7 @@ export default function InventaireClient({ products, warehouses, levels }: Props
                 <tr key={p.id} className={`hover:bg-blue-50/20 transition-colors ${hasChange ? "bg-amber-50/40" : ""}`}>
                   <td className="px-4 py-2.5">
                     <span className="font-medium text-gray-900">{p.name}</span>
-                    {seeReference && p.reference && <span className="ml-2 text-xs text-gray-400 font-mono">{p.reference}</span>}
+                    {p.reference && <span className="ml-2 text-xs text-gray-400 font-mono">{p.reference}</span>}
                     {p.unit && <span className="ml-2 text-xs text-gray-500">({p.unit.name})</span>}
                   </td>
                   {warehouses.map(w => {

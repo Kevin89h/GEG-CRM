@@ -57,7 +57,7 @@ export default function ProduitsClient({ products: initial, categories, units, c
   const t = useTranslations("produits")
   const params = useParams()
   const locale = params.locale as string
-  // Display only (D2): purchase prices and internal references need "produits.prix_achat",
+  // Display only (D2): purchase prices need "produits.prix_achat" (E5: the reference is commercial, visible to everyone),
   // creating a packaging format (a unit) needs "parametres.gerer"
   const { can } = usePerms()
   const seeBuyPrice = can("produits.prix_achat")
@@ -185,7 +185,7 @@ export default function ProduitsClient({ products: initial, categories, units, c
           <button
             onClick={() => exportToXls(filtered.map(p => ({
               "Code": p.product_code ?? "",
-              ...(seeBuyPrice ? { "Référence": p.reference ?? "" } : {}),
+              "Référence": p.reference ?? "",
               "Nom": p.name,
               "Catégorie": p.category?.name ?? "",
               "Unité": p.unit?.name ?? "",
@@ -250,7 +250,7 @@ export default function ProduitsClient({ products: initial, categories, units, c
               <tr className="bg-gray-50 border-b border-gray-100">
                 <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colProduit")}</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Code</th>
-                {seeBuyPrice && <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colReference")}</th>}
+                <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colReference")}</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colCategorie")}</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colFormat")}</th>
                 {seeBuyPrice && <th className="text-right px-4 py-3 font-medium text-gray-600">{t("colPrixAchat")}</th>}
@@ -262,7 +262,7 @@ export default function ProduitsClient({ products: initial, categories, units, c
                 <tr key={p.id} className="hover:bg-blue-50/30 transition-colors cursor-pointer" onClick={() => window.location.href = `/${locale}/stock/produits/${p.id}`}>
                   <td className="px-4 py-3 font-medium text-gray-900">{p.name}</td>
                   <td className="px-4 py-3 text-blue-700 font-mono text-xs font-semibold">{p.product_code ?? "—"}</td>
-                  {seeBuyPrice && <td className="px-4 py-3 text-gray-500 font-mono text-xs">{p.reference ?? "—"}</td>}
+                  <td className="px-4 py-3 text-gray-500 font-mono text-xs">{p.reference ?? "—"}</td>
                   <td className="px-4 py-3">
                     {p.category ? (
                       <Badge variant={colorMap[p.category.color] ?? "gray"}>{p.category.name}</Badge>
@@ -305,7 +305,7 @@ export default function ProduitsClient({ products: initial, categories, units, c
             <div className="col-span-1 sm:col-span-2">
               <Input label={t("nomDuProduit")} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
             </div>
-            {seeBuyPrice && <Input label={`${t("reference")} (optionnel)`} value={form.reference} onChange={e => setForm(f => ({ ...f, reference: e.target.value }))} placeholder="ex: CIM-42.5-001" />}
+            <Input label={`${t("reference")} (optionnel)`} value={form.reference} onChange={e => setForm(f => ({ ...f, reference: e.target.value }))} placeholder="ex: CIM-42.5-001" />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

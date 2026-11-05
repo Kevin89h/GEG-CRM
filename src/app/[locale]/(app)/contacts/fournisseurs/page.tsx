@@ -8,7 +8,6 @@ export default async function FournisseursPage() {
   const { data } = await admin
     .from("suppliers")
     .select("id, name, phone, email, city, country, currency, notes, payment_terms, iban, swift, bank_name, is_active")
-    .eq("is_active", true)
     .order("name")
   return <FournisseursClient fournisseurs={data ?? []} />
 }

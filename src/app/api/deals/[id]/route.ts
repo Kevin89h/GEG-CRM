@@ -1,3 +1,4 @@
+import { SENSITIVE, sensitiveFilter, writesAny } from "@/lib/sensitive"
 import { NextRequest, NextResponse } from "next/server"
 import { hasPermission } from "@/lib/access"
 import { getSchemaFromRequest } from "@/lib/company"
@@ -15,7 +16,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 404 })
-  return NextResponse.json(data)
+  return NextResponse.json((await sensitiveFilter(SENSITIVE.dealCost)).apply(data))
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -57,6 +58,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  const costFilter = await sensitiveFilter(SENSITIVE.dealCost)
 
   // Notify newly added assignees
   const prevIds: string[] = Array.isArray(before?.assigned_to) ? before.assigned_to : []
@@ -88,5 +90,5 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     )
   }
 
-  return NextResponse.json(data)
+  return NextResponse.json(costFilter.apply(data))
 }

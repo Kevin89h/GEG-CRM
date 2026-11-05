@@ -46,6 +46,8 @@ interface Props {
   employees: Employee[]
   treasuryAccounts: TreasuryAccount[]
   profiles: UserProfile[]
+  /** "employes.salaires" (E4): without it the server blanks salaries and refuses to write them */
+  canSeeSalaries: boolean
 }
 
 const CURRENCIES = [
@@ -61,7 +63,7 @@ const emptyForm = {
   email: "", phone: "", notes: "", profile_id: "",
 }
 
-export default function EmployesClient({ employees: initial, treasuryAccounts, profiles }: Props) {
+export default function EmployesClient({ employees: initial, treasuryAccounts, profiles, canSeeSalaries }: Props) {
   // Display only (D2): employees need "employes.gerer", commissions (view and pay) "commissions.gerer";
   // both are checked again by the API and the database
   const { can } = usePerms()
@@ -82,7 +84,7 @@ export default function EmployesClient({ employees: initial, treasuryAccounts, p
   function openEdit(e: Employee) {
     setForm({
       full_name: e.full_name, title: e.title ?? "", job_description: e.job_description ?? "",
-      start_date: e.start_date, salary: String(e.salary ?? ""), salary_currency: e.salary_currency,
+      start_date: e.start_date, salary: String(e.salary ?? ""), salary_currency: e.salary_currency || "GNF",
       commission_rate: String(e.commission_rate), email: e.email ?? "", phone: e.phone ?? "", notes: e.notes ?? "", profile_id: e.profile_id ?? "",
     })
     setEditEmployee(e)
@@ -93,18 +95,21 @@ export default function EmployesClient({ employees: initial, treasuryAccounts, p
     if (!form.full_name || !form.start_date) return
     setSaving(true)
     setSaveError(null)
-    const payload = {
+    const payload: Record<string, unknown> = {
       full_name: form.full_name,
       title: form.title || null,
       job_description: form.job_description || null,
       start_date: form.start_date,
-      salary: form.salary ? parseFloat(form.salary) : null,
-      salary_currency: form.salary_currency,
       commission_rate: parseFloat(form.commission_rate) || 0,
       email: form.email || null,
       phone: form.phone || null,
       notes: form.notes || null,
       profile_id: form.profile_id || null,
+    }
+    // Salary fields are sent only with "employes.salaires": the API refuses them otherwise (403)
+    if (canSeeSalaries) {
+      payload.salary = form.salary ? parseFloat(form.salary) : null
+      payload.salary_currency = form.salary_currency
     }
 
     try {
@@ -217,7 +222,7 @@ export default function EmployesClient({ employees: initial, treasuryAccounts, p
                   <p className="text-sm text-gray-500">{emp.title ?? "—"}</p>
                 </div>
                 <div className="flex items-center gap-6 text-sm text-gray-500 flex-shrink-0">
-                  {emp.salary && (
+                  {canSeeSalaries && !!emp.salary && (
                     <div className="flex items-center gap-1">
                       <Banknote className="w-3.5 h-3.5" />
                       <span>{formatCurrency(emp.salary, emp.salary_currency as "GNF" | "USD" | "EUR")}/mois</span>
@@ -332,9 +337,13 @@ export default function EmployesClient({ employees: initial, treasuryAccounts, p
             <Input label="Date d'embauche *" type="date" value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} />
             <Input label="Email" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="email@example.com" />
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Input label="Salaire mensuel" type="number" min="0" step="any" value={form.salary} onChange={e => setForm(f => ({ ...f, salary: e.target.value }))} placeholder="0" />
-            <Select label="Devise salaire" value={form.salary_currency} onChange={e => setForm(f => ({ ...f, salary_currency: e.target.value }))} options={CURRENCIES} />
+          <div className={`grid grid-cols-1 gap-3 ${canSeeSalaries ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+            {canSeeSalaries && (
+              <>
+                <Input label="Salaire mensuel" type="number" min="0" step="any" value={form.salary} onChange={e => setForm(f => ({ ...f, salary: e.target.value }))} placeholder="0" />
+                <Select label="Devise salaire" value={form.salary_currency} onChange={e => setForm(f => ({ ...f, salary_currency: e.target.value }))} options={CURRENCIES} />
+              </>
+            )}
             <Input label="Taux commission (%)" type="number" min="0" max="100" step="0.1" value={form.commission_rate} onChange={e => setForm(f => ({ ...f, commission_rate: e.target.value }))} placeholder="0" />
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

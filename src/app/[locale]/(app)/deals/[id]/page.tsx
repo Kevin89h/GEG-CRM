@@ -1,3 +1,4 @@
+import { SENSITIVE, sensitiveFilter } from "@/lib/sensitive"
 import { createCompanyClient } from "@/lib/company"
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
@@ -60,7 +61,7 @@ export default async function DealDetailPage({ params }: { params: Promise<{ loc
     : { data: [] }
 
   const normalizedDeal = {
-    ...deal,
+    ...(await sensitiveFilter(SENSITIVE.dealCost)).apply(deal),
     assigned_to: assignedIds,
     account: Array.isArray(deal.account) ? deal.account[0] ?? null : deal.account,
     assignedEmployees: (assignedProfiles ?? []) as { id: string; full_name: string | null; email: string }[],

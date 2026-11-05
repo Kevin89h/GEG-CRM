@@ -1,7 +1,21 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSchemaFromRequest } from "@/lib/company"
 import { createSchemaClient } from "@/lib/supabase/admin"
-import { errorResponse } from "@/lib/access"
+import { errorResponse, requirePermission } from "@/lib/access"
+import { SENSITIVE, sensitiveFilter } from "@/lib/sensitive"
+
+// GET: active products for pickers (e.g. new purchase order). Purchase price blanked without "produits.prix_achat".
+export async function GET(req: NextRequest) {
+  try {
+    await requirePermission("produits.voir")
+    const db = createSchemaClient(await getSchemaFromRequest(req))
+    const { data, error } = await db.from("products").select("id, name, reference, buy_price").eq("is_active", true).order("name")
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ products: (await sensitiveFilter(SENSITIVE.productInternal)).apply(data ?? []) })
+  } catch (err) {
+    return errorResponse(err)
+  }
+}
 
 export async function POST(req: NextRequest)  {
   try {

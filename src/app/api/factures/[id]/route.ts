@@ -4,7 +4,8 @@ import { logActivity } from "@/lib/activity-logger"
 import { currentPerms } from "@/lib/current-perms"
 import { LOCKED_MESSAGE, invoiceStatus, invoiceTransitionError } from "@/lib/invoice-lock"
 
-const ALLOWED_FIELDS = ["notes", "due_date", "status"]
+// "notes" is printed on the invoice PDF: draft only (E2). "internal_notes" is never printed: editable at any status.
+const ALLOWED_FIELDS = ["notes", "internal_notes", "due_date", "status"]
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -22,7 +23,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const current = await invoiceStatus(db, id)
   if (!current) return NextResponse.json({ error: "Facture introuvable" }, { status: 404 })
-  if ("due_date" in update && current !== "draft") return NextResponse.json({ error: LOCKED_MESSAGE }, { status: 409 })
+  if (("due_date" in update || "notes" in update) && current !== "draft") return NextResponse.json({ error: LOCKED_MESSAGE }, { status: 409 })
   if ("status" in update) {
     const refused = invoiceTransitionError(await currentPerms(), current, String(update.status))
     if (refused) return NextResponse.json({ error: refused }, { status: 403 })
@@ -34,7 +35,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     .from("invoices")
     .update(update)
     .eq("id", id)
-    .select("id, number, status, notes")
+    .select("id, number, status, notes, internal_notes")
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })

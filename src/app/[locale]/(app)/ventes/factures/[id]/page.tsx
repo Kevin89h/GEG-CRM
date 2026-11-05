@@ -11,7 +11,7 @@ export default async function FactureDetailPage({ params }: { params: Promise<{ 
   const publicSupa = await createClient()
 
   // Try to find the invoice in the current schema; fall back to geg_guinee if needed
-  const INV_SELECT = "id, number, status, currency, account_id, issue_date, due_date, notes, order_id"
+  const INV_SELECT = "id, number, status, currency, account_id, issue_date, due_date, notes, internal_notes, order_id"
   let { data: inv } = await db.from("invoices").select(INV_SELECT).eq("id", id).single()
 
   if (!inv && schema !== "geg_guinee") {
@@ -93,6 +93,8 @@ export default async function FactureDetailPage({ params }: { params: Promise<{ 
     issue_date: inv.issue_date,
     due_date: inv.due_date ?? null,
     notes: inv.notes ?? null,
+    // Never printed: shown only on the detail screen (E2)
+    internal_notes: inv.internal_notes ?? null,
     total_ht,
     total_ttc,
     total_paid,

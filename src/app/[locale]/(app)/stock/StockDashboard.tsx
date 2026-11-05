@@ -31,10 +31,9 @@ export default function StockDashboard({ levels, warehouses, products }: Props) 
   const { locale } = useParams<{ locale: string }>()
   const t = useTranslations("stock")
   // Display only (D2): manual moves and losses need "stock.mouvement_manuel", the inventory "stock.inventaire",
-  // internal references "produits.prix_achat" (the pages and the API check again)
+  // (the pages and the API check again). E5: the product reference is commercial, visible to everyone
   const { can } = usePerms()
   const canMove = can("stock.mouvement_manuel")
-  const seeReference = can("produits.prix_achat")
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>("all")
   const [search, setSearch] = useState("")
 
@@ -102,7 +101,7 @@ export default function StockDashboard({ levels, warehouses, products }: Props) 
               const xlsRows = rows.flatMap(r =>
                 warehouses.map(w => ({
                   "Produit": r.product.name,
-                  ...(seeReference ? { "Référence": r.product.reference ?? "" } : {}),
+                  "Référence": r.product.reference ?? "",
                   "Catégorie": r.product.category?.name ?? "",
                   "Unité": r.product.unit?.name ?? "",
                   "Entrepôt": w.name,
@@ -183,7 +182,7 @@ export default function StockDashboard({ levels, warehouses, products }: Props) 
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
                 <th className="text-left px-4 py-3 font-medium text-gray-600 min-w-[200px]">{t("colProduct")}</th>
-                {seeReference && <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colRef")}</th>}
+                <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colRef")}</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colUnit")}</th>
                 {filteredWarehouses.map(w => (
                   <th key={w.id} className="text-right px-4 py-3 font-medium text-gray-600 min-w-[100px]">
@@ -209,7 +208,7 @@ export default function StockDashboard({ levels, warehouses, products }: Props) 
                         <span className="font-medium text-gray-900">{product.name}</span>
                       </div>
                     </td>
-                    {seeReference && <td className="px-4 py-3 text-gray-500 font-mono text-xs">{product.reference ?? "—"}</td>}
+                    <td className="px-4 py-3 text-gray-500 font-mono text-xs">{product.reference ?? "—"}</td>
                     <td className="px-4 py-3 text-gray-600">{product.unit?.name ?? "—"}</td>
                     {filteredWarehouses.map(w => {
                       const qty = byWarehouse[w.id] ?? 0

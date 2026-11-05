@@ -9,7 +9,7 @@ export default async function FournisseursAchatsPage({ params }: { params: Promi
   const admin = createAdminClient().schema(schema)
 
   const [{ data: suppliers }, { data: orderStats }] = await Promise.all([
-    admin.from("suppliers").select("id, name, email, phone, country, city, payment_terms, currency, iban, swift, bank_name, notes, is_active").eq("is_active", true).order("name"),
+    admin.from("suppliers").select("id, name, email, phone, country, city, payment_terms, currency, iban, swift, bank_name, notes, is_active").order("name"),
     db.from("purchase_orders").select("supplier_id, total").not("supplier_id", "is", null),
   ])
 

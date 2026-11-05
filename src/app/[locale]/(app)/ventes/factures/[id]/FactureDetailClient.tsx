@@ -50,6 +50,7 @@ interface Invoice {
   issue_date: string
   due_date: string | null
   notes: string | null
+  internal_notes?: string | null
   total_ht: number
   total_ttc: number
   total_paid: number
@@ -87,6 +88,10 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
   const [error, setError] = useState<string | null>(null)
   const [notes, setNotes] = useState(initial.notes ?? "")
   const [notesSaving, setNotesSaving] = useState(false)
+  const [notesMessage, setNotesMessage] = useState<{ ok: boolean; text: string } | null>(null)
+  const [internalNotes, setInternalNotes] = useState(initial.internal_notes ?? "")
+  const [internalNotesSaving, setInternalNotesSaving] = useState(false)
+  const [internalNotesMessage, setInternalNotesMessage] = useState<{ ok: boolean; text: string } | null>(null)
   const [cancelModalOpen, setCancelModalOpen] = useState(false)
   const [resetToDraftModalOpen, setResetToDraftModalOpen] = useState(false)
   const [paymentForm, setPaymentForm] = useState({
@@ -146,6 +151,10 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
   const canPay = allows(perms, "paiements_clients.enregistrer")
   // Notes go through PATCH /api/factures/[id], allowed with any of these keys (API_RULES)
   const canEditNotes = allows(perms, ["factures.modifier_brouillon", "factures.emettre", "factures.annuler_brouillon"])
+  // E2: "notes" is printed on the invoice, so it is frozen once the invoice is emitted
+  const canEditPrintedNotes = isDraft && canEditNotes
+  // E2: internal notes are never printed, editable at any status
+  const canEditInternalNotes = canEditNotes
   const [duplicating, setDuplicating] = useState(false)
 
   async function duplicateInvoice() {
@@ -216,14 +225,40 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
     setSavingAccount(false)
   }
 
+  // PATCH /api/factures/[id] with a single field; returns the server error message on failure
+  async function patchInvoiceField(body: Record<string, unknown>): Promise<string | null> {
+    try {
+      const res = await fetch(`/api/factures/${invoice.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}))
+        return json.error ?? `Erreur lors de l'enregistrement (${res.status})`
+      }
+      return null
+    } catch {
+      return "Erreur réseau lors de l'enregistrement"
+    }
+  }
+
   async function saveNotes(value: string) {
+    if (!canEditPrintedNotes) return
     setNotesSaving(true)
-    await fetch(`/api/factures/${invoice.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ notes: value || null }),
-    })
+    setNotesMessage(null)
+    const err = await patchInvoiceField({ notes: value || null })
+    setNotesMessage(err ? { ok: false, text: err } : { ok: true, text: "Mentions enregistrées." })
     setNotesSaving(false)
+  }
+
+  async function saveInternalNotes(value: string) {
+    if (!canEditInternalNotes) return
+    setInternalNotesSaving(true)
+    setInternalNotesMessage(null)
+    const err = await patchInvoiceField({ internal_notes: value || null })
+    setInternalNotesMessage(err ? { ok: false, text: err } : { ok: true, text: "Notes internes enregistrées." })
+    setInternalNotesSaving(false)
   }
 
   async function saveDates() {
@@ -1034,18 +1069,44 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
       )}
 
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-        <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">{t("notes")}</p>
+        {/* E2: "notes" is printed on the invoice PDF, editable only while the invoice is a draft */}
+        <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">Mentions imprimées sur la facture</p>
         <textarea
           value={notes}
           onChange={e => setNotes(e.target.value)}
-          onBlur={e => { if (canEditNotes) saveNotes(e.target.value) }}
-          readOnly={!canEditNotes}
+          onBlur={e => { if (canEditPrintedNotes) saveNotes(e.target.value) }}
+          readOnly={!canEditPrintedNotes}
           rows={4}
-          placeholder="Ajouter des notes..."
-          className="w-full text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+          placeholder={canEditPrintedNotes ? "Mentions à imprimer sur la facture..." : ""}
+          className={`w-full text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none ${!canEditPrintedNotes ? "bg-gray-50" : ""}`}
         />
-        <p className="text-xs text-gray-400 mt-1">
-          {notesSaving ? "Sauvegarde..." : "Les notes sont sauvegardées automatiquement à la perte du focus."}
+        <p className={`text-xs mt-1 ${notesMessage && !notesMessage.ok ? "text-red-600" : "text-gray-400"}`}>
+          {notesSaving
+            ? "Sauvegarde..."
+            : notesMessage
+            ? notesMessage.text
+            : canEditPrintedNotes
+            ? "Ce texte apparaît sur la facture imprimée. Sauvegarde automatique à la perte du focus."
+            : "Ce texte apparaît sur la facture imprimée. Il n'est modifiable que tant que la facture est en brouillon."}
+        </p>
+
+        {/* E2: internal notes are never printed, editable at any status */}
+        <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2 mt-6">Notes internes (jamais imprimées)</p>
+        <textarea
+          value={internalNotes}
+          onChange={e => setInternalNotes(e.target.value)}
+          onBlur={e => { if (canEditInternalNotes) saveInternalNotes(e.target.value) }}
+          readOnly={!canEditInternalNotes}
+          rows={4}
+          placeholder={canEditInternalNotes ? "Notes internes..." : ""}
+          className={`w-full text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none ${!canEditInternalNotes ? "bg-gray-50" : ""}`}
+        />
+        <p className={`text-xs mt-1 ${internalNotesMessage && !internalNotesMessage.ok ? "text-red-600" : "text-gray-400"}`}>
+          {internalNotesSaving
+            ? "Sauvegarde..."
+            : internalNotesMessage
+            ? internalNotesMessage.text
+            : "Visibles uniquement dans le CRM. Sauvegarde automatique à la perte du focus."}
         </p>
       </div>
 

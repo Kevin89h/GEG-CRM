@@ -1,3 +1,4 @@
+import { SENSITIVE, sensitiveFilter, writesAny } from "@/lib/sensitive"
 import { NextRequest, NextResponse } from "next/server"
 import { getSchemaFromRequest } from "@/lib/company"
 import { createSchemaClient, createAdminClient } from "@/lib/supabase/admin"
@@ -5,6 +6,7 @@ import { sendPushToUser } from "@/lib/webpush"
 import { sendLeadNotification } from "@/lib/notify"
 
 export async function POST(req: NextRequest) {
+  const costFilter = await sensitiveFilter(SENSITIVE.dealCost)
   const body = await req.json()
   const schema = await getSchemaFromRequest(req)
   const db = createSchemaClient(schema)
@@ -61,7 +63,7 @@ export async function POST(req: NextRequest) {
       sector: body.sector ?? [],
       preferred_channel: body.preferred_channel ?? null,
       selling_price: body.selling_price ?? null,
-      cost: body.cost ?? null,
+      cost: costFilter.allowed ? body.cost ?? null : null,
     }])
     .select("*, account:accounts(id, name)")
     .single()
