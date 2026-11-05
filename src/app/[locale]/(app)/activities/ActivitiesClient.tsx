@@ -9,6 +9,7 @@ import { Modal } from "@/components/ui/Modal"
 import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
 import type { Activity, ActivityType } from "@/types"
+import { usePerms } from "@/components/PermissionsProvider"
 
 type ActivityFull = Activity & {
   account: { id: string; name: string } | null
@@ -51,6 +52,8 @@ const EMPTY_FORM = (userId: string) => ({
 
 export default function ActivitiesClient({ activities: initial, accounts, deals, currentUserId }: Props) {
   const t = useTranslations("activities")
+  // Display only (D2): the API checks "activites.creer" / "activites.modifier" / "suppression" again
+  const { can } = usePerms()
   const [activities, setActivities] = useState(initial)
   const [modalOpen, setModalOpen] = useState(false)
   const [editActivity, setEditActivity] = useState<ActivityFull | null>(null)
@@ -150,10 +153,12 @@ export default function ActivitiesClient({ activities: initial, accounts, deals,
           <h1 className="text-2xl font-bold text-gray-900">{t("title")}</h1>
           <p className="text-gray-500 text-sm mt-0.5">{activities.length} activité{activities.length !== 1 ? "s" : ""}</p>
         </div>
+        {can("activites.creer") && (
         <Button onClick={() => setModalOpen(true)}>
           <Plus className="w-4 h-4" />
           {t("new")}
         </Button>
+        )}
       </div>
 
       {/* Upcoming follow-ups */}
@@ -255,6 +260,9 @@ function ActivityRow({
   highlight?: boolean
 }) {
   const Icon = typeIcon[a.type]
+  const { can } = usePerms()
+  const canEdit = can("activites.modifier")
+  const canDelete = can("suppression")
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -294,12 +302,14 @@ function ActivityRow({
       <div className="flex items-center gap-1 flex-shrink-0">
         <button
           onClick={() => onToggle(a.id, a.completed)}
-          className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition ${a.completed ? "bg-emerald-500 border-emerald-500" : "border-gray-300 hover:border-emerald-500"}`}
+          disabled={!canEdit}
+          className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition disabled:pointer-events-none ${a.completed ? "bg-emerald-500 border-emerald-500" : "border-gray-300 hover:border-emerald-500"}`}
         >
           {a.completed && <Check className="w-3 h-3 text-white" />}
         </button>
 
         {/* 3-dot menu */}
+        {(canEdit || canDelete) && (
         <div className="relative" ref={menuRef}>
           <button
             onClick={() => setMenuOpen(v => !v)}
@@ -309,6 +319,7 @@ function ActivityRow({
           </button>
           {menuOpen && (
             <div className="absolute right-0 top-7 z-20 w-40 bg-white rounded-lg shadow-lg border border-gray-100 py-1">
+              {canEdit && (
               <button
                 onClick={() => { setMenuOpen(false); onEdit(a) }}
                 className="flex items-center gap-2 w-full px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
@@ -316,6 +327,8 @@ function ActivityRow({
                 <Pencil className="w-3.5 h-3.5" />
                 Modifier
               </button>
+              )}
+              {canDelete && (
               <button
                 onClick={() => { setMenuOpen(false); onDelete(a.id) }}
                 className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50"
@@ -323,9 +336,11 @@ function ActivityRow({
                 <Trash2 className="w-3.5 h-3.5" />
                 Supprimer
               </button>
+              )}
             </div>
           )}
         </div>
+        )}
       </div>
     </div>
   )

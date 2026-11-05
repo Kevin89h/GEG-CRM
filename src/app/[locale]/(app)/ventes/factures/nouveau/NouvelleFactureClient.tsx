@@ -6,6 +6,7 @@ import { Plus, Trash2, ChevronDown } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { formatNumber } from "@/lib/utils"
+import { usePerms } from "@/components/PermissionsProvider"
 
 interface Account { id: string; name: string }
 interface Product { id: string; name: string; reference: string | null; sell_price: number; currency: string }
@@ -31,11 +32,13 @@ interface Line {
   discount: string
 }
 
-function AccountPicker({ accounts, value, onSelect, onCreated }: {
+function AccountPicker({ accounts, value, onSelect, onCreated, canCreate }: {
   accounts: Account[]
   value: string
   onSelect: (id: string, name: string) => void
   onCreated: (a: Account) => void
+  // Inline creation needs "comptes.creer"
+  canCreate: boolean
 }) {
   const t = useTranslations("factures")
   const [query, setQuery] = useState("")
@@ -90,7 +93,7 @@ function AccountPicker({ accounts, value, onSelect, onCreated }: {
               placeholder={t("search")}
               value={query}
               onChange={e => setQuery(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && filtered.length === 0 && handleCreate()}
+              onKeyDown={e => e.key === "Enter" && canCreate && filtered.length === 0 && handleCreate()}
             />
           </div>
           <div className="max-h-56 overflow-y-auto">
@@ -101,7 +104,7 @@ function AccountPicker({ accounts, value, onSelect, onCreated }: {
               </div>
             ))}
           </div>
-          {query.trim() && (
+          {canCreate && query.trim() && (
             <div className="border-t border-gray-100 p-1.5">
               <button
                 type="button"
@@ -120,12 +123,14 @@ function AccountPicker({ accounts, value, onSelect, onCreated }: {
   )
 }
 
-function ProductPicker({ products, value, onChange, lineIndex, onCreated }: {
+function ProductPicker({ products, value, onChange, lineIndex, onCreated, canCreate }: {
   products: Product[]
   value: string
   onChange: (lineIndex: number, product: Product | null, raw: string) => void
   lineIndex: number
   onCreated: (p: Product) => void
+  // Inline creation needs "produits.gerer"
+  canCreate: boolean
 }) {
   const t = useTranslations("factures")
   const [query, setQuery] = useState("")
@@ -194,7 +199,7 @@ function ProductPicker({ products, value, onChange, lineIndex, onCreated }: {
               </div>
             ))}
           </div>
-          {query.trim() && (
+          {canCreate && query.trim() && (
             <div className="border-t border-gray-100 p-1.5">
               <button
                 type="button"
@@ -216,6 +221,7 @@ function ProductPicker({ products, value, onChange, lineIndex, onCreated }: {
 export default function NouvelleFactureClient({ locale, accounts: initialAccounts, products: initialProducts, treasuryAccounts }: Props) {
   const t = useTranslations("factures")
   const router = useRouter()
+  const { can } = usePerms()
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -318,10 +324,13 @@ export default function NouvelleFactureClient({ locale, accounts: initialAccount
             className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 bg-white hover:bg-gray-50 transition-colors disabled:opacity-50">
             {t("saveDraft")}
           </button>
-          <button onClick={() => handleSave("sent")} disabled={saving}
-            className="px-4 py-2 text-sm font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition-colors disabled:opacity-50">
-            {saving ? t("saving") : t("validateInvoice")}
-          </button>
+          {/* Create and emit in one step: needs "factures.emettre" */}
+          {can("factures.emettre") && (
+            <button onClick={() => handleSave("sent")} disabled={saving}
+              className="px-4 py-2 text-sm font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition-colors disabled:opacity-50">
+              {saving ? t("saving") : t("validateInvoice")}
+            </button>
+          )}
         </div>
       </div>
 
@@ -333,7 +342,7 @@ export default function NouvelleFactureClient({ locale, accounts: initialAccount
         <div className="grid grid-cols-2 gap-6">
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t("client")} *</label>
-            <AccountPicker accounts={localAccounts} value={accountId} onSelect={(id) => setAccountId(id)} onCreated={(a) => setLocalAccounts(prev => [...prev, a])} />
+            <AccountPicker accounts={localAccounts} value={accountId} onSelect={(id) => setAccountId(id)} onCreated={(a) => setLocalAccounts(prev => [...prev, a])} canCreate={can("comptes.creer")} />
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
@@ -396,7 +405,7 @@ export default function NouvelleFactureClient({ locale, accounts: initialAccount
                 return (
                   <tr key={line.id} className="group">
                     <td className="py-1.5 pr-2">
-                      <ProductPicker products={localProducts} value={line.product_id} onChange={handleProductSelect} lineIndex={idx} onCreated={(p) => setLocalProducts(prev => [...prev, p])} />
+                      <ProductPicker products={localProducts} value={line.product_id} onChange={handleProductSelect} lineIndex={idx} onCreated={(p) => setLocalProducts(prev => [...prev, p])} canCreate={can("produits.gerer")} />
                     </td>
                     <td className="py-1.5 px-1">
                       <input type="number" value={line.quantity} onChange={e => updateLine(line.id, "quantity", e.target.value)}

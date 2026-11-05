@@ -11,6 +11,7 @@ import { Modal } from "@/components/ui/Modal"
 import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
 import type { Account, AccountType } from "@/types"
+import { usePerms } from "@/components/PermissionsProvider"
 
 interface Employee { id: string; full_name: string }
 interface Props {
@@ -31,6 +32,9 @@ export default function AccountsClient({ accounts: initial, employees }: Props) 
   const router = useRouter()
   const params = useParams()
   const locale = (params.locale as string) ?? "fr"
+  // Display only (D2): the API and the database check these permissions again
+  const { can } = usePerms()
+  const canCreateContact = can("contacts.creer")
   const [accounts, setAccounts] = useState(initial)
   const [search, setSearch] = useState("")
   const [filterType, setFilterType] = useState<string>("all")
@@ -65,7 +69,7 @@ export default function AccountsClient({ accounts: initial, employees }: Props) 
       setSaving(false)
       return
     }
-    if (form.contact_first_name || form.contact_last_name) {
+    if (canCreateContact && (form.contact_first_name || form.contact_last_name)) {
       await fetch("/api/contacts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -93,6 +97,7 @@ export default function AccountsClient({ accounts: initial, employees }: Props) 
           <p className="text-gray-500 text-sm mt-0.5">{filtered.length} compte{filtered.length !== 1 ? "s" : ""}</p>
         </div>
         <div className="flex gap-2">
+          {can("comptes.exporter") && (
           <button
             onClick={() => exportToXls(accounts.map(a => ({
               Nom: a.name,
@@ -109,6 +114,8 @@ export default function AccountsClient({ accounts: initial, employees }: Props) 
             <Download className="w-4 h-4" />
             Exporter
           </button>
+          )}
+          {can("doublons.fusionner") && (
           <button
             onClick={() => router.push(`/${locale}/comptes/doublons`)}
             className="flex items-center gap-1.5 px-3 py-2 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50"
@@ -116,10 +123,13 @@ export default function AccountsClient({ accounts: initial, employees }: Props) 
             <GitMerge className="w-4 h-4" />
             Doublons
           </button>
+          )}
+          {can("comptes.creer") && (
           <Button onClick={() => setModalOpen(true)}>
             <Plus className="w-4 h-4" />
             {t("new")}
           </Button>
+          )}
         </div>
       </div>
 
@@ -270,6 +280,7 @@ export default function AccountsClient({ accounts: initial, employees }: Props) 
             onChange={e => setForm(f => ({ ...f, salesperson_id: e.target.value }))}
             options={[{ value: "", label: "— Aucun commercial —" }, ...employees.map(e => ({ value: e.id, label: e.full_name }))]}
           />
+          {canCreateContact && (
           <div className="pt-2 border-t border-gray-100">
             <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">Contact principal</p>
             <div className="space-y-3">
@@ -293,6 +304,7 @@ export default function AccountsClient({ accounts: initial, employees }: Props) 
               </div>
             </div>
           </div>
+          )}
           {saveError && (
             <p className="text-sm text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg">{saveError}</p>
           )}

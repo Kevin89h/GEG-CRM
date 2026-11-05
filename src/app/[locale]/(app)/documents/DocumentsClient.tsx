@@ -7,6 +7,7 @@ import {
   Download,
 } from "lucide-react"
 import { formatDate } from "@/lib/utils"
+import { usePerms } from "@/components/PermissionsProvider"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -93,6 +94,11 @@ function formatSize(bytes: number | null): string {
 
 export default function DocumentsClient({ documents: initial, categories, accounts, userRole, isAdmin }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null)
+  // Display only (D2): on top of the admin visibility rules, adding needs "documents.ajouter"
+  // and deleting "suppression" (both checked again by the API)
+  const { can } = usePerms()
+  const canAdd = can("documents.ajouter")
+  const canDelete = isAdmin && can("suppression")
 
   const [docs, setDocs] = useState(initial)
   const [tab, setTab] = useState<"documents" | "societe">("documents")
@@ -215,7 +221,7 @@ export default function DocumentsClient({ documents: initial, categories, accoun
     <div className="max-w-6xl mx-auto">
 
       {/* ── Upload modal ── */}
-      {showModal && (
+      {showModal && canAdd && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-5">
@@ -358,18 +364,20 @@ export default function DocumentsClient({ documents: initial, categories, accoun
           <p className="text-sm text-gray-500 mt-0.5">{docs.length} document{docs.length !== 1 ? "s" : ""}</p>
         </div>
         <div className="flex gap-2">
-          {isAdmin && (
+          {isAdmin && canAdd && (
             <button onClick={openCompanyDocModal}
               className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 text-white text-sm font-medium rounded-xl hover:bg-slate-700 transition shadow-sm">
               <Building2 className="w-4 h-4" />
               Document société
             </button>
           )}
+          {canAdd && (
           <button onClick={() => { setIsCompanyDoc(false); setDocVisibility("all"); setShowModal(true) }}
             className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-xl hover:bg-blue-700 transition shadow-sm">
             <Plus className="w-4 h-4" />
             Ajouter
           </button>
+          )}
         </div>
       </div>
 
@@ -431,7 +439,7 @@ export default function DocumentsClient({ documents: initial, categories, accoun
                               className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition">
                               <ExternalLink className="w-3.5 h-3.5" />
                             </a>
-                            {isAdmin && (
+                            {canDelete && (
                               <button onClick={() => handleDelete(doc)}
                                 className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition">
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -444,7 +452,7 @@ export default function DocumentsClient({ documents: initial, categories, accoun
                   </div>
                 ) : (
                   <div className="px-4 py-3 text-xs text-gray-400 italic">
-                    Aucun document · <button onClick={openCompanyDocModal} className="text-blue-500 hover:underline">Ajouter</button>
+                    Aucun document{isAdmin && canAdd && <> · <button onClick={openCompanyDocModal} className="text-blue-500 hover:underline">Ajouter</button></>}
                   </div>
                 )}
               </div>
@@ -483,10 +491,12 @@ export default function DocumentsClient({ documents: initial, categories, accoun
             <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-16 text-center">
               <FolderOpen className="w-12 h-12 text-gray-200 mx-auto mb-3" />
               <p className="text-gray-400 text-sm">Aucun document trouvé</p>
+              {canAdd && (
               <button onClick={() => { setIsCompanyDoc(false); setDocVisibility("all"); setShowModal(true) }}
                 className="mt-3 text-sm text-blue-600 hover:underline">
                 Ajouter le premier document
               </button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -533,7 +543,7 @@ export default function DocumentsClient({ documents: initial, categories, accoun
                         className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition">
                         <ExternalLink className="w-3.5 h-3.5" />
                       </a>
-                      {isAdmin && (
+                      {canDelete && (
                         <button onClick={() => handleDelete(doc)}
                           className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition">
                           <Trash2 className="w-3.5 h-3.5" />

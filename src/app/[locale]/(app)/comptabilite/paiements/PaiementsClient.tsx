@@ -5,6 +5,7 @@ import Link from "next/link"
 import { Search, CreditCard, Building2, Smartphone, Banknote, ChevronLeft, ChevronRight, Download } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
 import { exportToXls } from "@/lib/exportXls"
+import { usePerms } from "@/components/PermissionsProvider"
 
 interface Payment {
   id: string
@@ -49,6 +50,7 @@ function fmtDate(iso: string) {
 }
 
 export default function PaiementsClient({ payments, locale }: Props) {
+  const { can } = usePerms()
   const [search, setSearch] = useState("")
   const [filterJournal, setFilterJournal] = useState("all")
   const [filterStatus, setFilterStatus] = useState("all")
@@ -94,7 +96,8 @@ export default function PaiementsClient({ payments, locale }: Props) {
           </p>
         </div>
         <div className="flex gap-2">
-          <button
+          {/* Exporting the treasury journal needs "tresorerie.saisir" (saisir, modifier, exporter) */}
+          {can("tresorerie.saisir") && <button
             onClick={() => exportToXls(payments.map(p => ({
               "N° paiement": p.number,
               Date: p.paid_at ? new Date(p.paid_at).toLocaleDateString("fr-FR") : "",
@@ -110,14 +113,16 @@ export default function PaiementsClient({ payments, locale }: Props) {
           >
             <Download className="w-4 h-4" />
             Exporter
-          </button>
-          <Link
-            href={`/${locale}/ventes/factures`}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition"
-          >
-            <CreditCard className="w-4 h-4" />
-            Nouveau paiement
-          </Link>
+          </button>}
+          {can("paiements_clients.enregistrer") && (
+            <Link
+              href={`/${locale}/ventes/factures`}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700 transition"
+            >
+              <CreditCard className="w-4 h-4" />
+              Nouveau paiement
+            </Link>
+          )}
         </div>
       </div>
 

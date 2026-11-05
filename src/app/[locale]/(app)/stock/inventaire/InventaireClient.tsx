@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Save, Search, CheckCircle, AlertTriangle } from "lucide-react"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { useParams } from "next/navigation"
+import { usePerms } from "@/components/PermissionsProvider"
 
 interface Product {
   id: string
@@ -33,6 +34,11 @@ interface Props {
 export default function InventaireClient({ products, warehouses, levels }: Props) {
   const router = useRouter()
   const params = useParams()
+  // Display only (D2): the page is reserved to "stock.inventaire", saving is checked again by the API;
+  // internal references need "produits.prix_achat"
+  const { can } = usePerms()
+  const canSave = can("stock.inventaire")
+  const seeReference = can("produits.prix_achat")
 
   // Build initial map: productId -> warehouseId -> quantity
   const initialMap = useMemo(() => {
@@ -139,6 +145,7 @@ export default function InventaireClient({ products, warehouses, levels }: Props
           <h1 className="text-2xl font-bold text-gray-900">Ajustement inventaire</h1>
           <p className="text-gray-500 text-sm mt-0.5">Modifiez les quantités directement dans le tableau puis enregistrez</p>
         </div>
+        {canSave && (
         <button
           onClick={handleSave}
           disabled={saving || changedCount === 0}
@@ -147,6 +154,7 @@ export default function InventaireClient({ products, warehouses, levels }: Props
           {saved ? <CheckCircle className="w-4 h-4" /> : <Save className="w-4 h-4" />}
           {saved ? "Enregistré !" : saving ? "Enregistrement..." : `Enregistrer${changedCount > 0 ? ` (${changedCount} modif.)` : ""}`}
         </button>
+        )}
       </div>
 
       {/* Search */}
@@ -190,7 +198,7 @@ export default function InventaireClient({ products, warehouses, levels }: Props
                 <tr key={p.id} className={`hover:bg-blue-50/20 transition-colors ${hasChange ? "bg-amber-50/40" : ""}`}>
                   <td className="px-4 py-2.5">
                     <span className="font-medium text-gray-900">{p.name}</span>
-                    {p.reference && <span className="ml-2 text-xs text-gray-400 font-mono">{p.reference}</span>}
+                    {seeReference && p.reference && <span className="ml-2 text-xs text-gray-400 font-mono">{p.reference}</span>}
                     {p.unit && <span className="ml-2 text-xs text-gray-500">({p.unit.name})</span>}
                   </td>
                   {warehouses.map(w => {
@@ -205,6 +213,7 @@ export default function InventaireClient({ products, warehouses, levels }: Props
                           step="any"
                           value={values[p.id]?.[w.id] ?? "0"}
                           onChange={e => setValue(p.id, w.id, e.target.value)}
+                          readOnly={!canSave}
                           className={`w-24 px-2 py-1.5 text-sm text-center border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${
                             changed
                               ? "border-amber-400 bg-amber-50 text-amber-900 font-semibold"

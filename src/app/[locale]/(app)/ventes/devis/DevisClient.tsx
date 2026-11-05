@@ -10,6 +10,7 @@ import {
 } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { exportToXls } from "@/lib/exportXls"
+import { usePerms } from "@/components/PermissionsProvider"
 
 interface Order {
   id: string
@@ -35,6 +36,9 @@ export default function DevisClient({ orders, schema }: Props) {
   const params = useParams()
   const locale = params.locale as string
   const t = useTranslations("devis")
+  const { can } = usePerms()
+  // Selection only serves the bulk cancel: shown with "devis.annuler" (D2)
+  const canBulkCancel = can("devis.annuler")
 
   const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; dot: string }> = {
     draft:     { label: t("statusDraft"),     bg: "bg-gray-50",    text: "text-gray-600",    dot: "bg-gray-400" },
@@ -123,7 +127,7 @@ export default function DevisClient({ orders, schema }: Props) {
   return (
     <div className="-m-6 min-h-screen bg-gray-50/50">
       {/* Bulk action bar */}
-      {selected.size > 0 && (
+      {canBulkCancel && selected.size > 0 && (
         <div className="bg-blue-600 text-white px-6 py-2.5 flex items-center gap-3 text-sm">
           <span className="font-medium">{selected.size} sélectionné{selected.size > 1 ? "s" : ""}</span>
           <button
@@ -141,12 +145,14 @@ export default function DevisClient({ orders, schema }: Props) {
 
       {/* Top toolbar */}
       <div className="bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-3">
-        <Link
+        {can("devis.creer") && (
+          <Link
             href={`/${locale}/ventes/devis/nouveau`}
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded bg-[#7c3aed] text-white hover:bg-[#6d28d9] transition"
           >
             <Plus className="w-3.5 h-3.5" /> {t("new")}
           </Link>
+        )}
         <button
           onClick={() => exportToXls(displayed.map(o => ({
             "Numéro": o.number,
@@ -244,14 +250,16 @@ export default function DevisClient({ orders, schema }: Props) {
             <table className="w-full text-sm">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-200 text-xs text-gray-500 font-medium">
-                  <th className="w-8 px-4 py-3">
-                    <input
-                      type="checkbox"
-                      className="rounded border-gray-300"
-                      checked={paged.length > 0 && selected.size === paged.length}
-                      onChange={toggleAll}
-                    />
-                  </th>
+                  {canBulkCancel && (
+                    <th className="w-8 px-4 py-3">
+                      <input
+                        type="checkbox"
+                        className="rounded border-gray-300"
+                        checked={paged.length > 0 && selected.size === paged.length}
+                        onChange={toggleAll}
+                      />
+                    </th>
+                  )}
                   <th className="text-left px-4 py-3">{t("colOrderNumber")}</th>
                   <th className="text-left px-4 py-3">{t("colClient")}</th>
                   <th className="text-left px-4 py-3">{t("colSalesperson")}</th>
@@ -266,14 +274,16 @@ export default function DevisClient({ orders, schema }: Props) {
                   const cfg = STATUS_CONFIG[o.status] ?? STATUS_CONFIG.draft
                   return (
                     <tr key={o.id} className="hover:bg-blue-50/20 transition-colors">
-                      <td className="px-4 py-3">
-                        <input
-                          type="checkbox"
-                          className="rounded border-gray-300"
-                          checked={selected.has(o.id)}
-                          onChange={() => toggleSelect(o.id)}
-                        />
-                      </td>
+                      {canBulkCancel && (
+                        <td className="px-4 py-3">
+                          <input
+                            type="checkbox"
+                            className="rounded border-gray-300"
+                            checked={selected.has(o.id)}
+                            onChange={() => toggleSelect(o.id)}
+                          />
+                        </td>
+                      )}
                       <td className="px-4 py-3">
                         <Link
                           href={`/${locale}/ventes/devis/${o.id}`}

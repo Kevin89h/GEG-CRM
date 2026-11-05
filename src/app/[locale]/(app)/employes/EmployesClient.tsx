@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
 import { Badge } from "@/components/ui/Badge"
 import { formatCurrency, formatDate } from "@/lib/utils"
+import { usePerms } from "@/components/PermissionsProvider"
 
 interface Commission {
   id: string
@@ -61,6 +62,11 @@ const emptyForm = {
 }
 
 export default function EmployesClient({ employees: initial, treasuryAccounts, profiles }: Props) {
+  // Display only (D2): employees need "employes.gerer", commissions (view and pay) "commissions.gerer";
+  // both are checked again by the API and the database
+  const { can } = usePerms()
+  const canManage = can("employes.gerer")
+  const canCommissions = can("commissions.gerer")
   const [employees, setEmployees] = useState(initial)
   const [modalOpen, setModalOpen] = useState(false)
   const [editEmployee, setEditEmployee] = useState<Employee | null>(null)
@@ -183,7 +189,7 @@ export default function EmployesClient({ employees: initial, treasuryAccounts, p
           <h1 className="text-2xl font-bold text-gray-900">Employés</h1>
           <p className="text-gray-500 text-sm mt-0.5">{active.length} actif{active.length !== 1 ? "s" : ""} · {inactive.length} inactif{inactive.length !== 1 ? "s" : ""}</p>
         </div>
-        <Button onClick={openNew}><Plus className="w-4 h-4" />Nouvel employé</Button>
+        {canManage && <Button onClick={openNew}><Plus className="w-4 h-4" />Nouvel employé</Button>}
       </div>
 
       <div className="space-y-3">
@@ -223,17 +229,19 @@ export default function EmployesClient({ employees: initial, treasuryAccounts, p
                       <span>{emp.commission_rate}%</span>
                     </div>
                   )}
-                  {pendingTotal > 0 && (
+                  {canCommissions && pendingTotal > 0 && (
                     <div className="flex items-center gap-1 text-emerald-600 font-medium">
                       <span>{formatCurrency(pendingTotal, pendingCurrency as "GNF" | "USD" | "EUR")} à payer</span>
                     </div>
                   )}
+                  {canManage && (
                   <div className="flex gap-2">
                     <button onClick={() => openEdit(emp)} className="text-xs text-gray-400 hover:text-blue-600 px-2 py-1 rounded border border-gray-200 hover:border-blue-300">Modifier</button>
                     <button onClick={() => toggleActive(emp)} className="text-xs text-gray-400 hover:text-gray-700 px-2 py-1 rounded border border-gray-200">
                       {emp.is_active ? "Désactiver" : "Réactiver"}
                     </button>
                   </div>
+                  )}
                 </div>
               </div>
 
@@ -260,6 +268,7 @@ export default function EmployesClient({ employees: initial, treasuryAccounts, p
                   </div>
 
                   {/* Commissions */}
+                  {canCommissions && (
                   <div>
                     <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">Commissions</p>
                     {(emp.commissions ?? []).length === 0 ? (
@@ -295,6 +304,7 @@ export default function EmployesClient({ employees: initial, treasuryAccounts, p
                       </div>
                     )}
                   </div>
+                  )}
                 </div>
               )}
             </div>
@@ -305,13 +315,13 @@ export default function EmployesClient({ employees: initial, treasuryAccounts, p
           <div className="text-center py-16 text-gray-400">
             <UserCheck className="w-10 h-10 mx-auto mb-3 opacity-30" />
             <p>Aucun employé enregistré</p>
-            <button onClick={openNew} className="mt-3 text-sm text-blue-600 hover:underline">Ajouter le premier employé</button>
+            {canManage && <button onClick={openNew} className="mt-3 text-sm text-blue-600 hover:underline">Ajouter le premier employé</button>}
           </div>
         )}
       </div>
 
       {/* Employee form modal */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editEmployee ? "Modifier l'employé" : "Nouvel employé"}>
+      <Modal open={modalOpen && canManage} onClose={() => setModalOpen(false)} title={editEmployee ? "Modifier l'employé" : "Nouvel employé"}>
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input label="Nom complet *" value={form.full_name} onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))} placeholder="Mamadou Diallo" />
@@ -353,7 +363,7 @@ export default function EmployesClient({ employees: initial, treasuryAccounts, p
       </Modal>
 
       {/* Pay commission modal */}
-      {payModal && (
+      {payModal && canCommissions && (
         <Modal open={true} onClose={() => setPayModal(null)} title="Payer la commission">
           <div className="space-y-4">
             <div className="bg-emerald-50 rounded-lg p-4 text-center">

@@ -15,6 +15,7 @@ import { Modal } from "@/components/ui/Modal"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import DocumentLayout from "@/components/print/DocumentLayout"
+import { usePerms } from "@/components/PermissionsProvider"
 
 interface LandedLine {
   line_id: string
@@ -96,6 +97,15 @@ type Tab = "produits" | "receptions" | "autres"
 export default function AchatDetailClient({ order, lines: initialLines, costs: initialCosts, warehouses, exchangeRates, locale, receptions = [], docSettings = {} }: Props) {
   const t = useTranslations("achats")
   const router = useRouter()
+  const { can } = usePerms()
+  // Display only (D2): the API checks the same keys and statuses again
+  const canModify = can("achats.modifier")
+  const canReceive = can("achats.receptionner")
+  // Voiding is impossible once anything was received (B1)
+  const canCancel = can("achats.annuler") && !["partial", "received"].includes(order.status) && receptions.length === 0
+  const canCreateSupplierInvoice = can("factures_fournisseurs.gerer")
+  const canAddDocument = can("documents.ajouter")
+  const canDelete = can("suppression")
   const [lines, setLines] = useState(initialLines)
   const [costs, setCosts] = useState(initialCosts)
   const [saving, setSaving] = useState(false)
@@ -464,7 +474,7 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
         {/* Actions */}
         <div className="flex items-center gap-1.5 flex-wrap">
           {/* Contextual status progression buttons */}
-          {order.status === "draft" && (
+          {canModify && order.status === "draft" && (
             <button
               onClick={() => changeStatus("confirmed")}
               disabled={statusChanging}
@@ -473,7 +483,7 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
               {statusChanging ? "…" : "Confirmer la commande"}
             </button>
           )}
-          {order.status === "confirmed" && (
+          {canModify && order.status === "confirmed" && (
             <button
               onClick={() => changeStatus("ordered")}
               disabled={statusChanging}
@@ -482,7 +492,7 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
               {statusChanging ? "…" : "Marquer comme commandée"}
             </button>
           )}
-          {order.status === "ordered" && (
+          {canModify && order.status === "ordered" && (
             <button
               onClick={() => changeStatus("in_transit")}
               disabled={statusChanging}
@@ -491,7 +501,7 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
               {statusChanging ? "…" : "En transit"}
             </button>
           )}
-          {(order.status === "in_transit" || order.status === "partial") && (
+          {canReceive && (order.status === "in_transit" || order.status === "partial") && (
             <button
               onClick={receive}
               disabled={saving}
@@ -505,7 +515,7 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
               ⚠ {statusMsg}
             </span>
           )}
-          {isReceived && (
+          {canCreateSupplierInvoice && isReceived && (
             <button onClick={goToNewInvoice} className="px-3 py-1.5 text-xs font-semibold rounded bg-[#017e84] text-white hover:opacity-90 transition">
               {t("loadInvoice")}
             </button>
@@ -519,7 +529,7 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
           <button className="px-3 py-1.5 text-xs font-medium rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition flex items-center gap-1.5">
             <MoreHorizontal className="w-3.5 h-3.5" /> ...
           </button>
-          {!isReceived && order.status !== "cancelled" && (
+          {canCancel && order.status !== "cancelled" && (
             <button onClick={cancelOrder} className="px-3 py-1.5 text-xs font-medium rounded border border-gray-300 bg-white text-red-600 hover:bg-red-50 transition flex items-center gap-1.5">
               <X className="w-3.5 h-3.5" /> {t("cancel")}
             </button>
@@ -759,6 +769,7 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
                               <select
                                 value={l.warehouse_id ?? ""}
                                 onChange={e => updateWarehouse(l.line_id, e.target.value)}
+                                disabled={!canReceive}
                                 className={`w-full px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white ${!l.warehouse_id ? "border-red-300 bg-red-50" : "border-gray-200"}`}
                               >
                                 <option value="">{t("chooseWarehouse")}</option>
@@ -767,7 +778,7 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
                             </td>
                           )}
                           <td className="px-4 py-2.5">
-                            {!isReceived && (
+                            {canModify && !isReceived && (
                               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <button
                                   onClick={() => startEditLine(l)}
@@ -854,7 +865,7 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
 
                 </div>
                 {/* Add links */}
-                {!isReceived && (
+                {canModify && !isReceived && (
                   <div className="px-4 py-3 flex items-center gap-4 text-xs border-t border-gray-100">
                     <button
                       onClick={() => { setAddingLine(true); setEditingLineId(null) }}
@@ -946,7 +957,7 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
                             <span className="font-semibold text-gray-800 text-sm">{rec.number}</span>
                             <span className="text-xs text-gray-400">{formatDate(rec.received_at, locale)}</span>
                           </div>
-                          <button
+                          {canCreateSupplierInvoice && <button
                             onClick={() => {
                               const params = new URLSearchParams({
                                 order_id: order.id,
@@ -960,7 +971,7 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
                             className="px-3 py-1.5 text-xs font-semibold rounded bg-[#017e84] text-white hover:opacity-90 transition flex items-center gap-1.5"
                           >
                             <FileText className="w-3.5 h-3.5" /> Créer facture fournisseur
-                          </button>
+                          </button>}
                         </div>
                         <table className="w-full text-xs">
                           <thead>
@@ -1030,7 +1041,7 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
                         </div>
                         <div className="flex items-center gap-3">
                           <span className="text-sm font-semibold text-amber-700">{formatCurrency(c.amount, c.currency as "USD" | "GNF" | "EUR")}</span>
-                          {isDraft && (
+                          {canModify && isDraft && (
                             <button onClick={() => removeCost(c.id)} className="text-gray-300 hover:text-red-400">
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -1041,7 +1052,7 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
                     {costs.length === 0 && <p className="text-sm text-gray-400 text-center py-3">{t("noCostsAdded")}</p>}
                   </div>
 
-                  {isDraft && (
+                  {canModify && isDraft && (
                     <div className="mt-3 pt-3 border-t border-gray-100">
                       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 items-end">
                         <Select
@@ -1125,14 +1136,14 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
                   {t("send")}
                 </button>
               )}
-              <button
+              {canAddDocument && <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploading}
                 title="Joindre un fichier"
                 className="p-1.5 rounded border border-gray-200 text-gray-400 hover:text-purple-600 hover:border-purple-300 transition disabled:opacity-40"
               >
                 <Paperclip className={`w-4 h-4 ${uploading ? "animate-pulse" : ""}`} />
-              </button>
+              </button>}
               <input
                 ref={fileInputRef}
                 type="file"
@@ -1156,9 +1167,9 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
                     <a href={a.url} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-blue-600 transition flex-shrink-0">
                       <Download className="w-3.5 h-3.5" />
                     </a>
-                    <button onClick={() => deleteAttachment(a.name)} className="text-gray-300 hover:text-red-400 transition flex-shrink-0 opacity-0 group-hover:opacity-100">
+                    {canDelete && <button onClick={() => deleteAttachment(a.name)} className="text-gray-300 hover:text-red-400 transition flex-shrink-0 opacity-0 group-hover:opacity-100">
                       <X className="w-3.5 h-3.5" />
-                    </button>
+                    </button>}
                   </div>
                 ))}
               </div>

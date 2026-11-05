@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from "react"
 import { ArrowLeft, GitMerge, Loader2, CheckCircle2, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { usePerms } from "@/components/PermissionsProvider"
 
 interface AccountEntry {
   id: string
@@ -29,6 +30,9 @@ interface Props {
 
 export default function DoublonsClient({ locale }: Props) {
   const router = useRouter()
+  // Display only (D2): merging needs "doublons.fusionner" (the page itself is already reserved to it)
+  const { can } = usePerms()
+  const canMerge = can("doublons.fusionner")
   const [groups, setGroups] = useState<DuplicateGroup[]>([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -133,6 +137,7 @@ export default function DoublonsClient({ locale }: Props) {
                   </h2>
                   <p className="text-sm text-gray-500">Ces doublons n&apos;ont pas de documents conflictuels. Le compte avec le plus de données sera conservé.</p>
                 </div>
+                {canMerge && (
                 <button
                   onClick={autoMergeAll}
                   disabled={!!merging}
@@ -141,6 +146,7 @@ export default function DoublonsClient({ locale }: Props) {
                   {merging ? <Loader2 className="w-4 h-4 animate-spin" /> : <GitMerge className="w-4 h-4" />}
                   Tout fusionner ({safeGroups.length})
                 </button>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -167,7 +173,7 @@ export default function DoublonsClient({ locale }: Props) {
                           {errors[group.key] && (
                             <span className="text-xs text-red-600">{errors[group.key]}</span>
                           )}
-                          {toDelete.map(del => (
+                          {canMerge && toDelete.map(del => (
                             <button
                               key={del.id}
                               onClick={() => merge(keeper.id, del.id, group.key)}
@@ -243,7 +249,7 @@ export default function DoublonsClient({ locale }: Props) {
                               </div>
                             </div>
                             <div className="flex gap-2">
-                              {group.accounts.filter(a => a.id !== keeper.id).map(del => (
+                              {canMerge && group.accounts.filter(a => a.id !== keeper.id).map(del => (
                                 <button
                                   key={del.id}
                                   onClick={() => merge(keeper.id, del.id, group.key + del.id)}

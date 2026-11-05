@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
 import { Modal } from "@/components/ui/Modal"
+import { usePerms } from "@/components/PermissionsProvider"
 
 /* ─── Types ─────────────────────────────────────────────── */
 interface InvoiceStat { id: string; status: string; currency: string; total_ht: number; balance: number; due_date: string | null }
@@ -61,6 +62,7 @@ const txTypeConfig = {
 
 /* ─── Carte "Factures clients" style Odoo ─────────────── */
 function InvoiceCard({ locale, stats }: { locale: string; stats: Props["clientStats"] }) {
+  const { can } = usePerms()
   const total = stats.draft.length + stats.unpaid.length
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
@@ -69,12 +71,14 @@ function InvoiceCard({ locale, stats }: { locale: string; stats: Props["clientSt
           <h2 className="text-base font-semibold text-blue-700">Factures clients</h2>
         </div>
         <div className="flex gap-2">
-          <Link
-            href={`/${locale}/ventes/factures/nouveau`}
-            className="px-3 py-1.5 text-sm font-semibold rounded-lg bg-gray-800 text-white hover:bg-gray-700 transition-colors"
-          >
-            Nouveau
-          </Link>
+          {can("factures.creer") && (
+            <Link
+              href={`/${locale}/ventes/factures/nouveau`}
+              className="px-3 py-1.5 text-sm font-semibold rounded-lg bg-gray-800 text-white hover:bg-gray-700 transition-colors"
+            >
+              Nouveau
+            </Link>
+          )}
           <button className="p-1.5 text-gray-400 hover:text-gray-600"><MoreVertical className="w-4 h-4" /></button>
         </div>
       </div>
@@ -124,6 +128,7 @@ function InvoiceCard({ locale, stats }: { locale: string; stats: Props["clientSt
 
 /* ─── Carte "Factures fournisseurs" style Odoo ────────── */
 function PurchaseCard({ locale, stats }: { locale: string; stats: Props["purchaseStats"] }) {
+  const { can } = usePerms()
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
       <div className="flex items-start justify-between px-5 pt-5 pb-3">
@@ -131,12 +136,14 @@ function PurchaseCard({ locale, stats }: { locale: string; stats: Props["purchas
           <h2 className="text-base font-semibold text-blue-700">Factures fournisseurs</h2>
         </div>
         <div className="flex gap-2">
-          <Link
-            href={`/${locale}/comptabilite/factures-fournisseurs/nouveau`}
-            className="px-3 py-1.5 text-sm font-semibold rounded-lg bg-gray-800 text-white hover:bg-gray-700 transition-colors"
-          >
-            Nouveau
-          </Link>
+          {can("factures_fournisseurs.gerer") && (
+            <Link
+              href={`/${locale}/comptabilite/factures-fournisseurs/nouveau`}
+              className="px-3 py-1.5 text-sm font-semibold rounded-lg bg-gray-800 text-white hover:bg-gray-700 transition-colors"
+            >
+              Nouveau
+            </Link>
+          )}
           <button className="p-1.5 text-gray-400 hover:text-gray-600"><MoreVertical className="w-4 h-4" /></button>
         </div>
       </div>
@@ -219,6 +226,7 @@ function BankCard({ account, locale, onTransact, onConfig }: {
   onTransact: (accountId: string) => void
   onConfig: (accountId: string) => void
 }) {
+  const { can } = usePerms()
   const Icon = typeIcon[account.type as keyof typeof typeIcon] ?? Banknote
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
@@ -230,11 +238,14 @@ function BankCard({ account, locale, onTransact, onConfig }: {
           )}
         </div>
         <div className="flex gap-2 mb-4">
-          <button
-            onClick={() => onConfig(account.id)}
-            className="px-3 py-1.5 text-sm font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors flex items-center gap-1.5">
-            <Icon className="w-3.5 h-3.5" /> Configuration de la banque
-          </button>
+          {/* The configuration modal edits (tresorerie.comptes) or resets (comptes_bancaires.supprimer) the account */}
+          {can(["tresorerie.comptes", "comptes_bancaires.supprimer"]) && (
+            <button
+              onClick={() => onConfig(account.id)}
+              className="px-3 py-1.5 text-sm font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors flex items-center gap-1.5">
+              <Icon className="w-3.5 h-3.5" /> Configuration de la banque
+            </button>
+          )}
           <button
             onClick={() => onTransact(account.id)}
             className="px-3 py-1.5 text-sm font-medium rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
@@ -290,6 +301,10 @@ function TransactionsDrawer({ accountId, accounts, onClose, onNewTx, refreshKey 
   refreshKey: number
 }) {
   const account = accounts.find(a => a.id === accountId)
+  const { can } = usePerms()
+  // Entries, edits and exports need "tresorerie.saisir"; deleting an operation needs "suppression"
+  const canEnter = can("tresorerie.saisir")
+  const canDelete = can("suppression")
   const [filtered, setFiltered] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
@@ -363,7 +378,7 @@ function TransactionsDrawer({ accountId, accounts, onClose, onNewTx, refreshKey 
             </p>
           </div>
           <div className="flex gap-2 items-center">
-            <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden text-xs font-medium text-gray-600">
+            {canEnter && <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden text-xs font-medium text-gray-600">
               <a
                 href={`/api/tresorerie/transactions/export?format=csv&account_id=${accountId}&account_name=${encodeURIComponent(account?.name ?? "")}`}
                 className="flex items-center gap-1 px-2.5 py-1.5 hover:bg-gray-50 border-r border-gray-200 transition-colors"
@@ -386,10 +401,12 @@ function TransactionsDrawer({ accountId, accounts, onClose, onNewTx, refreshKey 
               >
                 <FileText className="w-3.5 h-3.5" /> PDF
               </a>
-            </div>
-            <button onClick={onNewTx} className="px-3 py-1.5 text-sm font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition-colors flex items-center gap-1.5">
-              <Plus className="w-3.5 h-3.5" /> Mouvement
-            </button>
+            </div>}
+            {canEnter && (
+              <button onClick={onNewTx} className="px-3 py-1.5 text-sm font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition-colors flex items-center gap-1.5">
+                <Plus className="w-3.5 h-3.5" /> Mouvement
+              </button>
+            )}
             <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
               <X className="w-5 h-5" />
             </button>
@@ -425,18 +442,22 @@ function TransactionsDrawer({ accountId, accounts, onClose, onNewTx, refreshKey 
                         {isCredit ? "+" : "−"}{formatCurrency(t.amount, t.currency as "GNF"|"USD"|"EUR")}
                       </td>
                       <td className="px-4 py-3 text-right whitespace-nowrap">
-                        <button
-                          onClick={() => openEdit(t)}
-                          className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-blue-100 text-blue-700 text-xs font-medium hover:bg-blue-200 transition-colors mr-1"
-                        >
-                          ✏️ Modifier
-                        </button>
-                        <button
-                          onClick={() => deleteTx(t)}
-                          className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-red-100 text-red-700 text-xs font-medium hover:bg-red-200 transition-colors"
-                        >
-                          <Trash2 className="w-3 h-3" /> Supprimer
-                        </button>
+                        {canEnter && (
+                          <button
+                            onClick={() => openEdit(t)}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-blue-100 text-blue-700 text-xs font-medium hover:bg-blue-200 transition-colors mr-1"
+                          >
+                            ✏️ Modifier
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            onClick={() => deleteTx(t)}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-red-100 text-red-700 text-xs font-medium hover:bg-red-200 transition-colors"
+                          >
+                            <Trash2 className="w-3 h-3" /> Supprimer
+                          </button>
+                        )}
                       </td>
                     </tr>
                   )
@@ -448,7 +469,7 @@ function TransactionsDrawer({ accountId, accounts, onClose, onNewTx, refreshKey 
       </div>
 
       {/* Modal modifier */}
-      {editTx && (
+      {canEnter && editTx && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
             <div className="flex items-center justify-between mb-5">
@@ -517,6 +538,10 @@ function ConfigModal({ accountId, acc, form, setForm, onClose, onSaved, isSuperA
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { can } = usePerms()
+  // PATCH needs "tresorerie.comptes"; any DELETE on the account (reset, purge) needs "comptes_bancaires.supprimer"
+  const canEditAccount = can("tresorerie.comptes")
+  const canDeleteAccount = can("comptes_bancaires.supprimer")
 
   if (!acc) return null
 
@@ -615,7 +640,7 @@ function ConfigModal({ accountId, acc, form, setForm, onClose, onSaved, isSuperA
         </div>
 
         {/* Remettre à zéro */}
-        <div className="border-t border-gray-100 pt-4">
+        {canDeleteAccount && <div className="border-t border-gray-100 pt-4">
           <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Réinitialisation</label>
           <p className="text-xs text-gray-400 mb-3">Remet le solde ET les paiements à 0 en supprimant tout l&apos;historique de ce compte.</p>
           {!confirmReset ? (
@@ -636,10 +661,10 @@ function ConfigModal({ accountId, acc, form, setForm, onClose, onSaved, isSuperA
               </div>
             </div>
           )}
-        </div>
+        </div>}
 
         {/* Supprimer le compte — super admin uniquement */}
-        {isSuperAdmin && (
+        {isSuperAdmin && canDeleteAccount && (
           <div className="border-t border-red-100 pt-4">
             <label className="block text-xs font-semibold text-red-500 uppercase tracking-wide mb-1 flex items-center gap-1.5">
               <Trash2 className="w-3.5 h-3.5" /> Supprimer le compte
@@ -669,7 +694,7 @@ function ConfigModal({ accountId, acc, form, setForm, onClose, onSaved, isSuperA
         {error && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>}
         <div className="flex justify-end gap-3 pt-2">
           <Button variant="secondary" onClick={onClose}>Annuler</Button>
-          <Button onClick={save} disabled={saving || !form.name}>{saving ? "Enregistrement…" : "Enregistrer"}</Button>
+          {canEditAccount && <Button onClick={save} disabled={saving || !form.name}>{saving ? "Enregistrement…" : "Enregistrer"}</Button>}
         </div>
       </div>
     </Modal>
@@ -679,6 +704,10 @@ function ConfigModal({ accountId, acc, form, setForm, onClose, onSaved, isSuperA
 /* ─── Composant principal ────────────────────────────── */
 export default function ComptabiliteClient({ locale, isSuperAdmin, clientStats, purchaseStats, accounts, transactions }: Props) {
   const router = useRouter()
+  const { can } = usePerms()
+  // Display only (D2): the API checks the same keys again
+  const canEnter = can("tresorerie.saisir")
+  const canCreateAccount = can("tresorerie.comptes")
   const [drawerAccountId, setDrawerAccountId] = useState<string | null>(null)
   const [configAccountId, setConfigAccountId] = useState<string | null>(null)
   const [configForm, setConfigForm] = useState({ name: "", institution: "", account_number: "", swift: "", iban: "", currency: "GNF", type: "bank", target_balance: "" })
@@ -785,18 +814,26 @@ export default function ComptabiliteClient({ locale, isSuperAdmin, clientStats, 
           <Link href={`/${locale}/comptabilite/paiements`} className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-1.5">
             <FileText className="w-4 h-4" /> Paiements
           </Link>
-          <Link href={`/${locale}/comptabilite/paiements-fournisseurs`} className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-1.5">
-            <FileText className="w-4 h-4" /> Paiements fournisseurs
-          </Link>
-          <Link href={`/${locale}/comptabilite/resultat`} className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-1.5">
-            <BarChart2 className="w-4 h-4" /> Compte de résultat
-          </Link>
-          <button onClick={() => setAccountModal(true)} className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-1.5">
-            <Plus className="w-4 h-4" /> Nouveau journal
-          </button>
-          <button onClick={() => setTxModal(true)} className="px-4 py-2 text-sm font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition-colors flex items-center gap-1.5">
-            <Plus className="w-4 h-4" /> Mouvement
-          </button>
+          {can("paiements_fournisseurs.enregistrer") && (
+            <Link href={`/${locale}/comptabilite/paiements-fournisseurs`} className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-1.5">
+              <FileText className="w-4 h-4" /> Paiements fournisseurs
+            </Link>
+          )}
+          {can("resultat.voir") && (
+            <Link href={`/${locale}/comptabilite/resultat`} className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-1.5">
+              <BarChart2 className="w-4 h-4" /> Compte de résultat
+            </Link>
+          )}
+          {canCreateAccount && (
+            <button onClick={() => setAccountModal(true)} className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors flex items-center gap-1.5">
+              <Plus className="w-4 h-4" /> Nouveau journal
+            </button>
+          )}
+          {canEnter && (
+            <button onClick={() => setTxModal(true)} className="px-4 py-2 text-sm font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition-colors flex items-center gap-1.5">
+              <Plus className="w-4 h-4" /> Mouvement
+            </button>
+          )}
         </div>
       </div>
 
@@ -821,24 +858,30 @@ export default function ComptabiliteClient({ locale, isSuperAdmin, clientStats, 
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
           <h2 className="text-base font-semibold text-gray-700 mb-4">Opérations diverses</h2>
           <div className="space-y-3">
-            <button
-              onClick={() => setTxModal(true)}
-              className="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700"
-            >
-              <Plus className="w-4 h-4 text-gray-400" /> Nouveau mouvement
-            </button>
-            <Link
-              href={`/${locale}/ventes/factures`}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700"
-            >
-              <ArrowDownLeft className="w-4 h-4 text-emerald-500" /> Toutes les factures clients
-            </Link>
-            <Link
-              href={`/${locale}/achats`}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700"
-            >
-              <ArrowUpRight className="w-4 h-4 text-red-500" /> Toutes les factures fournisseurs
-            </Link>
+            {canEnter && (
+              <button
+                onClick={() => setTxModal(true)}
+                className="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700"
+              >
+                <Plus className="w-4 h-4 text-gray-400" /> Nouveau mouvement
+              </button>
+            )}
+            {can("factures.voir") && (
+              <Link
+                href={`/${locale}/ventes/factures`}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700"
+              >
+                <ArrowDownLeft className="w-4 h-4 text-emerald-500" /> Toutes les factures clients
+              </Link>
+            )}
+            {can("achats.voir") && (
+              <Link
+                href={`/${locale}/achats`}
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors text-sm font-medium text-gray-700"
+              >
+                <ArrowUpRight className="w-4 h-4 text-red-500" /> Toutes les factures fournisseurs
+              </Link>
+            )}
           </div>
         </div>
       </div>
@@ -860,13 +903,15 @@ export default function ComptabiliteClient({ locale, isSuperAdmin, clientStats, 
         ))}
 
         {/* Ajouter un compte */}
-        <button
-          onClick={() => setAccountModal(true)}
-          className="min-h-[160px] border-2 border-dashed border-gray-200 rounded-xl flex items-center justify-center gap-2 text-gray-400 hover:border-blue-300 hover:text-blue-500 transition-colors"
-        >
-          <Plus className="w-5 h-5" />
-          <span className="text-sm font-medium">Ajouter un compte</span>
-        </button>
+        {canCreateAccount && (
+          <button
+            onClick={() => setAccountModal(true)}
+            className="min-h-[160px] border-2 border-dashed border-gray-200 rounded-xl flex items-center justify-center gap-2 text-gray-400 hover:border-blue-300 hover:text-blue-500 transition-colors"
+          >
+            <Plus className="w-5 h-5" />
+            <span className="text-sm font-medium">Ajouter un compte</span>
+          </button>
+        )}
       </div>
 
       {/* Drawer transactions */}
@@ -884,7 +929,7 @@ export default function ComptabiliteClient({ locale, isSuperAdmin, clientStats, 
       )}
 
       {/* Modal nouveau mouvement */}
-      <Modal open={txModal} onClose={() => setTxModal(false)} title="Nouveau mouvement">
+      <Modal open={canEnter && txModal} onClose={() => setTxModal(false)} title="Nouveau mouvement">
         <div className="space-y-4">
           <div className="grid grid-cols-3 gap-2 min-w-0">
             {(["credit", "debit", "transfer_out"] as const).map(type => (
@@ -924,7 +969,7 @@ export default function ComptabiliteClient({ locale, isSuperAdmin, clientStats, 
       </Modal>
 
       {/* Modal nouveau compte */}
-      <Modal open={accountModal} onClose={() => setAccountModal(false)} title="Nouveau compte">
+      <Modal open={canCreateAccount && accountModal} onClose={() => setAccountModal(false)} title="Nouveau compte">
         <div className="space-y-4">
           <Input label="Nom du compte *" value={accForm.name} onChange={e => setAccForm(f => ({ ...f, name: e.target.value }))} placeholder="Ecobank GNF, Orange Money, Caisse…" />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

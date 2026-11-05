@@ -13,6 +13,7 @@ import DocumentLayout from "@/components/print/DocumentLayout"
 import ActivityLog from "@/components/ActivityLog"
 import ShareButton from "@/components/ShareButton"
 import { PROJECT_OPTIONS } from "@/lib/projects"
+import { usePerms } from "@/components/PermissionsProvider"
 
 interface Line {
   id: string
@@ -71,6 +72,7 @@ function getStepIndex(status: string) {
 export default function DevisDetailClient({ order, locale, docSettings = {}, stockByProduct, firstWarehouse, invoiceCount = 0, firstInvoiceId = null, deliveryCount = 0, allProducts = [] }: Props) {
   const t = useTranslations("devis")
   const router = useRouter()
+  const { can } = usePerms()
   const [loading, setLoading] = useState(false)
   const [addingLine, setAddingLine] = useState(false)
   const selectingProductRef = useRef(false)
@@ -166,6 +168,9 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
     setAdditionalInfoSaving(false)
   }
   const isDraft = order.status !== "invoiced" && order.status !== "cancelled"
+  // Display only (D2): fields and lines are editable only with "devis.modifier"
+  const canModify = can("devis.modifier")
+  const canEdit = isDraft && canModify
 
   const PAYMENT_TERMS_LABELS: Record<string, string> = {
     immediate: t("paymentImmediate"),
@@ -454,7 +459,8 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
             clientName={order.account?.name}
             type="devis"
           />
-          {order.status === "confirmed" && (
+          {/* Opens the delivery note creation form: needs "livraisons.creer" */}
+          {order.status === "confirmed" && can("livraisons.creer") && (
             <a
               href={`/${locale}/ventes/devis/${order.id}/bon-livraison`}
               target="_blank"
@@ -464,29 +470,31 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
             </a>
           )}
 
-          {/* Dupliquer : toujours disponible */}
-          <Button variant="secondary" onClick={duplicate} disabled={loading}>
-            <Copy className="w-4 h-4" /> Dupliquer
-          </Button>
+          {/* Duplicate: needs "devis.creer" */}
+          {can("devis.creer") && (
+            <Button variant="secondary" onClick={duplicate} disabled={loading}>
+              <Copy className="w-4 h-4" /> Dupliquer
+            </Button>
+          )}
 
-          {/* Remettre en brouillon : depuis confirmed, invoiced, cancelled */}
-          {["confirmed", "invoiced", "cancelled"].includes(order.status) && (
+          {/* Reset to draft: from confirmed or cancelled, never for an invoiced quote */}
+          {["confirmed", "cancelled"].includes(order.status) && canModify && (
             <Button variant="secondary" onClick={() => setResetToDraftModalOpen(true)} disabled={loading}>
               <RotateCcw className="w-4 h-4" /> {t("resetToDraft")}
             </Button>
           )}
-          {/* Annuler : depuis draft, confirmed, invoiced */}
-          {["draft", "confirmed", "invoiced"].includes(order.status) && (
+          {/* Cancel: from draft or confirmed, never for an invoiced quote */}
+          {["draft", "confirmed"].includes(order.status) && can("devis.annuler") && (
             <Button variant="danger" onClick={() => setCancelModalOpen(true)} disabled={loading}>
               <X className="w-4 h-4" /> {t("cancel")}
             </Button>
           )}
-          {order.status === "draft" && (
+          {order.status === "draft" && can("devis.confirmer") && (
             <Button onClick={confirm} disabled={loading}>
               <CheckCircle className="w-4 h-4" /> {t("confirm")}
             </Button>
           )}
-          {order.status === "confirmed" && (
+          {order.status === "confirmed" && can("factures.creer") && (
             <Button onClick={createInvoice} disabled={loading}>
               <Receipt className="w-4 h-4" /> {loading ? t("creating") : t("createInvoice")}
             </Button>
@@ -570,7 +578,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                             className="text-xs text-gray-400 hover:text-gray-600">Annuler</button>
                         </div>
                       </div>
-                    ) : (
+                    ) : can("comptes.creer") && (
                       <button onClick={() => setCreatingAccount(true)}
                         className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 border-t border-gray-100 flex items-center gap-1.5 transition">
                         <span className="font-bold">+</span> Nouveau client
@@ -579,6 +587,8 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                   </div>
                   <button onClick={() => { setEditingAccount(false); setAccountSearch(""); setCreatingAccount(false) }} className="ml-2 text-xs text-gray-400 hover:text-gray-600">Annuler</button>
                 </div>
+              ) : !canModify ? (
+                <p className="text-sm text-gray-900">{currentAccount?.name ?? "—"}</p>
               ) : (
                 <button
                   onClick={() => { setEditingAccount(true); loadAccounts("") }}
@@ -597,7 +607,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
             )}
             <div>
               <p className="text-xs text-gray-400 mb-0.5">{t("fieldClientRef")}</p>
-              {isDraft ? (
+              {canEdit ? (
                 <input
                   className="w-full text-sm text-gray-900 bg-transparent border-b border-gray-200 hover:border-gray-400 focus:border-blue-500 focus:outline-none py-0.5"
                   value={orderFields.client_order_ref}
@@ -612,7 +622,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
           </div>
           <div className="space-y-4">
             {/* Order date stays editable until the quote is invoiced (or cancelled) */}
-            {isDraft ? (
+            {canEdit ? (
               <div>
                 <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-0.5">{t("fieldOrderDate")}</p>
                 <input
@@ -628,7 +638,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
             )}
             <div>
               <p className="text-xs text-gray-400 mb-0.5">{t("fieldExpiry")}</p>
-              {isDraft ? (
+              {canEdit ? (
                 <input
                   type="date"
                   className="text-sm text-gray-900 bg-transparent border-b border-gray-200 hover:border-gray-400 focus:border-blue-500 focus:outline-none py-0.5"
@@ -642,7 +652,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
             </div>
             <div>
               <p className="text-xs text-gray-400 mb-0.5">{t("fieldPaymentTerms")}</p>
-              {isDraft ? (
+              {canEdit ? (
                 <select
                   className="text-sm text-gray-900 bg-transparent border-b border-gray-200 hover:border-gray-400 focus:border-blue-500 focus:outline-none py-0.5 w-full"
                   value={orderFields.payment_terms}
@@ -659,7 +669,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
             </div>
             <div>
               <p className="text-xs text-gray-400 mb-0.5">{t("fieldCurrency")}</p>
-              {isDraft ? (
+              {canEdit ? (
                 <select
                   className="text-sm text-gray-900 bg-transparent border-b border-gray-200 hover:border-gray-400 focus:border-blue-500 focus:outline-none py-0.5 w-full"
                   value={orderFields.currency}
@@ -677,9 +687,10 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
             <div>
               <p className="text-xs text-gray-400 mb-0.5">Projet</p>
               <select
-                className="text-sm text-gray-900 bg-transparent border-b border-gray-200 hover:border-gray-400 focus:border-blue-500 focus:outline-none py-0.5 w-full"
+                className="text-sm text-gray-900 bg-transparent border-b border-gray-200 hover:border-gray-400 focus:border-blue-500 focus:outline-none py-0.5 w-full disabled:border-transparent disabled:appearance-none"
                 value={orderFields.project_code}
                 onChange={e => updateOrderField("project_code", e.target.value)}
+                disabled={!canModify}
               >
                 <option value="">—</option>
                 {PROJECT_OPTIONS.map(p => (
@@ -738,14 +749,14 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                   <th className="text-right px-4 py-3 font-medium text-gray-600">{t("colStock")}</th>
                   {tva && <th className="text-center px-4 py-3 font-medium text-gray-600 text-xs">Sans TVA</th>}
                   <th className="text-right px-4 py-3 font-medium text-gray-600">{t("colSubtotal")}</th>
-                  {isDraft && <th className="px-2 py-3" />}
+                  {canEdit && <th className="px-2 py-3" />}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {lines.map(l => (
                   <tr key={l.id} className={l.tva_exempt ? "bg-gray-50/50" : ""}>
                     <td className="px-4 py-2">
-                      {isDraft ? (
+                      {canEdit ? (
                         <div className="relative flex items-start gap-2">
                           {l.product_id && allProducts.find(p => p.id === l.product_id)?.image_url && (
                             <img
@@ -810,7 +821,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                       )}
                     </td>
                     <td className="px-4 py-2 text-right">
-                      {isDraft ? (
+                      {canEdit ? (
                         <input
                           type="number" min="0" step="any"
                           className="w-20 text-sm text-right text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none py-0.5"
@@ -822,7 +833,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                       )}
                     </td>
                     <td className="px-4 py-2 text-right">
-                      {isDraft ? (
+                      {canEdit ? (
                         <input
                           type="number" min="0" step="any"
                           className="w-24 text-sm text-right text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none py-0.5"
@@ -834,7 +845,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                       )}
                     </td>
                     <td className="px-4 py-2 text-right">
-                      {isDraft ? (
+                      {canEdit ? (
                         <input
                           type="number" min="0" max="100" step="any"
                           className="w-16 text-sm text-right text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none py-0.5"
@@ -859,6 +870,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                       <td className="px-4 py-2 text-center">
                         <button
                           onClick={() => toggleLineExempt(l.id)}
+                          disabled={!canModify}
                           title={l.tva_exempt ? "Cliquer pour appliquer la TVA" : "Cliquer pour exempter de TVA"}
                           className={`w-8 h-4 rounded-full transition-colors relative inline-flex items-center ${l.tva_exempt ? "bg-amber-400" : "bg-gray-200"}`}
                         >
@@ -869,7 +881,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                     <td className="px-4 py-2 text-right font-semibold text-gray-900">
                       {formatNumber(lineTotal(l))}
                     </td>
-                    {isDraft && (
+                    {canEdit && (
                       <td className="px-2 py-2">
                         <button
                           onClick={() => deleteLine(l.id)}
@@ -883,7 +895,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                 ))}
               </tbody>
             </table>
-            {isDraft && (
+            {canEdit && (
               <div className="px-4 py-3 border-t border-gray-50">
                 <button
                   onClick={addLine}
@@ -901,7 +913,8 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
               <div className="flex items-center gap-2">
                 <button
                   onClick={toggleTva}
-                  className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer ${tva ? "bg-blue-600" : "bg-gray-200"}`}
+                  disabled={!canModify}
+                  className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 ${tva ? "bg-blue-600" : "bg-gray-200"}`}
                 >
                   <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${tva ? "translate-x-4" : "translate-x-0.5"}`} />
                 </button>
@@ -944,7 +957,8 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
             <textarea
               value={additionalInfo}
               onChange={e => setAdditionalInfo(e.target.value)}
-              onBlur={e => saveAdditionalInfo(e.target.value)}
+              onBlur={e => { if (canModify) saveAdditionalInfo(e.target.value) }}
+              readOnly={!canModify}
               rows={6}
               placeholder="Conditions générales, termes de livraison, remarques..."
               className="w-full text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
@@ -960,7 +974,8 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
             <textarea
               value={notes}
               onChange={e => setNotes(e.target.value)}
-              onBlur={e => saveNotes(e.target.value)}
+              onBlur={e => { if (canModify) saveNotes(e.target.value) }}
+              readOnly={!canModify}
               rows={6}
               placeholder={t("noNotes")}
               className="w-full text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"

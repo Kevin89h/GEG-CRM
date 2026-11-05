@@ -612,8 +612,8 @@ begin
   elsif tg_table_name = 'supplier_invoices' then
     if new.status = 'cancelled' and old.status <> 'cancelled' then
       execute format('select count(*) from %I.supplier_payments where supplier_invoice_id = $1', tg_table_schema) into n using old.id;
-      if n > 0 or old.status not in ('draft', 'pending') then
-        raise exception 'Facture fournisseur validée ou payée : elle ne peut pas être annulée (corriger par un avoir)';
+      if n > 0 or old.status <> 'pending' then
+        raise exception 'Seule une facture fournisseur « En attente » et sans paiement peut être annulée (sinon : avoir)';
       end if;
     end if;
     return new;

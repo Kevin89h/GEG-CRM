@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Truck, ArrowLeft, Package } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/Button"
+import { usePerms } from "@/components/PermissionsProvider"
 
 interface OrderLine {
   id: string
@@ -31,6 +32,9 @@ interface Props {
 
 export default function BLPartielClient({ orderId, orderNumber, locale, lines, warehouses }: Props) {
   const router = useRouter()
+  const { can } = usePerms()
+  // Creating the delivery note needs "livraisons.creer" (D2, display only)
+  const canCreate = can("livraisons.creer")
   const [warehouseId, setWarehouseId] = useState(warehouses[0]?.id ?? "")
   const [notes, setNotes] = useState("")
   const [qtys, setQtys] = useState<Record<string, number>>(() => {
@@ -223,14 +227,18 @@ export default function BLPartielClient({ orderId, orderNumber, locale, lines, w
             ? `${totalToDeliver} unité(s) à livrer`
             : "Aucune quantité saisie"}
         </p>
-        <Button
-          onClick={handleSubmit}
-          disabled={loading || totalToDeliver === 0 || !warehouseId}
-          className="flex items-center gap-2"
-        >
-          <Truck className="w-4 h-4" />
-          {loading ? "Création…" : "Créer le bon de livraison"}
-        </Button>
+        {canCreate ? (
+          <Button
+            onClick={handleSubmit}
+            disabled={loading || totalToDeliver === 0 || !warehouseId}
+            className="flex items-center gap-2"
+          >
+            <Truck className="w-4 h-4" />
+            {loading ? "Création…" : "Créer le bon de livraison"}
+          </Button>
+        ) : (
+          <p className="text-sm text-gray-400">Vous n&apos;avez pas le droit de créer un bon de livraison.</p>
+        )}
       </div>
     </div>
   )

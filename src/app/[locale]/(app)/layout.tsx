@@ -7,6 +7,7 @@ import MobileHeader from "@/components/layout/MobileHeader"
 import ChatWidget from "@/components/chat/ChatWidget"
 import PwaInstallBanner from "@/components/PwaInstallBanner"
 import PushSubscriber from "@/components/PushSubscriber"
+import { PermissionsProvider } from "@/components/PermissionsProvider"
 
 interface Props {
   children: React.ReactNode
@@ -57,7 +58,7 @@ export default async function AppLayout({ children, params }: Props) {
       {/* Main content */}
       <main className="flex-1 overflow-y-auto pt-14 md:pt-0">
         <div className="max-w-7xl mx-auto px-4 py-4 md:px-6 md:py-8">
-          {children}
+          <PermissionsProvider perms={access.perms[currentSchema] ?? []}>{children}</PermissionsProvider>
         </div>
       </main>
 

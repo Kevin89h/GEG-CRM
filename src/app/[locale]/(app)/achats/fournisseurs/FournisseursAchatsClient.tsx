@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Plus, Search, Building2, Phone, Mail, MapPin, Pencil, X, CreditCard, Download } from "lucide-react"
 import { exportToXls } from "@/lib/exportXls"
+import { usePerms } from "@/components/PermissionsProvider"
 
 interface Supplier {
   id: string
@@ -50,6 +51,10 @@ interface Props {
 }
 
 export default function FournisseursAchatsClient({ suppliers: initial, locale }: Props) {
+  const { can } = usePerms()
+  // Display only (D2): POST/PATCH /api/suppliers need "fournisseurs.gerer", DELETE (unlisted) needs "suppression"
+  const canManage = can("fournisseurs.gerer")
+  const canDelete = can("suppression")
   const [suppliers, setSuppliers] = useState(initial)
   const [search, setSearch] = useState("")
   const [modalOpen, setModalOpen] = useState(false)
@@ -141,12 +146,14 @@ export default function FournisseursAchatsClient({ suppliers: initial, locale }:
     <div className="-mx-4 -my-4 md:-m-6 min-h-screen bg-gray-50/50">
       {/* Toolbar */}
       <div className="bg-white border-b border-gray-200 px-4 md:px-6 py-3 flex items-center gap-3">
-        <button
-          onClick={openNew}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded bg-[#7c3aed] text-white hover:bg-[#6d28d9] transition"
-        >
-          <Plus className="w-3.5 h-3.5" /> Nouveau fournisseur
-        </button>
+        {canManage && (
+          <button
+            onClick={openNew}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded bg-[#7c3aed] text-white hover:bg-[#6d28d9] transition"
+          >
+            <Plus className="w-3.5 h-3.5" /> Nouveau fournisseur
+          </button>
+        )}
         <div className="relative ml-auto">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
           <input
@@ -226,12 +233,16 @@ export default function FournisseursAchatsClient({ suppliers: initial, locale }:
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        <button onClick={() => openEdit(s)} className="p-1.5 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition">
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button onClick={() => handleDelete(s.id)} className="p-1.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition">
-                          <X className="w-3.5 h-3.5" />
-                        </button>
+                        {canManage && (
+                          <button onClick={() => openEdit(s)} className="p-1.5 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition">
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button onClick={() => handleDelete(s.id)} className="p-1.5 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition">
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -243,7 +254,7 @@ export default function FournisseursAchatsClient({ suppliers: initial, locale }:
       </div>
 
       {/* Modal */}
-      {modalOpen && (
+      {canManage && modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">

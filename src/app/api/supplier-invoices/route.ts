@@ -1,6 +1,7 @@
 import { createSchemaClient } from "@/lib/supabase/admin"
 import { getSchemaFromRequest } from "@/lib/company"
 import { NextRequest, NextResponse } from "next/server"
+import { hasPermission } from "@/lib/access"
 
 export async function POST(req: NextRequest) {
   try {
@@ -15,6 +16,11 @@ export async function POST(req: NextRequest) {
 
     if (!supplier_name?.trim()) {
       return NextResponse.json({ error: "Le nom du fournisseur est requis" }, { status: 400 })
+    }
+
+    // An invoice created as already paid records a supplier payment: it needs that permission too
+    if ((pay_immediately || status === "paid") && !(await hasPermission("paiements_fournisseurs.enregistrer"))) {
+      return NextResponse.json({ error: "Vos permissions ne permettent pas d'enregistrer un paiement fournisseur" }, { status: 403 })
     }
 
     const db = createSchemaClient(await getSchemaFromRequest(req))

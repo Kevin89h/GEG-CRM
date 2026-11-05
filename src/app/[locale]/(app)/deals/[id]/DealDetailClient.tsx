@@ -11,6 +11,7 @@ import {
 import { formatCurrency } from "@/lib/utils"
 import type { DealStage } from "@/types"
 import DealFinancialsPanel from "@/components/DealFinancialsPanel"
+import { usePerms } from "@/components/PermissionsProvider"
 
 interface Activity {
   id: string
@@ -159,6 +160,15 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
   const router = useRouter()
   const params = useParams()
   const locale = (params?.locale as string) ?? "fr"
+  // Display only (D2): buttons follow the permissions of the active company, the API checks again
+  const { can } = usePerms()
+  const canEditDeal = can("opportunites.modifier")
+  const canSeeCosts = can("opportunites.couts_voir")
+  const canEditCosts = can("opportunites.couts_modifier")
+  const canCreateActivity = can("activites.creer")
+  const canEditActivity = can("activites.modifier")
+  const canDelete = can("suppression")
+  const canLinkDevis = can("devis.modifier")
   const [deal, setDeal] = useState(initial)
   const [activities, setActivities] = useState(initialActs)
   const [stageSaving, setStageSaving] = useState(false)
@@ -252,7 +262,7 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
       body.value = editForm.value ? parseFloat(editForm.value) : null
       body.currency = editForm.currency
       body.selling_price = editForm.selling_price ? parseFloat(editForm.selling_price) : null
-      body.cost = editForm.cost ? parseFloat(editForm.cost) : null
+      if (canEditCosts) body.cost = editForm.cost ? parseFloat(editForm.cost) : null
     }
     const res = await fetch(`/api/deals/${deal.id}`, {
       method: "PATCH",
@@ -441,9 +451,12 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
           <p className="text-sm text-gray-500 mt-0.5">{clientName} · Créé le {formatDate(deal.created_at)}</p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
+          {canEditDeal && (
           <button onClick={() => setEditing(true)} className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition">
             <Edit2 className="w-3.5 h-3.5" /> Modifier
           </button>
+          )}
+          {can("opportunites.transferer") && (
           <button
             disabled={actionLoading}
             onClick={async () => {
@@ -459,6 +472,8 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
             <ArrowLeftRight className="w-3.5 h-3.5" />
             {schema === "geg_guinee" ? "→ Singapore" : "→ Guinée"}
           </button>
+          )}
+          {canDelete && (
           <button
             disabled={actionLoading}
             onClick={async () => {
@@ -472,6 +487,7 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
           >
             <Trash2 className="w-3.5 h-3.5" /> Supprimer
           </button>
+          )}
         </div>
       </div>
 
@@ -490,8 +506,8 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
                   <button
                     key={s}
                     onClick={() => changeStage(s)}
-                    disabled={stageSaving}
-                    className={`flex-1 py-2 text-xs font-medium rounded-lg transition ${
+                    disabled={stageSaving || !canEditDeal}
+                    className={`flex-1 py-2 text-xs font-medium rounded-lg transition disabled:cursor-default ${
                       current ? `${STAGE_CHIP[s]} ring-2 ring-offset-1 ring-current` :
                       past ? "bg-gray-100 text-gray-400" :
                       "bg-gray-50 text-gray-400 hover:bg-gray-100"
@@ -587,13 +603,13 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
                       <span className="font-medium text-gray-800">{formatCurrency(deal.selling_price, deal.currency as "USD" | "GNF" | "EUR")}</span>
                     </div>
                   )}
-                  {deal.cost != null && (
+                  {canSeeCosts && deal.cost != null && (
                     <div className="flex items-center gap-2 text-sm">
                       <span className="text-gray-400 w-28 flex-shrink-0 text-xs">Coût</span>
                       <span className="font-medium text-gray-800">{formatCurrency(deal.cost, deal.currency as "USD" | "GNF" | "EUR")}</span>
                     </div>
                   )}
-                  {deal.selling_price != null && deal.cost != null && (
+                  {canSeeCosts && deal.selling_price != null && deal.cost != null && (
                     <div className="flex items-center gap-2 text-sm">
                       <span className="text-gray-400 w-28 flex-shrink-0 text-xs">Marge</span>
                       <span className={`font-semibold ${margin >= 0 ? "text-green-600" : "text-red-600"}`}>
@@ -666,15 +682,18 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
           {leftTab === "activite" && <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
               <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5"><Zap className="w-3.5 h-3.5 text-yellow-500" /> Journal d'activité</h2>
+              {canCreateActivity && (
               <button
                 onClick={() => setActivityModal(true)}
                 className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 px-2 py-1 rounded-lg hover:bg-blue-50 transition"
               >
                 <Plus className="w-3.5 h-3.5" /> Détaillé
               </button>
+              )}
             </div>
 
             {/* Quick actions */}
+            {canCreateActivity && (
             <div className="px-4 py-3 border-b border-gray-50 space-y-2">
               <div className="flex gap-2 flex-wrap">
                 {QUICK_ACTIONS.map(qa => (
@@ -708,6 +727,7 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
                 </div>
               )}
             </div>
+            )}
             <div className="divide-y divide-gray-50">
               {activities.length === 0 ? (
                 <div className="text-center py-10 text-gray-400 text-sm">
@@ -767,6 +787,7 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
                           <span className="text-sm font-medium text-gray-900">{act.subject}</span>
                           {act.completed && <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />}
                           <div className="ml-auto flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            {canEditActivity && (
                             <button
                               onClick={() => startEditAct(act)}
                               className="p-1 rounded hover:bg-gray-200 text-gray-400 hover:text-gray-600 transition"
@@ -774,6 +795,8 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
                             >
                               <Pencil className="w-3 h-3" />
                             </button>
+                            )}
+                            {canDelete && (
                             <button
                               onClick={() => deleteActivity(act.id)}
                               className="p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-500 transition"
@@ -781,6 +804,7 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
                             >
                               <Trash2 className="w-3 h-3" />
                             </button>
+                            )}
                           </div>
                         </div>
                         {act.notes && <p className="text-xs text-gray-500 mt-0.5 whitespace-pre-line">{act.notes}</p>}
@@ -870,12 +894,14 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
                   <span className="ml-1 px-1.5 py-0.5 bg-blue-50 text-blue-600 text-xs rounded-full">{linkedDevis.length}</span>
                 )}
               </h2>
+              {canLinkDevis && (
               <button
                 onClick={() => { setDevisPickerOpen(true); searchDevis("") }}
                 className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 px-2 py-1 rounded-lg hover:bg-blue-50 transition"
               >
                 <Plus className="w-3.5 h-3.5" /> Lier
               </button>
+              )}
             </div>
 
             {linkedDevis.length === 0 ? (
@@ -904,6 +930,7 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
                         {d.status === "draft" ? "Brouillon" : d.status === "confirmed" ? "Confirmé" : d.status === "invoiced" ? "Facturé" : "Annulé"}
                       </span>
                     </div>
+                    {canLinkDevis && (
                     <button
                       onClick={() => unlinkDevis(d.id)}
                       className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-500 transition"
@@ -911,6 +938,7 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
                     >
                       <Trash2 className="w-3 h-3" />
                     </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -924,7 +952,7 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
                 <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
                   <FileText className="w-3.5 h-3.5 text-green-500" /> Facture liée
                 </h2>
-                {!linkedInvoice && (
+                {!linkedInvoice && canEditDeal && (
                   <button
                     onClick={() => setInvoicePickerOpen(true)}
                     className="flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 px-2 py-1 rounded-lg hover:bg-blue-50 transition"
@@ -952,6 +980,7 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
                     }`}>
                       {linkedInvoice.status === "draft" ? "Brouillon" : linkedInvoice.status === "sent" ? "Envoyée" : linkedInvoice.status === "paid" ? "Payée" : linkedInvoice.status}
                     </span>
+                    {canEditDeal && (
                     <button
                       onClick={unlinkInvoice}
                       className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-100 text-gray-400 hover:text-red-500 transition"
@@ -959,6 +988,7 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
                     >
                       <Trash2 className="w-3 h-3" />
                     </button>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -1199,12 +1229,14 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
                         <label className="text-xs font-medium text-gray-500 block mb-1">Prix de vente</label>
                         <input type="number" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" placeholder="0" value={editForm.selling_price} onChange={e => setEditForm(f => ({ ...f, selling_price: e.target.value }))} />
                       </div>
+                      {canSeeCosts && (
                       <div>
                         <label className="text-xs font-medium text-gray-500 block mb-1">Coût</label>
-                        <input type="number" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500" placeholder="0" value={editForm.cost} onChange={e => setEditForm(f => ({ ...f, cost: e.target.value }))} />
+                        <input type="number" readOnly={!canEditCosts} className={`w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-blue-500 ${canEditCosts ? "" : "bg-gray-50 text-gray-500"}`} placeholder="0" value={editForm.cost} onChange={e => setEditForm(f => ({ ...f, cost: e.target.value }))} />
                       </div>
+                      )}
                     </div>
-                    {(editForm.selling_price || editForm.cost) && (
+                    {canSeeCosts && (editForm.selling_price || editForm.cost) && (
                       <div className={`rounded-lg px-3 py-2 text-sm flex items-center gap-2 ${margin >= 0 ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
                         <span className="text-xs font-medium">Marge :</span>
                         <span className="font-semibold">{margin.toLocaleString("fr-FR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {editForm.currency}</span>

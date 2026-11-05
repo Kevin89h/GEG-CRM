@@ -8,6 +8,7 @@ import { Package, ArrowDownToLine, ArrowUpFromLine, ArrowLeftRight, SlidersHoriz
 import { exportToXls } from "@/lib/exportXls"
 import { Badge } from "@/components/ui/Badge"
 import type { Warehouse } from "@/types"
+import { usePerms } from "@/components/PermissionsProvider"
 
 interface StockLevelRow {
   id: string
@@ -29,6 +30,11 @@ const categoryColors: Record<string, "blue" | "yellow" | "gray" | "green" | "pur
 export default function StockDashboard({ levels, warehouses, products }: Props) {
   const { locale } = useParams<{ locale: string }>()
   const t = useTranslations("stock")
+  // Display only (D2): manual moves and losses need "stock.mouvement_manuel", the inventory "stock.inventaire",
+  // internal references "produits.prix_achat" (the pages and the API check again)
+  const { can } = usePerms()
+  const canMove = can("stock.mouvement_manuel")
+  const seeReference = can("produits.prix_achat")
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>("all")
   const [search, setSearch] = useState("")
 
@@ -69,28 +75,34 @@ export default function StockDashboard({ levels, warehouses, products }: Props) 
             <WarehouseIcon className="w-4 h-4" />
             <span className="hidden sm:inline">{t("warehouses")}</span>
           </Link>
+          {can("produits.voir") && (
           <Link href={`/${locale}/stock/produits`} className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition">
             <Package className="w-4 h-4" />
             <span className="hidden sm:inline">{t("products")}</span>
           </Link>
+          )}
           <Link href={`/${locale}/stock/mouvements`} className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition">
             <SlidersHorizontal className="w-4 h-4" />
             <span className="hidden sm:inline">{t("movements")}</span>
           </Link>
+          {can("stock.inventaire") && (
           <Link href={`/${locale}/stock/inventaire`} className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 transition">
             <ClipboardList className="w-4 h-4" />
             <span className="hidden sm:inline">Inventaire</span>
           </Link>
+          )}
+          {canMove && (
           <Link href={`/${locale}/stock/pertes`} className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition">
             <AlertTriangle className="w-4 h-4" />
             <span className="hidden sm:inline">Pertes & Rebuts</span>
           </Link>
+          )}
           <button
             onClick={() => {
               const xlsRows = rows.flatMap(r =>
                 warehouses.map(w => ({
                   "Produit": r.product.name,
-                  "Référence": r.product.reference ?? "",
+                  ...(seeReference ? { "Référence": r.product.reference ?? "" } : {}),
                   "Catégorie": r.product.category?.name ?? "",
                   "Unité": r.product.unit?.name ?? "",
                   "Entrepôt": w.name,
@@ -104,14 +116,17 @@ export default function StockDashboard({ levels, warehouses, products }: Props) 
             <Download className="w-4 h-4" />
             <span className="hidden sm:inline">Export XLS</span>
           </button>
+          {canMove && (
           <Link href={`/${locale}/stock/mouvements/nouveau`} className="inline-flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition">
             <Plus className="w-4 h-4" />
             <span className="hidden sm:inline">{t("movement")}</span>
           </Link>
+          )}
         </div>
       </div>
 
       {/* Quick actions */}
+      {canMove && (
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
         {[
           { label: t("stockIn"), icon: ArrowDownToLine, color: "text-emerald-600 bg-emerald-50", href: `/${locale}/stock/mouvements/nouveau?type=in` },
@@ -126,6 +141,7 @@ export default function StockDashboard({ levels, warehouses, products }: Props) 
           </Link>
         ))}
       </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
@@ -167,7 +183,7 @@ export default function StockDashboard({ levels, warehouses, products }: Props) 
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
                 <th className="text-left px-4 py-3 font-medium text-gray-600 min-w-[200px]">{t("colProduct")}</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colRef")}</th>
+                {seeReference && <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colRef")}</th>}
                 <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colUnit")}</th>
                 {filteredWarehouses.map(w => (
                   <th key={w.id} className="text-right px-4 py-3 font-medium text-gray-600 min-w-[100px]">
@@ -193,7 +209,7 @@ export default function StockDashboard({ levels, warehouses, products }: Props) 
                         <span className="font-medium text-gray-900">{product.name}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-gray-500 font-mono text-xs">{product.reference ?? "—"}</td>
+                    {seeReference && <td className="px-4 py-3 text-gray-500 font-mono text-xs">{product.reference ?? "—"}</td>}
                     <td className="px-4 py-3 text-gray-600">{product.unit?.name ?? "—"}</td>
                     {filteredWarehouses.map(w => {
                       const qty = byWarehouse[w.id] ?? 0

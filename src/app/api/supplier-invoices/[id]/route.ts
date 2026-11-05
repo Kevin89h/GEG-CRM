@@ -7,7 +7,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params
   const body = await req.json()
   const { db } = await createCompanyClient()
-  // Void before validation and without payment only (B1); other changes need "factures_fournisseurs.gerer"
+  // Void only when the invoice is "En attente" (pending) and has no payment (B1, D1); other changes need "factures_fournisseurs.gerer"
   const perms = await currentPerms()
   if (body.status === "cancelled") {
     if (!allows(perms, "factures_fournisseurs.annuler")) return NextResponse.json({ error: "Vos permissions ne permettent pas d'annuler cette facture" }, { status: 403 })
@@ -15,8 +15,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       db.from("supplier_invoices").select("status").eq("id", id).single(),
       db.from("supplier_payments").select("id", { count: "exact", head: true }).eq("supplier_invoice_id", id),
     ])
-    if (count || !["draft", "pending"].includes(cur?.status ?? ""))
-      return NextResponse.json({ error: "Facture validée ou payée : elle ne peut pas être annulée (corriger par un avoir)" }, { status: 409 })
+    if (count || cur?.status !== "pending")
+      return NextResponse.json({ error: "Seule une facture fournisseur « En attente » et sans paiement peut être annulée (sinon : avoir)" }, { status: 409 })
   } else if (!allows(perms, "factures_fournisseurs.gerer")) {
     return NextResponse.json({ error: "Vos permissions ne permettent pas de modifier cette facture" }, { status: 403 })
   }

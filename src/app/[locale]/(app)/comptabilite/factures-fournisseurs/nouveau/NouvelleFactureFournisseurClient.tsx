@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Plus, Trash2, ArrowLeft, FileText, ChevronDown, X } from "lucide-react"
 import Link from "next/link"
+import { usePerms } from "@/components/PermissionsProvider"
 
 interface TreasuryAccount { id: string; name: string; type: string; currency: string }
 interface PrefillLine { description: string; quantity: string; unit_price: string; tax_rate: string }
@@ -29,6 +30,12 @@ const QUICK_FORM_EMPTY = { name: "", currency: "USD", payment_terms: "" }
 
 export default function NouvelleFactureFournisseurClient({ locale, treasuryAccounts, prefill, suppliers: initialSuppliers }: Props) {
   const router = useRouter()
+  const { can } = usePerms()
+  // Display only (D2): POST /api/supplier-invoices "factures_fournisseurs.gerer", quick supplier "fournisseurs.gerer",
+  // paying at creation records a supplier payment "paiements_fournisseurs.enregistrer"
+  const canCreate = can("factures_fournisseurs.gerer")
+  const canManageSuppliers = can("fournisseurs.gerer")
+  const canPay = can("paiements_fournisseurs.enregistrer")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [suppliers, setSuppliers] = useState<SupplierOption[]>(initialSuppliers)
@@ -230,11 +237,13 @@ export default function NouvelleFactureFournisseurClient({ locale, treasuryAccou
                         ))
                         : <li className="px-3 py-2 text-xs text-gray-400">Aucun fournisseur trouvé</li>
                       }
-                      <li
-                        onMouseDown={() => { setShowDropdown(false); setShowQuickCreate(true); setQuickForm(f => ({ ...f, name: supplierSearch })) }}
-                        className="px-3 py-2 text-sm text-[#7c3aed] hover:bg-purple-50 cursor-pointer flex items-center gap-1.5 border-t border-gray-100 font-medium">
-                        <Plus className="w-3.5 h-3.5" /> Nouveau fournisseur
-                      </li>
+                      {canManageSuppliers && (
+                        <li
+                          onMouseDown={() => { setShowDropdown(false); setShowQuickCreate(true); setQuickForm(f => ({ ...f, name: supplierSearch })) }}
+                          className="px-3 py-2 text-sm text-[#7c3aed] hover:bg-purple-50 cursor-pointer flex items-center gap-1.5 border-t border-gray-100 font-medium">
+                          <Plus className="w-3.5 h-3.5" /> Nouveau fournisseur
+                        </li>
+                      )}
                     </ul>
                   )}
                 </div>
@@ -344,7 +353,7 @@ export default function NouvelleFactureFournisseurClient({ locale, treasuryAccou
         </div>
 
         {/* Paiement immédiat */}
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
+        {canPay && <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
           <label className="flex items-center gap-3 cursor-pointer">
             <input type="checkbox" checked={form.pay_immediately}
               onChange={e => setF("pay_immediately", e.target.checked)}
@@ -377,7 +386,7 @@ export default function NouvelleFactureFournisseurClient({ locale, treasuryAccou
               </div>
             </div>
           )}
-        </div>
+        </div>}
 
         {/* Notes */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
@@ -395,15 +404,17 @@ export default function NouvelleFactureFournisseurClient({ locale, treasuryAccou
             className="px-4 py-2 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">
             Annuler
           </button>
-          <button onClick={handleSave} disabled={saving}
-            className="px-4 py-2 text-sm bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors">
-            {saving ? "Création…" : "Créer la facture"}
-          </button>
+          {canCreate && (
+            <button onClick={handleSave} disabled={saving}
+              className="px-4 py-2 text-sm bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors">
+              {saving ? "Création…" : "Créer la facture"}
+            </button>
+          )}
         </div>
       </div>
 
       {/* Quick-create supplier modal */}
-      {showQuickCreate && (
+      {canManageSuppliers && showQuickCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">

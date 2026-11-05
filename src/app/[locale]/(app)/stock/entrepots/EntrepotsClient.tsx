@@ -7,11 +7,15 @@ import { Button } from "@/components/ui/Button"
 import { Modal } from "@/components/ui/Modal"
 import { Input } from "@/components/ui/Input"
 import type { Warehouse } from "@/types"
+import { usePerms } from "@/components/PermissionsProvider"
 
 interface Props { warehouses: Warehouse[] }
 
 export default function EntrepotsClient({ warehouses: initial }: Props) {
   const t = useTranslations("entrepots")
+  // Display only (D2): creating and deactivating a warehouse need "stock.entrepots" (checked again by the API)
+  const { can } = usePerms()
+  const canManage = can("stock.entrepots")
   const [warehouses, setWarehouses] = useState(initial)
   const [modalOpen, setModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -58,21 +62,25 @@ export default function EntrepotsClient({ warehouses: initial }: Props) {
           <h1 className="text-2xl font-bold text-gray-900">{t("pageTitle")}</h1>
           <p className="text-gray-500 text-sm mt-0.5">{warehouses.length} {t("siteCount", { count: warehouses.length })}</p>
         </div>
+        {canManage && (
         <Button onClick={() => setModalOpen(true)}>
           <Plus className="w-4 h-4" />
           {t("newSite")}
         </Button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {warehouses.map(w => (
           <div key={w.id} className="relative bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+            {canManage && (
             <button
               onClick={() => setConfirmDeleteId(w.id)}
               className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full bg-red-100 text-red-500 hover:bg-red-200 transition-colors"
             >
               <X className="w-3.5 h-3.5" />
             </button>
+            )}
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
                 <WarehouseIcon className="w-5 h-5 text-blue-600" />
@@ -91,6 +99,7 @@ export default function EntrepotsClient({ warehouses: initial }: Props) {
         ))}
 
         {/* Placeholder ajouter */}
+        {canManage && (
         <button
           onClick={() => setModalOpen(true)}
           className="border-2 border-dashed border-gray-200 rounded-xl p-5 flex items-center justify-center gap-2 text-gray-400 hover:border-blue-300 hover:text-blue-500 transition-colors"
@@ -98,9 +107,10 @@ export default function EntrepotsClient({ warehouses: initial }: Props) {
           <Plus className="w-5 h-5" />
           <span className="text-sm font-medium">{t("addSite")}</span>
         </button>
+        )}
       </div>
 
-      <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title={t("confirmDeleteTitle")}>
+      <Modal open={!!confirmDeleteId && canManage} onClose={() => setConfirmDeleteId(null)} title={t("confirmDeleteTitle")}>
         <div className="space-y-4">
           <p className="text-sm text-gray-600">{t("confirmDeleteDescription")}</p>
           <div className="flex justify-end gap-3">
@@ -116,7 +126,7 @@ export default function EntrepotsClient({ warehouses: initial }: Props) {
         </div>
       </Modal>
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={t("newSiteModalTitle")}>
+      <Modal open={modalOpen && canManage} onClose={() => setModalOpen(false)} title={t("newSiteModalTitle")}>
         <div className="space-y-4">
           <Input label={t("labelName")} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder={t("placeholderName")} required />
           <Input label={t("labelCity")} value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))} placeholder={t("placeholderCity")} />

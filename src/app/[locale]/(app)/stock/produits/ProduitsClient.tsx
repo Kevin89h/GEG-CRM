@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
 import { formatCurrency } from "@/lib/utils"
 import { exportToXls } from "@/lib/exportXls"
+import { usePerms } from "@/components/PermissionsProvider"
 import type { ProductCategory, Unit } from "@/types"
 
 interface PackagingRow {
@@ -56,6 +57,11 @@ export default function ProduitsClient({ products: initial, categories, units, c
   const t = useTranslations("produits")
   const params = useParams()
   const locale = params.locale as string
+  // Display only (D2): purchase prices and internal references need "produits.prix_achat",
+  // creating a packaging format (a unit) needs "parametres.gerer"
+  const { can } = usePerms()
+  const seeBuyPrice = can("produits.prix_achat")
+  const canCreateUnit = can("parametres.gerer")
   const [products, setProducts] = useState(initial)
   const [search, setSearch] = useState("")
   const [filterCat, setFilterCat] = useState("all")
@@ -179,12 +185,11 @@ export default function ProduitsClient({ products: initial, categories, units, c
           <button
             onClick={() => exportToXls(filtered.map(p => ({
               "Code": p.product_code ?? "",
-              "Référence": p.reference ?? "",
+              ...(seeBuyPrice ? { "Référence": p.reference ?? "" } : {}),
               "Nom": p.name,
               "Catégorie": p.category?.name ?? "",
               "Unité": p.unit?.name ?? "",
-              "Prix achat": p.buy_price ?? "",
-              "Devise achat": p.buy_price_currency,
+              ...(seeBuyPrice ? { "Prix achat": p.buy_price ?? "", "Devise achat": p.buy_price_currency } : {}),
               "Prix vente": p.sell_price ?? "",
               "Devise vente": p.currency,
               "Actif": p.is_active ? "Oui" : "Non",
@@ -245,10 +250,10 @@ export default function ProduitsClient({ products: initial, categories, units, c
               <tr className="bg-gray-50 border-b border-gray-100">
                 <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colProduit")}</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Code</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colReference")}</th>
+                {seeBuyPrice && <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colReference")}</th>}
                 <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colCategorie")}</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colFormat")}</th>
-                <th className="text-right px-4 py-3 font-medium text-gray-600">{t("colPrixAchat")}</th>
+                {seeBuyPrice && <th className="text-right px-4 py-3 font-medium text-gray-600">{t("colPrixAchat")}</th>}
                 <th className="text-right px-4 py-3 font-medium text-gray-600">{t("colPrixVente")}</th>
               </tr>
             </thead>
@@ -257,7 +262,7 @@ export default function ProduitsClient({ products: initial, categories, units, c
                 <tr key={p.id} className="hover:bg-blue-50/30 transition-colors cursor-pointer" onClick={() => window.location.href = `/${locale}/stock/produits/${p.id}`}>
                   <td className="px-4 py-3 font-medium text-gray-900">{p.name}</td>
                   <td className="px-4 py-3 text-blue-700 font-mono text-xs font-semibold">{p.product_code ?? "—"}</td>
-                  <td className="px-4 py-3 text-gray-500 font-mono text-xs">{p.reference ?? "—"}</td>
+                  {seeBuyPrice && <td className="px-4 py-3 text-gray-500 font-mono text-xs">{p.reference ?? "—"}</td>}
                   <td className="px-4 py-3">
                     {p.category ? (
                       <Badge variant={colorMap[p.category.color] ?? "gray"}>{p.category.name}</Badge>
@@ -278,9 +283,11 @@ export default function ProduitsClient({ products: initial, categories, units, c
                         ) : "—"
                     }
                   </td>
+                  {seeBuyPrice && (
                   <td className="px-4 py-3 text-right text-gray-600">
                     {p.buy_price != null ? formatCurrency(p.buy_price, p.buy_price_currency ?? p.currency) : "—"}
                   </td>
+                  )}
                   <td className="px-4 py-3 text-right font-semibold text-gray-900">
                     {p.sell_price != null ? formatCurrency(p.sell_price, p.currency) : "—"}
                   </td>
@@ -292,13 +299,13 @@ export default function ProduitsClient({ products: initial, categories, units, c
       )}
 
       {/* Modal nouveau produit */}
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={t("nouveauProduit")}>
+      <Modal open={modalOpen && canWrite} onClose={() => setModalOpen(false)} title={t("nouveauProduit")}>
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="col-span-1 sm:col-span-2">
               <Input label={t("nomDuProduit")} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
             </div>
-            <Input label={`${t("reference")} (optionnel)`} value={form.reference} onChange={e => setForm(f => ({ ...f, reference: e.target.value }))} placeholder="ex: CIM-42.5-001" />
+            {seeBuyPrice && <Input label={`${t("reference")} (optionnel)`} value={form.reference} onChange={e => setForm(f => ({ ...f, reference: e.target.value }))} placeholder="ex: CIM-42.5-001" />}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -315,6 +322,7 @@ export default function ProduitsClient({ products: initial, categories, units, c
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-sm font-medium text-gray-700">Formats / Conditionnements</label>
                 <div className="flex gap-2">
+                  {canCreateUnit && (
                   <button
                     type="button"
                     onClick={() => setShowNewFormat(v => !v)}
@@ -322,6 +330,7 @@ export default function ProduitsClient({ products: initial, categories, units, c
                   >
                     <span className="text-base font-bold leading-none">+</span> Créer format
                   </button>
+                  )}
                   <button
                     type="button"
                     onClick={addPkgRow}
@@ -332,7 +341,7 @@ export default function ProduitsClient({ products: initial, categories, units, c
                 </div>
               </div>
 
-              {showNewFormat && (
+              {showNewFormat && canCreateUnit && (
                 <div className="mb-2 flex gap-2 items-center p-2 bg-blue-50 border border-blue-200 rounded-lg">
                   <input
                     autoFocus
@@ -368,8 +377,8 @@ export default function ProduitsClient({ products: initial, categories, units, c
                     <thead>
                       <tr className="bg-gray-50 border-b border-gray-100">
                         <th className="text-left px-2 py-1.5 font-medium text-gray-600">Format</th>
-                        <th className="text-left px-2 py-1.5 font-medium text-gray-600">Prix achat</th>
-                        <th className="text-left px-2 py-1.5 font-medium text-gray-600">Devise</th>
+                        {seeBuyPrice && <th className="text-left px-2 py-1.5 font-medium text-gray-600">Prix achat</th>}
+                        {seeBuyPrice && <th className="text-left px-2 py-1.5 font-medium text-gray-600">Devise</th>}
                         <th className="text-left px-2 py-1.5 font-medium text-gray-600">Prix vente</th>
                         <th className="text-left px-2 py-1.5 font-medium text-gray-600">Devise</th>
                         <th className="px-2 py-1.5" />
@@ -387,6 +396,7 @@ export default function ProduitsClient({ products: initial, categories, units, c
                               {localUnits.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                             </select>
                           </td>
+                          {seeBuyPrice && (<>
                           <td className="px-2 py-1.5">
                             <input
                               type="number"
@@ -405,6 +415,7 @@ export default function ProduitsClient({ products: initial, categories, units, c
                               {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
                             </select>
                           </td>
+                          </>)}
                           <td className="px-2 py-1.5">
                             <input
                               type="number"
@@ -448,6 +459,7 @@ export default function ProduitsClient({ products: initial, categories, units, c
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {seeBuyPrice && (
             <div className="flex gap-2">
               <div className="flex-1">
                 <Input
@@ -464,6 +476,7 @@ export default function ProduitsClient({ products: initial, categories, units, c
                 options={CURRENCIES.map(c => ({ value: c, label: c }))}
               />
             </div>
+            )}
             <div className="flex gap-2">
               <div className="flex-1">
                 <Input

@@ -144,6 +144,8 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
   // Emitted invoices are locked for every role (D1, Q2): only a draft can be edited, emitted or voided
   const canEdit = isDraft && !hasDeliveredBL && allows(perms, "factures.modifier_brouillon")
   const canPay = allows(perms, "paiements_clients.enregistrer")
+  // Notes go through PATCH /api/factures/[id], allowed with any of these keys (API_RULES)
+  const canEditNotes = allows(perms, ["factures.modifier_brouillon", "factures.emettre", "factures.annuler_brouillon"])
   const [duplicating, setDuplicating] = useState(false)
 
   async function duplicateInvoice() {
@@ -654,7 +656,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
                         {savingNewAccount ? "…" : "✓"}
                       </button>
                     </div>
-                  ) : (
+                  ) : allows(perms, "comptes.creer") && (
                     <button
                       onClick={() => setCreatingAccount(true)}
                       className="w-full text-left px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 border-t border-gray-100 font-medium"
@@ -670,10 +672,10 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
             <button
               disabled={isCancelled}
               onClick={() => { if (canEdit) { setEditingAccount(true); searchAccounts("") } }}
-              className={`text-sm text-left ${isCancelled ? "text-gray-400 cursor-default" : "text-gray-500 hover:text-blue-600 hover:underline cursor-pointer"} group`}
+              className={`text-sm text-left ${!canEdit ? "text-gray-500 cursor-default" : "text-gray-500 hover:text-blue-600 hover:underline cursor-pointer"} group`}
             >
               {invoice.account?.name ?? "—"}
-              {!isCancelled && <span className="ml-1 opacity-0 group-hover:opacity-100 text-blue-400 text-xs">✎</span>}
+              {canEdit && <span className="ml-1 opacity-0 group-hover:opacity-100 text-blue-400 text-xs">✎</span>}
             </button>
           )}
           {invoice.salesperson?.full_name && (
@@ -690,7 +692,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
             clientName={invoice.account?.name}
             type="facture"
           />
-          {!isCancelled && invoice.status !== "draft" && (
+          {!isCancelled && invoice.status !== "draft" && allows(perms, "livraisons.creer") && (
             <Button variant="secondary" onClick={createDeliveryNote} disabled={creatingBL}>
               <Truck className="w-4 h-4" /> {creatingBL ? t("creating") : t("deliveryNote")}
             </Button>
@@ -1036,7 +1038,8 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
         <textarea
           value={notes}
           onChange={e => setNotes(e.target.value)}
-          onBlur={e => saveNotes(e.target.value)}
+          onBlur={e => { if (canEditNotes) saveNotes(e.target.value) }}
+          readOnly={!canEditNotes}
           rows={4}
           placeholder="Ajouter des notes..."
           className="w-full text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"

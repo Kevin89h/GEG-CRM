@@ -10,6 +10,7 @@ import {
 } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { exportToXls } from "@/lib/exportXls"
+import { usePerms } from "@/components/PermissionsProvider"
 
 interface Invoice {
   id: string
@@ -51,6 +52,7 @@ export default function FacturesClient({ invoices, schema }: Props) {
   const params = useParams()
   const locale = params.locale as string
   const t = useTranslations("factures")
+  const { can } = usePerms()
 
   const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; dot: string }> = {
     draft:     { label: t("statusDraft"),     bg: "bg-gray-50",    text: "text-gray-600",    dot: "bg-gray-400" },
@@ -249,16 +251,25 @@ export default function FacturesClient({ invoices, schema }: Props) {
     return totals
   }, [selected, displayed])
 
+  // Display only (D2): bulk cancel applies to drafts only and needs "factures.annuler_brouillon";
+  // bulk payment needs "paiements_clients.enregistrer"
+  const canBulkPay = can("paiements_clients.enregistrer")
+  const canBulkCancel = can("factures.annuler_brouillon")
+    && selected.size > 0
+    && invoices.filter(i => selected.has(i.id)).every(i => i.status === "draft")
+
   return (
     <div className="-m-6 min-h-screen bg-gray-50/50">
       {/* Toolbar */}
       <div className="bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-3">
-        <Link
+        {can("factures.creer") && (
+          <Link
             href={`/${locale}/ventes/factures/nouveau`}
             className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded bg-[#7c3aed] text-white hover:bg-[#6d28d9] transition"
           >
             <Plus className="w-3.5 h-3.5" /> {t("new")}
           </Link>
+        )}
         <button
           onClick={() => exportToXls(displayed.map(i => ({
             "Numéro": i.number,
@@ -395,19 +406,23 @@ export default function FacturesClient({ invoices, schema }: Props) {
                 {formatCurrency(total, cur as "GNF" | "USD" | "EUR")}
               </span>
             ))}
-            <button
-              onClick={() => { setBulkPayForm(f => ({ ...f, amount: String(bulkPayTotal) })); setBulkPayOpen(true) }}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-            >
-              <CreditCard className="w-3.5 h-3.5" /> Enregistrer un paiement
-            </button>
-            <button
-              onClick={submitBulkCancel}
-              disabled={bulkCancelLoading}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 transition disabled:opacity-50"
-            >
-              <Ban className="w-3.5 h-3.5" /> {bulkCancelLoading ? "En cours…" : "Annuler"}
-            </button>
+            {canBulkPay && (
+              <button
+                onClick={() => { setBulkPayForm(f => ({ ...f, amount: String(bulkPayTotal) })); setBulkPayOpen(true) }}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+              >
+                <CreditCard className="w-3.5 h-3.5" /> Enregistrer un paiement
+              </button>
+            )}
+            {canBulkCancel && (
+              <button
+                onClick={submitBulkCancel}
+                disabled={bulkCancelLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 transition disabled:opacity-50"
+              >
+                <Ban className="w-3.5 h-3.5" /> {bulkCancelLoading ? "En cours…" : "Annuler"}
+              </button>
+            )}
             <button onClick={() => setSelected(new Set())} className="text-blue-400 hover:text-blue-700 ml-1 text-lg leading-none">×</button>
           </div>
         </div>

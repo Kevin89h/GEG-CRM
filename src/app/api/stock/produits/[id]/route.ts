@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSchemaFromRequest } from "@/lib/company"
 import { createSchemaClient } from "@/lib/supabase/admin"
+import { hasPermission } from "@/lib/access"
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -19,6 +20,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (key in body) update[key] = body[key]
   }
 
+  // Purchase price and internal references need "produits.prix_achat" (D4); never returned without it
+  const seeBuy = await hasPermission("produits.prix_achat")
+  if (!seeBuy && ["buy_price", "buy_price_currency", "reference", "sku", "internal_notes"].some(k => k in update)) {
+    return NextResponse.json({ error: "Vos permissions ne permettent pas de modifier le prix d'achat ou les références internes" }, { status: 403 })
+  }
+
   const { data, error } = await db
     .from("products")
     .update(update)
@@ -27,7 +34,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
-  return NextResponse.json(data)
+  return NextResponse.json(seeBuy ? data : { ...data, buy_price: null, sku: null, internal_notes: null })
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

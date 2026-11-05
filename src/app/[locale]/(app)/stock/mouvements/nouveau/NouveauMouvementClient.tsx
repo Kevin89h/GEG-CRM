@@ -11,6 +11,7 @@ import { Select } from "@/components/ui/Select"
 import { Modal } from "@/components/ui/Modal"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import type { Warehouse } from "@/types"
+import { usePerms } from "@/components/PermissionsProvider"
 
 interface ProductOption {
   id: string
@@ -41,6 +42,11 @@ const VALID_TYPES: MoveType[] = ["in", "out", "transfer", "adjustment", "damaged
 export default function NouveauMouvementClient({ warehouses, products, stockLevels, initialType, initialProductId, locale }: Props) {
   const router = useRouter()
   const t = useTranslations("mouvements")
+  // Display only (D2): the page is reserved to "stock.mouvement_manuel", the API checks it again;
+  // internal references need "produits.prix_achat"
+  const { can } = usePerms()
+  const canSave = can("stock.mouvement_manuel")
+  const seeReference = can("produits.prix_achat")
 
   const typeConfig: Record<MoveType, { label: string; icon: React.ElementType; color: string; description: string; needsFrom: boolean; needsTo: boolean }> = {
     in: {
@@ -259,7 +265,7 @@ export default function NouveauMouvementClient({ warehouses, products, stockLeve
           onChange={e => set("product_id", e.target.value)}
           options={products.map(p => ({
             value: p.id,
-            label: p.reference ? `${p.name} (${p.reference})` : p.name,
+            label: seeReference && p.reference ? `${p.name} (${p.reference})` : p.name,
           }))}
         />
 
@@ -376,14 +382,16 @@ export default function NouveauMouvementClient({ warehouses, products, stockLeve
 
         <div className="flex justify-end gap-3 pt-2">
           <Button variant="secondary" onClick={() => router.back()}>{t("cancel")}</Button>
+          {canSave && (
           <Button onClick={handleSave} disabled={!isValid || saving}>
             {saving ? t("saving") : t("save")}
           </Button>
+          )}
         </div>
       </div>
 
       {/* Modal confirmation mouvement de stock */}
-      <Modal open={confirmOpen} onClose={() => setConfirmOpen(false)} title="Confirmer le mouvement de stock">
+      <Modal open={confirmOpen && canSave} onClose={() => setConfirmOpen(false)} title="Confirmer le mouvement de stock">
         <div className="space-y-4">
           <div className={`flex items-start gap-3 p-4 rounded-xl border text-sm ${cfg.color}`}>
             {(() => { const Icon = cfg.icon; return <Icon className="w-4 h-4 flex-shrink-0 mt-0.5" /> })()}

@@ -11,6 +11,7 @@ import {
 } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { exportToXls } from "@/lib/exportXls"
+import { usePerms } from "@/components/PermissionsProvider"
 
 interface InvoiceRef {
   id: string
@@ -65,6 +66,7 @@ export default function AchatsClient({ orders }: Props) {
   const params = useParams()
   const locale = params.locale as string
   const t = useTranslations("achats")
+  const { can } = usePerms()
 
   const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; dot: string }> = {
     draft:      { label: t("statusDraft"),      bg: "bg-gray-100",   text: "text-gray-600",    dot: "bg-gray-400" },
@@ -193,12 +195,14 @@ export default function AchatsClient({ orders }: Props) {
     <div className="-mx-4 -my-4 md:-m-6 min-h-screen bg-gray-50/50">
       {/* Toolbar */}
       <div className="bg-white border-b border-gray-200 px-4 md:px-6 py-3 flex flex-wrap items-center gap-2">
-        <Link
-          href={`/${locale}/achats/nouveau`}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded bg-[#7c3aed] text-white hover:bg-[#6d28d9] transition"
-        >
-          <Plus className="w-3.5 h-3.5" /> {t("btnNew")}
-        </Link>
+        {can("achats.creer") && (
+          <Link
+            href={`/${locale}/achats/nouveau`}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded bg-[#7c3aed] text-white hover:bg-[#6d28d9] transition"
+          >
+            <Plus className="w-3.5 h-3.5" /> {t("btnNew")}
+          </Link>
+        )}
 
         <Link
           href={`/${locale}/achats/fournisseurs`}

@@ -12,6 +12,7 @@ import { useTranslations } from "next-intl"
 import { createClient } from "@/lib/supabase/client"
 import { formatCurrency, formatNumber, formatDate } from "@/lib/utils"
 import { Button } from "@/components/ui/Button"
+import { usePerms } from "@/components/PermissionsProvider"
 
 interface Product {
   id: string
@@ -96,6 +97,12 @@ export default function ProductDetailClient({
 }: Props) {
   const t = useTranslations("produits")
   const router = useRouter()
+  // Display only (D2): isAdmin = "produits.gerer" (edit, image, documents); purchase price and internal
+  // references need "produits.prix_achat", the stock value "stock.valeur", the deletion "suppression"
+  const { can } = usePerms()
+  const seeBuyPrice = can("produits.prix_achat")
+  const seeStockValue = can("stock.valeur")
+  const canDelete = can("suppression")
   const [product, setProduct] = useState(initial)
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -178,7 +185,6 @@ export default function ProductDetailClient({
     setSaveError(null)
     const updateData: Record<string, unknown> = {
       name: form.name,
-      reference: form.reference || null,
       merchant_reference: form.merchant_reference || null,
       description: form.description || null,
       category_id: form.category_id || null,
@@ -188,13 +194,18 @@ export default function ProductDetailClient({
       can_be_purchased: form.can_be_purchased,
       sell_price: form.sell_price ? parseFloat(form.sell_price) : null,
       currency: form.currency,
-      buy_price: form.buy_price ? parseFloat(form.buy_price) : null,
-      buy_price_currency: form.buy_price_currency,
       tva_vente: form.tva_vente ? parseFloat(form.tva_vente) : null,
       tva_achat: form.tva_achat ? parseFloat(form.tva_achat) : null,
       barcode: form.barcode || null,
     }
-    if (isAdmin) {
+    // Purchase price and internal references: only sent when the user can see them (hidden fields are
+    // blanked by the page, sending them back would erase the stored values)
+    if (seeBuyPrice) {
+      updateData.reference = form.reference || null
+      updateData.buy_price = form.buy_price ? parseFloat(form.buy_price) : null
+      updateData.buy_price_currency = form.buy_price_currency
+    }
+    if (isAdmin && seeBuyPrice) {
       updateData.sku = form.sku || null
       updateData.origin = form.origin || null
       updateData.internal_notes = form.internal_notes || null
@@ -305,7 +316,8 @@ export default function ProductDetailClient({
     { key: "mouvements", label: t("tabMouvements") },
   ]
 
-  const visibleTabs = TABS.filter(t => !t.adminOnly || isAdmin)
+  // Internal references tab: "produits.prix_achat" (read-only unless the user can also edit the product)
+  const visibleTabs = TABS.filter(t => !t.adminOnly || seeBuyPrice)
 
   const inputCls = "w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
 
@@ -331,15 +343,19 @@ export default function ProductDetailClient({
                 <Save className="w-4 h-4" /> {saving ? "…" : <span className="hidden sm:inline">{t("btnEnregistrer")}</span>}
               </Button>
             </>
-          ) : isAdmin && (
+          ) : (isAdmin || canDelete) && (
             <>
+              {canDelete && (
               <button onClick={() => setConfirmDelete(true)}
                 className="p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition">
                 <Trash2 className="w-4 h-4" />
               </button>
+              )}
+              {isAdmin && (
               <Button variant="secondary" onClick={() => setEditing(true)}>
                 <Edit2 className="w-4 h-4" /> <span className="hidden sm:inline">{t("btnModifier")}</span>
               </Button>
+              )}
             </>
           )}
         </div>
@@ -357,6 +373,7 @@ export default function ProductDetailClient({
                     : <Package className="w-6 h-6 md:w-8 md:h-8 text-blue-400" />
                   }
                 </div>
+                {isAdmin && (
                 <button
                   onClick={() => imageInputRef.current?.click()}
                   disabled={uploadingImage}
@@ -364,6 +381,7 @@ export default function ProductDetailClient({
                 >
                   <Upload className="w-5 h-5 text-white" />
                 </button>
+                )}
                 <input ref={imageInputRef} type="file" accept="image/*" className="hidden"
                   onChange={e => { if (e.target.files?.[0]) uploadImage(e.target.files[0]) }}
                 />
@@ -391,7 +409,7 @@ export default function ProductDetailClient({
                       {editing ? form.merchant_reference : product.merchant_reference}
                     </span>
                   )}
-                  {isAdmin && (editing ? form.sku : product.sku) && (
+                  {seeBuyPrice && (editing ? form.sku : product.sku) && (
                     <span className="text-xs text-blue-700 font-mono bg-blue-50 px-2 py-0.5 rounded">
                       SKU: {editing ? form.sku : product.sku}
                     </span>
@@ -426,7 +444,7 @@ export default function ProductDetailClient({
               { label: t("statEntrees"), value: formatNumber(incoming), color: "text-emerald-600", onClick: () => setTab("mouvements") },
               { label: t("statSorties"), value: formatNumber(outgoing), color: "text-red-500", onClick: () => setTab("mouvements") },
               { label: t("statPrevu"), value: formatNumber(forecast), color: forecast < 0 ? "text-red-600" : "text-purple-600", onClick: () => setTab("inventaire") },
-              ...(product.buy_price ? [{ label: t("statValeurStock"), value: formatCurrency(stockValue, product.buy_price_currency), color: "text-gray-700", onClick: undefined }] : []),
+              ...(seeStockValue && seeBuyPrice && product.buy_price ? [{ label: t("statValeurStock"), value: formatCurrency(stockValue, product.buy_price_currency), color: "text-gray-700", onClick: undefined }] : []),
             ].map(({ label, value, color, onClick }) => (
               <div key={label}
                 className={`flex-1 min-w-[80px] px-3 md:px-6 py-3 text-center ${onClick ? "hover:bg-gray-50 cursor-pointer" : ""} transition`}
@@ -549,7 +567,7 @@ export default function ProductDetailClient({
             )}
 
             {/* RÉFÉRENCE INTERNE — admin only */}
-            {tab === "interne" && isAdmin && (
+            {tab === "interne" && seeBuyPrice && (
               <div className="space-y-6">
                 <div className="flex items-center gap-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5">
                   <Lock className="w-4 h-4 flex-shrink-0" />
@@ -631,6 +649,7 @@ export default function ProductDetailClient({
                   )}
                 </div>
 
+                {seeBuyPrice && (
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t("labelCoutAchat")}</label>
                   {editing ? (
@@ -647,6 +666,7 @@ export default function ProductDetailClient({
                     <p className="text-sm font-semibold text-gray-900">{product.buy_price ? formatCurrency(product.buy_price, product.buy_price_currency) : "—"}</p>
                   )}
                 </div>
+                )}
 
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t("labelTvaAchat")}</label>
@@ -658,7 +678,7 @@ export default function ProductDetailClient({
                   )}
                 </div>
 
-                {product.sell_price && product.buy_price && (
+                {seeBuyPrice && product.sell_price && product.buy_price && (
                   <div className="sm:col-span-2 bg-blue-50 rounded-xl p-4 flex flex-wrap gap-8">
                     <div>
                       <p className="text-xs text-blue-600 font-semibold uppercase tracking-wide mb-1">{t("margeBrute")}</p>

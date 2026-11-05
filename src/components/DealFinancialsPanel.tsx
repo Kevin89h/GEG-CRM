@@ -6,6 +6,7 @@ import {
   Plus, Trash2, Check, X, ChevronDown, ChevronUp, Loader2
 } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
+import { usePerms } from "@/components/PermissionsProvider"
 
 type InvoiceData = {
   id: string
@@ -66,10 +67,16 @@ interface Props {
 }
 
 export default function DealFinancialsPanel({ dealId, dealCurrency, invoiceFromProps }: Props) {
+  // Display only (D2): costs and margin need "opportunites.couts_voir", entering costs "opportunites.couts_modifier"
+  const { can } = usePerms()
+  const canSeeCosts = can("opportunites.couts_voir")
+  const canEditCosts = can("opportunites.couts_modifier")
+  const canLinkSupplierInvoice = can("factures_fournisseurs.gerer")
+  const canDeleteCost = can("suppression")
   const [invoice, setInvoice] = useState<InvoiceData | null>(invoiceFromProps)
   const [supplierInvoices, setSupplierInvoices] = useState<SupplierInvoice[]>([])
   const [dealCosts, setDealCosts] = useState<DealCost[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(canSeeCosts)
 
   // Add cost form
   const [addCostOpen, setAddCostOpen] = useState(false)
@@ -86,6 +93,8 @@ export default function DealFinancialsPanel({ dealId, dealCurrency, invoiceFromP
   const [costsExpanded, setCostsExpanded] = useState(true)
 
   useEffect(() => {
+    // Without the permission the API refuses the costs: do not ask for them
+    if (!canSeeCosts) return
     fetch(`/api/deals/${dealId}/financials`)
       .then(r => r.json())
       .then(data => {
@@ -95,7 +104,7 @@ export default function DealFinancialsPanel({ dealId, dealCurrency, invoiceFromP
         setLoading(false)
       })
       .catch(() => setLoading(false))
-  }, [dealId])
+  }, [dealId, canSeeCosts])
 
   async function searchSupplierInvoices(q: string) {
     setSuppSearch(q)
@@ -256,7 +265,14 @@ export default function DealFinancialsPanel({ dealId, dealCurrency, invoiceFromP
         )}
       </div>
 
+      {!canSeeCosts && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-5 text-center text-xs text-gray-400">
+          Les coûts et la marge ne sont pas accessibles avec vos droits.
+        </div>
+      )}
+
       {/* Costs card */}
+      {canSeeCosts && (
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
           <button className="flex items-center gap-2 text-sm font-semibold text-gray-900" onClick={() => setCostsExpanded(e => !e)}>
@@ -266,25 +282,29 @@ export default function DealFinancialsPanel({ dealId, dealCurrency, invoiceFromP
             {costsExpanded ? <ChevronUp className="w-3.5 h-3.5 text-gray-300" /> : <ChevronDown className="w-3.5 h-3.5 text-gray-300" />}
           </button>
           <div className="flex items-center gap-1">
+            {canLinkSupplierInvoice && (
             <button
               onClick={() => setSuppPickerOpen(true)}
               className="flex items-center gap-1 text-xs text-gray-500 hover:text-blue-600 px-2 py-1 rounded-lg hover:bg-blue-50 transition"
             >
               <Plus className="w-3 h-3" /> Facture fournisseur
             </button>
+            )}
+            {canEditCosts && (
             <button
               onClick={() => setAddCostOpen(o => !o)}
               className="flex items-center gap-1 text-xs text-gray-500 hover:text-orange-600 px-2 py-1 rounded-lg hover:bg-orange-50 transition"
             >
               <Plus className="w-3 h-3" /> Coût manuel
             </button>
+            )}
           </div>
         </div>
 
         {costsExpanded && (
           <>
             {/* Add cost form */}
-            {addCostOpen && (
+            {addCostOpen && canEditCosts && (
               <div className="px-4 py-3 bg-gray-50 border-b border-gray-100">
                 <div className="grid grid-cols-2 gap-2 mb-2">
                   <select
@@ -364,12 +384,14 @@ export default function DealFinancialsPanel({ dealId, dealCurrency, invoiceFromP
                         {inv.status === "paid" ? "Payée" : inv.status === "partial" ? "Partiel" : "En attente"}
                       </span>
                     </div>
+                    {canLinkSupplierInvoice && (
                     <button
                       onClick={() => unlinkSupplierInvoice(inv.id)}
                       className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-100 text-gray-300 hover:text-red-500 transition"
                     >
                       <Trash2 className="w-3 h-3" />
                     </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -391,19 +413,22 @@ export default function DealFinancialsPanel({ dealId, dealCurrency, invoiceFromP
                       <p className="text-xs font-semibold text-gray-700">{formatCurrency(Number(cost.amount), cost.currency)}</p>
                       <button
                         onClick={() => toggleCostPaid(cost)}
+                        disabled={!canEditCosts}
                         title={cost.paid ? "Marquer non payé" : "Marquer payé"}
-                        className={`w-5 h-5 rounded-full flex items-center justify-center transition ${
+                        className={`w-5 h-5 rounded-full flex items-center justify-center transition disabled:pointer-events-none ${
                           cost.paid ? "bg-green-100 text-green-600" : "bg-gray-100 text-gray-300 hover:bg-green-50 hover:text-green-400"
                         }`}
                       >
                         <Check className="w-3 h-3" />
                       </button>
+                      {canDeleteCost && (
                       <button
                         onClick={() => deleteCost(cost.id)}
                         className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-100 text-gray-300 hover:text-red-500 transition"
                       >
                         <Trash2 className="w-3 h-3" />
                       </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -416,9 +441,10 @@ export default function DealFinancialsPanel({ dealId, dealCurrency, invoiceFromP
           </>
         )}
       </div>
+      )}
 
       {/* Margin summary */}
-      {(invoice || hasCosts) && (
+      {canSeeCosts && (invoice || hasCosts) && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-50">
             <h3 className="text-sm font-semibold text-gray-900">Marge opérationnelle</h3>
@@ -482,7 +508,7 @@ export default function DealFinancialsPanel({ dealId, dealCurrency, invoiceFromP
       )}
 
       {/* Supplier invoice picker modal */}
-      {suppPickerOpen && (
+      {suppPickerOpen && canLinkSupplierInvoice && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/30 backdrop-blur-sm" onClick={() => setSuppPickerOpen(false)}>
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md" onClick={e => e.stopPropagation()}>
             <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">

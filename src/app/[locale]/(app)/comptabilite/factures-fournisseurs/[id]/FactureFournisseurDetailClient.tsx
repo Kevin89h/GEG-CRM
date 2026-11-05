@@ -6,6 +6,7 @@ import { ArrowLeft, Plus, X, ChevronDown, Ban, Trash2, Printer, FileMinus, Copy,
 import ActivityLog from "@/components/ActivityLog"
 import { formatDate } from "@/lib/utils"
 import { useRouter } from "next/navigation"
+import { usePerms } from "@/components/PermissionsProvider"
 
 const STATUS_LABEL: Record<string, string> = {
   draft: "Brouillon",
@@ -70,6 +71,7 @@ export default function FactureFournisseurDetailClient({
   locale: string
 }) {
   const router = useRouter()
+  const { can } = usePerms()
   const [invoice, setInvoice] = useState(initialInvoice)
   const [payments, setPayments] = useState(initialPayments)
   const [modalOpen, setModalOpen] = useState(false)
@@ -162,6 +164,15 @@ export default function FactureFournisseurDetailClient({
 
   const isPaid = invoice.status === "paid" || invoice.status === "cancelled"
   const isCancelled = invoice.status === "cancelled"
+  // Display only (D2): the API checks the same keys and statuses again
+  const hasPayment = payments.length > 0 || Number(invoice.total_paid) > 0
+  const canPay = can("paiements_fournisseurs.enregistrer")
+  const canManage = can("factures_fournisseurs.gerer")
+  // Voiding: only "En attente" (pending) and without any payment (D1); otherwise a credit note
+  const canCancel = can("factures_fournisseurs.annuler") && invoice.status === "pending" && !hasPayment
+  // Deleting (unlisted DELETE) needs "suppression"; the API refuses an invoice with payments
+  const canDelete = can("suppression") && !hasPayment
+  const canDeletePayment = can("paiements.supprimer")
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -229,7 +240,7 @@ export default function FactureFournisseurDetailClient({
           <span className={`px-3 py-1 rounded-full text-sm font-medium ${STATUS_COLOR[invoice.status] ?? STATUS_COLOR.pending}`}>
             {STATUS_LABEL[invoice.status] ?? invoice.status}
           </span>
-          {!isPaid && (
+          {canPay && !isPaid && (
             <button
               onClick={() => setModalOpen(true)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
@@ -263,19 +274,23 @@ export default function FactureFournisseurDetailClient({
                 >
                   <Download className="w-4 h-4 text-gray-400" /> Télécharger PDF
                 </a>
-                <button
-                  onClick={duplicateInvoice}
-                  className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  <Copy className="w-4 h-4 text-gray-400" /> Dupliquer
-                </button>
-                <button
-                  onClick={createCreditNote}
-                  className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  <FileMinus className="w-4 h-4 text-gray-400" /> Créer un avoir
-                </button>
-                {!isCancelled && (
+                {canManage && (
+                  <button
+                    onClick={duplicateInvoice}
+                    className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    <Copy className="w-4 h-4 text-gray-400" /> Dupliquer
+                  </button>
+                )}
+                {canManage && (
+                  <button
+                    onClick={createCreditNote}
+                    className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                  >
+                    <FileMinus className="w-4 h-4 text-gray-400" /> Créer un avoir
+                  </button>
+                )}
+                {canCancel && !isCancelled && (
                   <button
                     onClick={cancelInvoice}
                     className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-amber-700 hover:bg-amber-50"
@@ -283,13 +298,17 @@ export default function FactureFournisseurDetailClient({
                     <Ban className="w-4 h-4" /> Annuler la facture
                   </button>
                 )}
-                <div className="my-1 border-t border-gray-100" />
-                <button
-                  onClick={deleteInvoice}
-                  className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
-                >
-                  <Trash2 className="w-4 h-4" /> Supprimer
-                </button>
+                {canDelete && (
+                  <>
+                    <div className="my-1 border-t border-gray-100" />
+                    <button
+                      onClick={deleteInvoice}
+                      className="flex w-full items-center gap-2.5 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
+                    >
+                      <Trash2 className="w-4 h-4" /> Supprimer
+                    </button>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -388,13 +407,15 @@ export default function FactureFournisseurDetailClient({
                   <td className="px-4 py-3 text-gray-500">{p.reference ?? "—"}</td>
                   <td className="px-4 py-3 text-right font-medium text-emerald-700">{Number(p.amount).toLocaleString("fr")} {p.currency}</td>
                   <td className="px-4 py-3 text-right">
-                    <button
-                      onClick={() => deletePayment(p.id, p.amount, p.currency)}
-                      className="text-red-400 hover:text-red-600 transition-colors p-1 rounded hover:bg-red-50"
-                      title="Annuler ce paiement"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
+                    {canDeletePayment && (
+                      <button
+                        onClick={() => deletePayment(p.id, p.amount, p.currency)}
+                        className="text-red-400 hover:text-red-600 transition-colors p-1 rounded hover:bg-red-50"
+                        title="Annuler ce paiement"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -417,7 +438,7 @@ export default function FactureFournisseurDetailClient({
       </div>
 
       {/* Modal paiement */}
-      {modalOpen && (
+      {canPay && modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
             <div className="flex items-center justify-between mb-5">

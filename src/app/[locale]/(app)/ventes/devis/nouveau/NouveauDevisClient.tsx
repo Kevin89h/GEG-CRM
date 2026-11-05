@@ -8,6 +8,7 @@ import { useTranslations } from "next-intl"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { formatNumber } from "@/lib/utils"
 import { PROJECT_OPTIONS } from "@/lib/projects"
+import { usePerms } from "@/components/PermissionsProvider"
 
 /* --- Types ----------------------------------------------- */
 interface Account  { id: string; name: string; salesperson_id: string | null; cgv_text?: string | null }
@@ -55,7 +56,8 @@ function AccountPicker({ accounts, value, onSelect, onCreateNew }: {
   accounts: Account[]
   value: string
   onSelect: (id: string) => void
-  onCreateNew: () => void
+  // Omitted when the user cannot create accounts ("comptes.creer")
+  onCreateNew?: () => void
 }) {
   const t = useTranslations("devis")
   const [query, setQuery] = useState("")
@@ -116,14 +118,16 @@ function AccountPicker({ accounts, value, onSelect, onCreateNew }: {
               </button>
             ))}
           </div>
-          <div className="border-t border-gray-100">
-            <button
-              onMouseDown={() => { setOpen(false); onCreateNew() }}
-              className="w-full text-left px-4 py-2 text-sm text-blue-600 font-medium hover:bg-blue-50 transition-colors flex items-center gap-2"
-            >
-              <span className="text-lg leading-none">+</span> {t("nouveauClient")}
-            </button>
-          </div>
+          {onCreateNew && (
+            <div className="border-t border-gray-100">
+              <button
+                onMouseDown={() => { setOpen(false); onCreateNew() }}
+                className="w-full text-left px-4 py-2 text-sm text-blue-600 font-medium hover:bg-blue-50 transition-colors flex items-center gap-2"
+              >
+                <span className="text-lg leading-none">+</span> {t("nouveauClient")}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -135,7 +139,8 @@ function ProductPicker({ products, value, onChange, onCreateNew, lineIndex }: {
   products: Product[]
   value: string
   onChange: (productId: string) => void
-  onCreateNew: (lineIndex: number) => void
+  // Omitted when the user cannot create products ("produits.gerer")
+  onCreateNew?: (lineIndex: number) => void
   lineIndex: number
 }) {
   const t = useTranslations("devis")
@@ -195,14 +200,16 @@ function ProductPicker({ products, value, onChange, onCreateNew, lineIndex }: {
               </button>
             ))}
           </div>
-          <div className="border-t border-gray-100">
-            <button
-              onMouseDown={() => { setOpen(false); onCreateNew(lineIndex) }}
-              className="w-full text-left px-4 py-2 text-sm text-blue-600 font-medium hover:bg-blue-50 flex items-center gap-2"
-            >
-              <span className="text-lg leading-none">+</span> {t("nouveauProduit")}
-            </button>
-          </div>
+          {onCreateNew && (
+            <div className="border-t border-gray-100">
+              <button
+                onMouseDown={() => { setOpen(false); onCreateNew(lineIndex) }}
+                className="w-full text-left px-4 py-2 text-sm text-blue-600 font-medium hover:bg-blue-50 flex items-center gap-2"
+              >
+                <span className="text-lg leading-none">+</span> {t("nouveauProduit")}
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -231,6 +238,7 @@ export default function NouveauDevisClient({
 }: Props) {
   const router = useRouter()
   const t = useTranslations("devis")
+  const { can } = usePerms()
 
   const [accounts, setAccounts] = useState(initAccounts)
   const [products, setProducts] = useState(initProducts)
@@ -513,7 +521,7 @@ export default function NouveauDevisClient({
                   accounts={accounts}
                   value={form.account_id}
                   onSelect={onAccountChange}
-                  onCreateNew={() => setShowClientModal(true)}
+                  onCreateNew={can("comptes.creer") ? () => setShowClientModal(true) : undefined}
                 />
               </div>
 
@@ -712,7 +720,7 @@ export default function NouveauDevisClient({
                               products={products}
                               value={l.product_id}
                               onChange={productId => onProductSelected(l.id, productId)}
-                              onCreateNew={() => openProductModal(i)}
+                              onCreateNew={can("produits.gerer") ? () => openProductModal(i) : undefined}
                               lineIndex={i}
                             />
                             {l.product_id && (

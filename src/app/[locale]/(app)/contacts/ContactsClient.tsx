@@ -12,6 +12,7 @@ import { Select } from "@/components/ui/Select"
 import { Badge } from "@/components/ui/Badge"
 import { initials } from "@/lib/utils"
 import type { Contact } from "@/types"
+import { usePerms } from "@/components/PermissionsProvider"
 
 type ContactWithAccount = Contact & { account: { id: string; name: string; type: string } | null }
 
@@ -22,6 +23,8 @@ interface Props {
 
 export default function ContactsClient({ contacts: initial, accounts }: Props) {
   const t = useTranslations("contacts")
+  // Display only (D2): the API checks "contacts.creer" again
+  const { can } = usePerms()
   const [contacts, setContacts] = useState(initial)
   const [search, setSearch] = useState("")
   const [modalOpen, setModalOpen] = useState(false)
@@ -82,10 +85,12 @@ export default function ContactsClient({ contacts: initial, accounts }: Props) {
           <h1 className="text-xl md:text-2xl font-bold text-gray-900">{t("title")}</h1>
           <p className="text-gray-500 text-sm mt-0.5">{filtered.length} contact{filtered.length !== 1 ? "s" : ""}</p>
         </div>
+        {can("contacts.creer") && (
         <Button onClick={() => setModalOpen(true)}>
           <Plus className="w-4 h-4" />
           {t("new")}
         </Button>
+        )}
       </div>
 
       <div className="relative mb-6 max-w-sm">

@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Globe, Trash2, ArrowLeftRight, MapPin, Mail } from "lucide-react"
+import { usePerms } from "@/components/PermissionsProvider"
 
 interface Lead {
   id: string
@@ -21,6 +22,10 @@ interface Props {
 
 export default function SingaporeLeadsClient({ leads: initial }: Props) {
   const router = useRouter()
+  // Display only (D2): transfer needs "opportunites.transferer", deletion "suppression"
+  const { can } = usePerms()
+  const canTransfer = can("opportunites.transferer")
+  const canDelete = can("suppression")
   const [leads, setLeads] = useState(initial)
   const [loading, setLoading] = useState<string | null>(null)
 
@@ -96,6 +101,7 @@ export default function SingaporeLeadsClient({ leads: initial }: Props) {
                 )}
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
+                {canTransfer && (
                 <button
                   onClick={() => handleTransfer(lead.id)}
                   disabled={loading !== null}
@@ -105,6 +111,8 @@ export default function SingaporeLeadsClient({ leads: initial }: Props) {
                   <ArrowLeftRight className="w-3.5 h-3.5" />
                   {loading === lead.id + "-transfer" ? "..." : "→ Guinée"}
                 </button>
+                )}
+                {canDelete && (
                 <button
                   onClick={() => handleDelete(lead.id)}
                   disabled={loading !== null}
@@ -114,6 +122,7 @@ export default function SingaporeLeadsClient({ leads: initial }: Props) {
                   <Trash2 className="w-3.5 h-3.5" />
                   {loading === lead.id + "-delete" ? "..." : "Supprimer"}
                 </button>
+                )}
               </div>
             </div>
           ))}

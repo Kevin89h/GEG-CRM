@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
+import { usePerms } from "@/components/PermissionsProvider"
 
 interface Product { id: string; name: string; reference: string | null; buy_price: number | null }
 interface Supplier { id: string; name: string; currency: string; payment_terms: string | null }
@@ -56,6 +57,9 @@ const QUICK_FORM_EMPTY = { name: "", currency: "USD", payment_terms: "" }
 export default function NouvelAchatClient({ products: initialProducts, suppliers: initialSuppliers, locale }: Props) {
   const t = useTranslations("achats")
   const router = useRouter()
+  const { can } = usePerms()
+  // Quick supplier creation calls POST /api/suppliers (display only, the API checks it again)
+  const canManageSuppliers = can("fournisseurs.gerer")
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [products, setProducts] = useState<Product[]>(initialProducts)
@@ -312,11 +316,13 @@ export default function NouvelAchatClient({ products: initialProducts, suppliers
                         ))
                         : <li className="px-3 py-2 text-xs text-gray-400">Aucun fournisseur trouvé</li>
                       }
-                      <li
-                        onMouseDown={() => { setShowDropdown(false); setShowQuickCreate(true); setQuickForm(f => ({ ...f, name: supplierSearch })) }}
-                        className="px-3 py-2 text-sm text-[#7c3aed] hover:bg-purple-50 cursor-pointer flex items-center gap-1.5 border-t border-gray-100 font-medium">
-                        <Plus className="w-3.5 h-3.5" /> Nouveau fournisseur
-                      </li>
+                      {canManageSuppliers && (
+                        <li
+                          onMouseDown={() => { setShowDropdown(false); setShowQuickCreate(true); setQuickForm(f => ({ ...f, name: supplierSearch })) }}
+                          className="px-3 py-2 text-sm text-[#7c3aed] hover:bg-purple-50 cursor-pointer flex items-center gap-1.5 border-t border-gray-100 font-medium">
+                          <Plus className="w-3.5 h-3.5" /> Nouveau fournisseur
+                        </li>
+                      )}
                     </ul>
                   )}
                 </div>
@@ -574,14 +580,16 @@ export default function NouvelAchatClient({ products: initialProducts, suppliers
 
         <div className="flex justify-end gap-3 pb-8">
           <Button variant="secondary" onClick={() => router.back()}>{t("cancel")}</Button>
-          <Button onClick={handleSave} disabled={saving}>
-            {saving ? t("creating") : t("createOrder")}
-          </Button>
+          {can("achats.creer") && (
+            <Button onClick={handleSave} disabled={saving}>
+              {saving ? t("creating") : t("createOrder")}
+            </Button>
+          )}
         </div>
       </div>
 
       {/* Quick-create supplier modal */}
-      {showQuickCreate && (
+      {canManageSuppliers && showQuickCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">

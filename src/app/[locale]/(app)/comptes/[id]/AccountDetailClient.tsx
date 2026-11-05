@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/Badge"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import Link from "next/link"
+import { usePerms } from "@/components/PermissionsProvider"
 
 interface SalesOrder {
   id: string
@@ -114,6 +115,10 @@ function daysOverdue(dueDateStr: string | null): number {
 export default function AccountDetailClient({ account, orders, invoices, payments, locale }: Props) {
   const router = useRouter()
   const { db } = getCompanyClientBrowser()
+  // Display only (D2): editing needs "comptes.modifier", the direct deletion "suppression" (checked again by the database)
+  const { can } = usePerms()
+  const canEdit = can("comptes.modifier")
+  const canDelete = can("suppression")
   const [period, setPeriod] = useState<Period>("all")
   const [customFrom, setCustomFrom] = useState("")
   const [customTo, setCustomTo] = useState("")
@@ -281,7 +286,7 @@ export default function AccountDetailClient({ account, orders, invoices, payment
   return (
     <div className="max-w-5xl mx-auto">
       {/* Delete modal */}
-      {showDeleteModal && (
+      {showDeleteModal && canDelete && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
             <div className="flex items-center gap-3 mb-4">
@@ -324,7 +329,7 @@ export default function AccountDetailClient({ account, orders, invoices, payment
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            {editingName ? (
+            {editingName && canEdit ? (
               <div className="flex items-center gap-2">
                 <input
                   autoFocus
@@ -343,9 +348,11 @@ export default function AccountDetailClient({ account, orders, invoices, payment
             ) : (
               <div className="flex items-center gap-2 group">
                 <h1 className="text-2xl font-bold text-gray-900">{editName}</h1>
+                {canEdit && (
                 <button onClick={() => setEditingName(true)} className="opacity-0 group-hover:opacity-100 transition text-gray-400 hover:text-gray-600">
                   <Pencil className="w-4 h-4" />
                 </button>
+                )}
               </div>
             )}
             <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
@@ -364,19 +371,23 @@ export default function AccountDetailClient({ account, orders, invoices, payment
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {canEdit && (
           <button onClick={() => setShowInfoEdit(v => !v)}
             className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 border border-gray-200 rounded-xl hover:bg-gray-50 transition">
             <Pencil className="w-4 h-4" /> Modifier
           </button>
+          )}
+          {canDelete && (
           <button onClick={() => setShowDeleteModal(true)}
             className="flex items-center gap-2 px-3 py-2 text-sm text-red-600 border border-red-200 rounded-xl hover:bg-red-50 transition">
             <Trash2 className="w-4 h-4" /> Supprimer
           </button>
+          )}
         </div>
       </div>
 
       {/* Info edit panel */}
-      {showInfoEdit && (
+      {showInfoEdit && canEdit && (
         <div className="bg-white border border-gray-200 rounded-2xl p-5 mb-4 shadow-sm">
           <h3 className="text-sm font-semibold text-gray-700 mb-4">Informations du compte</h3>
           <div className="grid grid-cols-2 gap-3">

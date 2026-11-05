@@ -7,6 +7,7 @@ import { useParams } from "next/navigation"
 import { Button } from "@/components/ui/Button"
 import { Modal } from "@/components/ui/Modal"
 import { Input } from "@/components/ui/Input"
+import { usePerms } from "@/components/PermissionsProvider"
 
 interface Supplier {
   id: string
@@ -32,6 +33,10 @@ const EMPTY_FORM = {
 interface Props { fournisseurs: Supplier[] }
 
 export default function FournisseursClient({ fournisseurs: initial }: Props) {
+  // Display only (D2): create/edit need "fournisseurs.gerer", the DELETE route "suppression" (checked again by the API)
+  const { can } = usePerms()
+  const canManage = can("fournisseurs.gerer")
+  const canDelete = can("suppression")
   const [fournisseurs, setFournisseurs] = useState(initial)
   const [search, setSearch] = useState("")
   const [modalOpen, setModalOpen] = useState(false)
@@ -133,9 +138,11 @@ export default function FournisseursClient({ fournisseurs: initial }: Props) {
           <h1 className="text-xl md:text-2xl font-bold text-gray-900">Fournisseurs</h1>
           <p className="text-gray-500 text-sm mt-0.5">{filtered.length} fournisseur{filtered.length !== 1 ? "s" : ""}</p>
         </div>
+        {canManage && (
         <Button onClick={openNew}>
           <Plus className="w-4 h-4" /> Nouveau fournisseur
         </Button>
+        )}
       </div>
 
       <div className="relative mb-6 max-w-sm">
@@ -196,12 +203,16 @@ export default function FournisseursClient({ fournisseurs: initial }: Props) {
                   <td className="px-4 py-3 text-xs text-gray-400">{f.payment_terms}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                      {canManage && (
                       <button onClick={() => openEdit(f)} className="p-1.5 rounded hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition">
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
+                      )}
+                      {canDelete && (
                       <button onClick={() => handleDelete(f.id)} className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-500 transition">
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -211,7 +222,7 @@ export default function FournisseursClient({ fournisseurs: initial }: Props) {
         </div>
       )}
 
-      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editingId ? "Modifier le fournisseur" : "Nouveau fournisseur"}>
+      <Modal open={modalOpen && canManage} onClose={() => setModalOpen(false)} title={editingId ? "Modifier le fournisseur" : "Nouveau fournisseur"}>
         <div className="space-y-4">
           <Input label="Nom du fournisseur *" value={form.name}
             onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="TotalEnergies, YESIL…" />

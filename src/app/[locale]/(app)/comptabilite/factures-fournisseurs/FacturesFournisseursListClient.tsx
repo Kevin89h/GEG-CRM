@@ -5,6 +5,7 @@ import Link from "next/link"
 import { Plus, Download, Upload, Search, ChevronUp, ChevronDown, X, CreditCard, CreditCard as PayIcon } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 import { useRouter } from "next/navigation"
+import { usePerms } from "@/components/PermissionsProvider"
 
 const STATUS_LABEL: Record<string, string> = {
   draft: "Brouillon", pending: "En attente", paid: "Payée", partial: "Partielle", cancelled: "Annulée",
@@ -34,6 +35,10 @@ export default function FacturesFournisseursListClient({
 }) {
   const router = useRouter()
   const fileRef = useRef<HTMLInputElement>(null)
+  const { can } = usePerms()
+  // Display only (D2): create/import "factures_fournisseurs.gerer", payments "paiements_fournisseurs.enregistrer"
+  const canManage = can("factures_fournisseurs.gerer")
+  const canPay = can("paiements_fournisseurs.enregistrer")
 
   const [search, setSearch] = useState("")
   const [statusFilters, setStatusFilters] = useState<Set<string>>(new Set())
@@ -183,30 +188,36 @@ export default function FacturesFournisseursListClient({
           <p className="text-sm text-gray-500 mt-0.5">Gérez vos achats et dépenses directement</p>
         </div>
         <div className="flex items-center gap-2">
-          <Link
-            href={`/${locale}/comptabilite/paiements-fournisseurs`}
-            className="inline-flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <CreditCard className="w-4 h-4" /> Paiements
-          </Link>
-          <button
-            onClick={() => setImportOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            <Upload className="w-4 h-4" /> Importer CSV
-          </button>
+          {canPay && (
+            <Link
+              href={`/${locale}/comptabilite/paiements-fournisseurs`}
+              className="inline-flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <CreditCard className="w-4 h-4" /> Paiements
+            </Link>
+          )}
+          {canManage && (
+            <button
+              onClick={() => setImportOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <Upload className="w-4 h-4" /> Importer CSV
+            </button>
+          )}
           <a
             href="/api/supplier-invoices/export"
             className="inline-flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white text-sm font-medium text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
           >
             <Download className="w-4 h-4" /> Exporter CSV
           </a>
-          <Link
-            href={`/${locale}/comptabilite/factures-fournisseurs/nouveau`}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="w-4 h-4" /> Nouvelle facture
-          </Link>
+          {canManage && (
+            <Link
+              href={`/${locale}/comptabilite/factures-fournisseurs/nouveau`}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              <Plus className="w-4 h-4" /> Nouvelle facture
+            </Link>
+          )}
         </div>
       </div>
 
@@ -279,12 +290,14 @@ export default function FacturesFournisseursListClient({
                 {total.toLocaleString("fr")} {cur}
               </span>
             ))}
-            <button
-              onClick={() => { setBulkPayForm(f => ({ ...f, amount: String(bulkPayTotal) })); setBulkPayOpen(true) }}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-            >
-              <PayIcon className="w-3.5 h-3.5" /> Enregistrer un paiement
-            </button>
+            {canPay && (
+              <button
+                onClick={() => { setBulkPayForm(f => ({ ...f, amount: String(bulkPayTotal) })); setBulkPayOpen(true) }}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+              >
+                <PayIcon className="w-3.5 h-3.5" /> Enregistrer un paiement
+              </button>
+            )}
             <button onClick={() => setSelected(new Set())} className="text-blue-400 hover:text-blue-700 ml-1">
               <X className="w-4 h-4" />
             </button>
@@ -376,7 +389,7 @@ export default function FacturesFournisseursListClient({
       </div>
 
       {/* Modal import */}
-      {bulkPayOpen && (
+      {canPay && bulkPayOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
             <div className="flex items-center justify-between mb-5">
@@ -447,7 +460,7 @@ export default function FacturesFournisseursListClient({
         </div>
       )}
 
-      {importOpen && (
+      {canManage && importOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg mx-4 p-6">
             <div className="flex items-center justify-between mb-5">

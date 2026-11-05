@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
 import { Modal } from "@/components/ui/Modal"
 import { formatCurrency, formatDate } from "@/lib/utils"
+import { usePerms } from "@/components/PermissionsProvider"
 
 interface TreasuryAccount {
   id: string
@@ -58,6 +59,12 @@ const txTypeConfig = {
 }
 
 export default function TresorerieClient({ accounts: initial, transactions: initialTx }: Props) {
+  const { can } = usePerms()
+  // Display only (D2): entries/edits/exports "tresorerie.saisir", new account "tresorerie.comptes",
+  // deleting an operation (unlisted DELETE) "suppression"
+  const canEnter = can("tresorerie.saisir")
+  const canCreateAccount = can("tresorerie.comptes")
+  const canDelete = can("suppression")
   const [accounts, setAccounts] = useState(initial)
   const [transactions, setTransactions] = useState(initialTx)
   const [selectedAccount, setSelectedAccount] = useState<string | null>(null)
@@ -249,23 +256,29 @@ export default function TresorerieClient({ accounts: initial, transactions: init
           <p className="text-gray-500 text-sm mt-0.5">Soldes en temps réel</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => exportToXls(transactions.map(t => ({
-            Date: t.date ? new Date(t.date).toLocaleDateString("fr-FR") : "",
-            Type: t.type,
-            Montant: t.amount,
-            Devise: t.currency,
-            Description: t.description,
-            Référence: t.reference ?? "",
-            Catégorie: t.category ?? "",
-          })), "journal_tresorerie")}>
-            <Download className="w-4 h-4" /> Exporter journal
-          </Button>
-          <Button variant="secondary" onClick={() => setAccountModal(true)}>
-            <Plus className="w-4 h-4" /> Nouveau compte
-          </Button>
-          <Button onClick={() => setTxModal(true)}>
-            <Plus className="w-4 h-4" /> Mouvement
-          </Button>
+          {canEnter && (
+            <Button variant="secondary" onClick={() => exportToXls(transactions.map(t => ({
+              Date: t.date ? new Date(t.date).toLocaleDateString("fr-FR") : "",
+              Type: t.type,
+              Montant: t.amount,
+              Devise: t.currency,
+              Description: t.description,
+              Référence: t.reference ?? "",
+              Catégorie: t.category ?? "",
+            })), "journal_tresorerie")}>
+              <Download className="w-4 h-4" /> Exporter journal
+            </Button>
+          )}
+          {canCreateAccount && (
+            <Button variant="secondary" onClick={() => setAccountModal(true)}>
+              <Plus className="w-4 h-4" /> Nouveau compte
+            </Button>
+          )}
+          {canEnter && (
+            <Button onClick={() => setTxModal(true)}>
+              <Plus className="w-4 h-4" /> Mouvement
+            </Button>
+          )}
         </div>
       </div>
 
@@ -323,13 +336,15 @@ export default function TresorerieClient({ accounts: initial, transactions: init
         })}
 
         {/* Ajouter compte */}
-        <button
-          onClick={() => setAccountModal(true)}
-          className="border-2 border-dashed border-gray-200 rounded-2xl p-5 flex items-center justify-center gap-2 text-gray-400 hover:border-blue-300 hover:text-blue-500 transition-colors min-h-[140px]"
-        >
-          <Plus className="w-5 h-5" />
-          <span className="text-sm font-medium">Ajouter un compte</span>
-        </button>
+        {canCreateAccount && (
+          <button
+            onClick={() => setAccountModal(true)}
+            className="border-2 border-dashed border-gray-200 rounded-2xl p-5 flex items-center justify-center gap-2 text-gray-400 hover:border-blue-300 hover:text-blue-500 transition-colors min-h-[140px]"
+          >
+            <Plus className="w-5 h-5" />
+            <span className="text-sm font-medium">Ajouter un compte</span>
+          </button>
+        )}
       </div>
 
       {/* Journal des mouvements */}
@@ -388,26 +403,32 @@ export default function TresorerieClient({ accounts: initial, transactions: init
                       {isCredit ? "+" : "−"}{formatCurrency(t.amount, t.currency as "GNF" | "USD" | "EUR")}
                     </td>
                     <td className="px-2 py-3 text-right relative">
-                      <button
-                        onClick={() => setOpenMenuId(openMenuId === t.id ? null : t.id)}
-                        className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
-                      >
-                        <MoreHorizontal className="w-4 h-4" />
-                      </button>
-                      {openMenuId === t.id && (
+                      {(canEnter || canDelete) && (
+                        <button
+                          onClick={() => setOpenMenuId(openMenuId === t.id ? null : t.id)}
+                          className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
+                        >
+                          <MoreHorizontal className="w-4 h-4" />
+                        </button>
+                      )}
+                      {(canEnter || canDelete) && openMenuId === t.id && (
                         <div className="absolute right-2 top-8 z-30 bg-white border border-gray-200 rounded-xl shadow-lg py-1 w-40">
-                          <button
-                            onClick={() => openEdit(t)}
-                            className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
-                          >
-                            <Pencil className="w-4 h-4 text-gray-400" /> Modifier
-                          </button>
-                          <button
-                            onClick={() => deleteTransaction(t)}
-                            className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
-                          >
-                            <Trash2 className="w-4 h-4" /> Supprimer
-                          </button>
+                          {canEnter && (
+                            <button
+                              onClick={() => openEdit(t)}
+                              className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
+                            >
+                              <Pencil className="w-4 h-4 text-gray-400" /> Modifier
+                            </button>
+                          )}
+                          {canDelete && (
+                            <button
+                              onClick={() => deleteTransaction(t)}
+                              className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
+                            >
+                              <Trash2 className="w-4 h-4" /> Supprimer
+                            </button>
+                          )}
                         </div>
                       )}
                     </td>
@@ -428,7 +449,7 @@ export default function TresorerieClient({ accounts: initial, transactions: init
       )}
 
       {/* Modal mouvement */}
-      <Modal open={txModal} onClose={() => { setTxModal(false); setError(null) }} title="Nouveau mouvement">
+      <Modal open={canEnter && txModal} onClose={() => { setTxModal(false); setError(null) }} title="Nouveau mouvement">
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             {(["credit", "debit", "transfer_out"] as const).map(type => (
@@ -508,7 +529,7 @@ export default function TresorerieClient({ accounts: initial, transactions: init
       </Modal>
 
       {/* Modal modifier transaction */}
-      {editTx && (
+      {canEnter && editTx && (
         <Modal open={!!editTx} onClose={() => setEditTx(null)} title="Modifier le mouvement">
           <div className="space-y-4">
             <Input
@@ -551,7 +572,7 @@ export default function TresorerieClient({ accounts: initial, transactions: init
       )}
 
       {/* Modal nouveau compte */}
-      <Modal open={accountModal} onClose={() => { setAccountModal(false); setError(null) }} title="Nouveau compte de trésorerie">
+      <Modal open={canCreateAccount && accountModal} onClose={() => { setAccountModal(false); setError(null) }} title="Nouveau compte de trésorerie">
         <div className="space-y-4">
           <Input label="Nom du compte *" value={accForm.name} onChange={e => setAccForm(f => ({ ...f, name: e.target.value }))} placeholder="Ecobank GNF, Orange Money, Caisse principale…" />
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

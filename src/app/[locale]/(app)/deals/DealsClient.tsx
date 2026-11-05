@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { Plus, TrendingUp, LayoutGrid, List, MessageSquare, Mail, Phone, Users, Globe, HelpCircle, AlertCircle } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
 import type { DealStage } from "@/types"
+import { usePerms } from "@/components/PermissionsProvider"
 
 interface DealRow {
   id: string
@@ -135,6 +136,8 @@ const INITIAL_FORM = {
 
 export default function DealsClient({ deals: initial, accounts, profiles, currentUserId }: Props) {
   const router = useRouter()
+  // Display only (D2): the API checks "opportunites.creer" again
+  const { can } = usePerms()
   const [deals, setDeals] = useState(initial)
   const [view, setView] = useState<"kanban" | "list">("kanban")
   const [modalOpen, setModalOpen] = useState(false)
@@ -241,12 +244,14 @@ export default function DealsClient({ deals: initial, accounts, profiles, curren
           >
             <TrendingUp className="w-4 h-4" /> Dashboard
           </button>
+          {can("opportunites.creer") && (
           <button
             onClick={() => setModalOpen(true)}
             className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition"
           >
             <Plus className="w-4 h-4" /> Nouvelle demande
           </button>
+          )}
         </div>
       </div>
 

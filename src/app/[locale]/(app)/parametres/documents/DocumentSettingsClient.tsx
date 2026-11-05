@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react"
 import { Upload, Save, Eye, Building2, Phone, FileText, Palette, Landmark, Plus, Pencil, Trash2, X, Check } from "lucide-react"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser" // storage upload only
+import { usePerms } from "@/components/PermissionsProvider"
 
 interface Settings {
   id?: string
@@ -110,6 +111,12 @@ const FIELD_GROUPS = [
 ]
 
 export default function DocumentSettingsClient({ settings: initial, companyId }: Props) {
+  const { can } = usePerms()
+  // Display only (D2): document settings (save, preview, logo) "parametres.gerer";
+  // bank accounts create/edit "tresorerie.comptes", delete "comptes_bancaires.supprimer"
+  const canManage = can("parametres.gerer")
+  const canEditBank = can("tresorerie.comptes")
+  const canDeleteBank = can("comptes_bancaires.supprimer")
   const [form, setForm] = useState<Settings & { tva_rate_str?: string }>(
     initial
       ? { ...initial }
@@ -241,7 +248,7 @@ export default function DocumentSettingsClient({ settings: initial, companyId }:
     <div className="max-w-5xl">
       <div className="flex items-center justify-between mb-6">
         <p className="text-sm text-gray-500">Configurez l'en-tête et le pied de page de vos documents imprimés</p>
-        <div className="flex gap-2">
+        {canManage && <div className="flex gap-2">
           <button
             onClick={() => {
               if (preview) { setPreview(false) } else { setPreview(true); loadPreview() }
@@ -259,7 +266,7 @@ export default function DocumentSettingsClient({ settings: initial, companyId }:
             <Save className="w-4 h-4" />
             {saving ? "Enregistrement…" : saved ? "Enregistré ✓" : "Enregistrer"}
           </button>
-        </div>
+        </div>}
       </div>
 
       {saveError && (
@@ -279,8 +286,8 @@ export default function DocumentSettingsClient({ settings: initial, companyId }:
             <div className="flex items-start gap-6">
               {/* Logo zone */}
               <div
-                onClick={() => fileRef.current?.click()}
-                className="w-40 h-24 rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50/50 transition overflow-hidden"
+                onClick={() => { if (canManage) fileRef.current?.click() }}
+                className={`w-40 h-24 rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center transition overflow-hidden ${canManage ? "cursor-pointer hover:border-blue-400 hover:bg-blue-50/50" : ""}`}
               >
                 {form.logo_url ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -466,7 +473,7 @@ export default function DocumentSettingsClient({ settings: initial, companyId }:
               <h2 className="font-semibold text-gray-800 flex items-center gap-2">
                 <Landmark className="w-4 h-4 text-gray-400" /> Comptes bancaires (factures PDF)
               </h2>
-              {editingBank !== "new" && (
+              {canEditBank && editingBank !== "new" && (
                 <button
                   onClick={() => { setEditingBank("new"); setBankForm(EMPTY_BANK) }}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition"
@@ -492,7 +499,7 @@ export default function DocumentSettingsClient({ settings: initial, companyId }:
                   </thead>
                   <tbody className="divide-y divide-gray-50">
                     {bankAccounts.map(acc => (
-                      editingBank === acc.id ? (
+                      canEditBank && editingBank === acc.id ? (
                         <tr key={acc.id} className="bg-blue-50">
                           <td className="px-2 py-1.5"><input autoFocus className="w-full px-2 py-1 text-sm border border-blue-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" value={bankForm.institution} onChange={e => setBank("institution", e.target.value)} placeholder="ECOBANK" /></td>
                           <td className="px-2 py-1.5"><input className="w-full px-2 py-1 text-sm border border-blue-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500" value={bankForm.account_number} onChange={e => setBank("account_number", e.target.value)} placeholder="7308052262" /></td>
@@ -519,8 +526,8 @@ export default function DocumentSettingsClient({ settings: initial, companyId }:
                           <td className="px-3 py-2"><span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700">{acc.currency}</span></td>
                           <td className="px-3 py-2">
                             <div className="flex gap-1 justify-end opacity-0 group-hover:opacity-100 transition">
-                              <button onClick={() => startEdit(acc)} className="p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50"><Pencil className="w-3.5 h-3.5" /></button>
-                              <button onClick={() => deleteBank(acc.id)} className="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50"><Trash2 className="w-3.5 h-3.5" /></button>
+                              {canEditBank && <button onClick={() => startEdit(acc)} className="p-1 rounded text-gray-400 hover:text-blue-600 hover:bg-blue-50"><Pencil className="w-3.5 h-3.5" /></button>}
+                              {canDeleteBank && <button onClick={() => deleteBank(acc.id)} className="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50"><Trash2 className="w-3.5 h-3.5" /></button>}
                             </div>
                           </td>
                         </tr>
@@ -532,7 +539,7 @@ export default function DocumentSettingsClient({ settings: initial, companyId }:
             )}
 
             {/* New account form */}
-            {editingBank === "new" && (
+            {canEditBank && editingBank === "new" && (
               <div className="grid grid-cols-5 gap-2 p-3 rounded-lg bg-blue-50 border border-blue-100">
                 <div>
                   <label className="block text-xs text-gray-500 mb-1">Banque *</label>

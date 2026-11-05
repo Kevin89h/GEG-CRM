@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { hasPermission } from "@/lib/access"
 import { getSchemaFromRequest } from "@/lib/company"
 import { createSchemaClient, createAdminClient } from "@/lib/supabase/admin"
 import { sendPushToUser } from "@/lib/webpush"
@@ -30,6 +31,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     "contact_email", "contact_phone", "sector", "preferred_channel",
     "selling_price", "cost",
   ]
+  // The cost of an opportunity (margin) needs "opportunites.couts_modifier"
+  if ("cost" in body && !(await hasPermission("opportunites.couts_modifier"))) {
+    return NextResponse.json({ error: "Vos permissions ne permettent pas de modifier le coût" }, { status: 403 })
+  }
   const patch: Record<string, unknown> = {}
   let nextAssignedIds: string[] = []
   for (const k of allowedFields) {

@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Plus, Pencil, Trash2, Check, X } from "lucide-react"
 import { Button } from "@/components/ui/Button"
+import { usePerms } from "@/components/PermissionsProvider"
 
 interface Unit {
   id: string
@@ -27,6 +28,10 @@ const TYPE_OPTIONS = [
 ]
 
 export default function UnitesClient({ units: initial }: Props) {
+  const { can } = usePerms()
+  // Display only (D2): POST/PATCH /api/units "parametres.gerer", DELETE (unlisted) "suppression"
+  const canManage = can("parametres.gerer")
+  const canDelete = can("suppression")
   const [units, setUnits] = useState(initial)
   const [newName, setNewName] = useState("")
   const [newType, setNewType] = useState("unit")
@@ -95,7 +100,7 @@ export default function UnitesClient({ units: initial }: Props) {
       )}
 
       {/* Add row */}
-      <div className="flex gap-2 mb-4">
+      {canManage && <div className="flex gap-2 mb-4">
         <input
           type="text"
           placeholder="Nom (ex : Fût 180 kg)"
@@ -114,7 +119,7 @@ export default function UnitesClient({ units: initial }: Props) {
         <Button onClick={handleAdd} disabled={saving || !newName.trim()} size="sm">
           <Plus className="w-4 h-4 mr-1" /> Ajouter
         </Button>
-      </div>
+      </div>}
 
       {/* List */}
       <div className="border border-gray-200 rounded-xl overflow-hidden">
@@ -126,7 +131,7 @@ export default function UnitesClient({ units: initial }: Props) {
             key={unit.id}
             className={`flex items-center gap-3 px-4 py-3 ${i < units.length - 1 ? "border-b border-gray-100" : ""}`}
           >
-            {editId === unit.id ? (
+            {canManage && editId === unit.id ? (
               <>
                 <input
                   type="text"
@@ -156,12 +161,16 @@ export default function UnitesClient({ units: initial }: Props) {
                 <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
                   {TYPE_LABELS[unit.type] ?? unit.type}
                 </span>
-                <button onClick={() => startEdit(unit)} className="text-gray-400 hover:text-blue-500 transition-colors">
-                  <Pencil className="w-3.5 h-3.5" />
-                </button>
-                <button onClick={() => handleDelete(unit.id)} className="text-gray-400 hover:text-red-500 transition-colors">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                {canManage && (
+                  <button onClick={() => startEdit(unit)} className="text-gray-400 hover:text-blue-500 transition-colors">
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                {canDelete && (
+                  <button onClick={() => handleDelete(unit.id)} className="text-gray-400 hover:text-red-500 transition-colors">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </>
             )}
           </div>

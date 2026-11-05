@@ -3,6 +3,7 @@
 import { useState } from "react"
 import { Plus, TrendingUp, RefreshCw } from "lucide-react"
 import { formatDate } from "@/lib/utils"
+import { usePerms } from "@/components/PermissionsProvider"
 
 interface Rate {
   id: string
@@ -31,6 +32,9 @@ const PAIRS: { from: Currency; to: Currency; label: string }[] = [
 ]
 
 export default function TauxDeChangeClient({ rates: initialRates }: Props) {
+  const { can } = usePerms()
+  // Display only (D2): refreshing and adding rates need "parametres.gerer"
+  const canManage = can("parametres.gerer")
   const [rates, setRates] = useState(initialRates)
   const [form, setForm] = useState({ from: "USD" as Currency, to: "GNF" as Currency, rate: "", notes: "", date: new Date().toISOString().slice(0, 10) })
   const [saving, setSaving] = useState(false)
@@ -101,14 +105,16 @@ export default function TauxDeChangeClient({ rates: initialRates }: Props) {
     <div className="max-w-3xl">
       <div className="flex items-center justify-between mb-6">
         <p className="text-sm text-gray-500">Gérez les taux de change (USD, EUR, XOF ↔ GNF) pour les calculs de prix de revient</p>
-        <button
-          onClick={refreshRates}
-          disabled={refreshing}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-60 transition-colors"
-        >
-          <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
-          {refreshing ? "Mise à jour…" : "Actualiser les taux"}
-        </button>
+        {canManage && (
+          <button
+            onClick={refreshRates}
+            disabled={refreshing}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-60 transition-colors"
+          >
+            <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
+            {refreshing ? "Mise à jour…" : "Actualiser les taux"}
+          </button>
+        )}
       </div>
       {refreshMsg && <p className="text-sm text-emerald-600 mb-4">{refreshMsg}</p>}
 
@@ -139,7 +145,7 @@ export default function TauxDeChangeClient({ rates: initialRates }: Props) {
       )}
 
       {/* Add rate form */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 mb-8">
+      {canManage && <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 mb-8">
         <h2 className="font-semibold text-gray-800 mb-4">Ajouter un taux</h2>
         <div className="grid grid-cols-2 gap-4 mb-4">
           <div>
@@ -207,7 +213,7 @@ export default function TauxDeChangeClient({ rates: initialRates }: Props) {
           <Plus className="w-4 h-4" />
           {saving ? "Enregistrement…" : "Ajouter le taux"}
         </button>
-      </div>
+      </div>}
 
       {/* History */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">

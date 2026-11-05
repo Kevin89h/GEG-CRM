@@ -9,6 +9,7 @@ import { Select } from "@/components/ui/Select"
 import { Modal } from "@/components/ui/Modal"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { formatDate } from "@/lib/utils"
+import { usePerms } from "@/components/PermissionsProvider"
 
 
 interface DNLine {
@@ -44,6 +45,7 @@ const statusConfig: Record<string, { label: string; color: string }> = {
 
 export default function BonLivraisonClient({ dn, lines: initialLines, warehouses, locale, docSettings = {} }: Props) {
   const router = useRouter()
+  const { can } = usePerms()
   const firstWarehouseId = warehouses[0]?.id ?? ""
   const [lines, setLines] = useState(() =>
     initialLines.map(l => ({ ...l, warehouse_id: l.warehouse_id || firstWarehouseId || null }))
@@ -54,6 +56,10 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
   const [defaultWarehouse, setDefaultWarehouse] = useState(firstWarehouseId)
 
   const isDraft = dn.status === "draft"
+  // Display only (D2): cancel before delivery needs "livraisons.annuler", confirm needs "livraisons.confirmer".
+  // Quantities and warehouses are only sent by the confirmation, so they are editable with it.
+  const canCancel = isDraft && can("livraisons.annuler")
+  const canConfirm = isDraft && can("livraisons.confirmer")
 
   function setLineWarehouse(lineId: string, warehouseId: string) {
     setLines(prev => prev.map(l => l.id === lineId ? { ...l, warehouse_id: warehouseId } : l))
@@ -174,15 +180,15 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
           >
             <Printer className="w-4 h-4" /> Imprimer
           </button>
-          {isDraft && (
-            <>
-              <Button variant="secondary" onClick={cancel} className="text-red-500 border-red-200 hover:bg-red-50">
-                <X className="w-4 h-4" /> Annuler
-              </Button>
-              <Button onClick={() => setConfirmOpen(true)}>
-                <Truck className="w-4 h-4" /> Confirmer la livraison
-              </Button>
-            </>
+          {canCancel && (
+            <Button variant="secondary" onClick={cancel} className="text-red-500 border-red-200 hover:bg-red-50">
+              <X className="w-4 h-4" /> Annuler
+            </Button>
+          )}
+          {canConfirm && (
+            <Button onClick={() => setConfirmOpen(true)}>
+              <Truck className="w-4 h-4" /> Confirmer la livraison
+            </Button>
           )}
           {dn.status === "delivered" && (
             <div className="flex items-center gap-2 text-emerald-600 font-medium text-sm px-3 py-2 bg-emerald-50 rounded-lg">
@@ -193,7 +199,7 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
       </div>
 
       {/* Entrepôt par défaut (draft seulement) */}
-      {isDraft && warehouses.length > 0 && (
+      {canConfirm && warehouses.length > 0 && (
         <div className="bg-blue-50 border border-blue-100 rounded-xl px-5 py-4 mb-6 flex items-center gap-4">
           <Truck className="w-4 h-4 text-blue-500 flex-shrink-0" />
           <p className="text-sm text-blue-700 flex-1">Entrepôt de sortie par défaut :</p>
@@ -231,7 +237,7 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
                   )}
                 </td>
                 <td className="px-4 py-3 text-right">
-                  {isDraft && l.product_id ? (
+                  {canConfirm && l.product_id ? (
                     <input
                       type="number" min="0" step="any"
                       value={l.quantity}
@@ -244,7 +250,7 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
                 </td>
                 <td className="px-4 py-3">
                   {l.product_id ? (
-                    isDraft ? (
+                    canConfirm ? (
                       <select
                         value={l.warehouse_id ?? ""}
                         onChange={e => setLineWarehouse(l.id, e.target.value)}
