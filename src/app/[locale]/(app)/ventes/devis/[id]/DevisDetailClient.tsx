@@ -176,13 +176,15 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
     setAdditionalInfoSaving(false)
   }
   const isInvoiced = order.status === "invoiced"
-  const isDraft = !isInvoiced && order.status !== "cancelled"
+  const isCancelled = order.status === "cancelled"
+  const isDraft = !isInvoiced && !isCancelled
   // Display only (D2): fields and lines are editable only with "devis.modifier"
   const canModify = can("devis.modifier")
   const canEdit = isDraft && canModify
   // E1: an invoiced quote is fully frozen, only the project stays editable
-  const canEditUnlessInvoiced = canModify && !isInvoiced
-  const canEditProject = canModify
+  // F3: a cancelled quote is entirely read-only, project included (server answers 409)
+  const canEditUnlessInvoiced = canModify && !isInvoiced && !isCancelled
+  const canEditProject = canModify && !isCancelled
 
   const PAYMENT_TERMS_LABELS: Record<string, string> = {
     immediate: t("paymentImmediate"),
@@ -394,7 +396,6 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
     router.push(`/${locale}/ventes/factures/${json.invoiceId}`)
   }
 
-  const isCancelled = order.status === "cancelled"
   const stepIndex = getStepIndex(order.status)
 
   return (
@@ -413,6 +414,9 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
             )}
           </div>
           <p className="text-gray-500 text-sm">{t("createdOn")} {formatDate(order.created_at, locale)}</p>
+          {isCancelled && (
+            <p className="mt-1 text-xs text-red-600">Devis annulé : non modifiable (numéro et historique conservés)</p>
+          )}
 
           {/* Smart buttons : factures & livraisons liées */}
           {(invoiceCount > 0 || deliveryCount > 0) && (
@@ -474,8 +478,8 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
             </Button>
           )}
 
-          {/* Reset to draft: from confirmed or cancelled, never for an invoiced quote */}
-          {["confirmed", "cancelled"].includes(order.status) && canModify && (
+          {/* Reset to draft: only from confirmed, never for an invoiced or cancelled quote (F3) */}
+          {order.status === "confirmed" && canModify && (
             <Button variant="secondary" onClick={() => setResetToDraftModalOpen(true)} disabled={loading}>
               <RotateCcw className="w-4 h-4" /> {t("resetToDraft")}
             </Button>
@@ -680,7 +684,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                 <p className="text-sm text-gray-900 font-medium">{orderFields.currency}</p>
               )}
             </div>
-            {/* The project only classifies the quote for reporting: editable at any status, even invoiced (E1) */}
+            {/* The project only classifies the quote for reporting: editable even when invoiced (E1), never when cancelled (F3) */}
             <div>
               <p className="text-xs text-gray-400 mb-0.5">Projet</p>
               <select

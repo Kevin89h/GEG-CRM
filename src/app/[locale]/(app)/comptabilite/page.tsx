@@ -65,6 +65,14 @@ export default async function ComptabilitePage({ params }: { params: Promise<{ l
     iban: swiftMap.get(a.id)?.iban ?? null,
   }))
 
+  // F6: amounts per currency, never added across currencies (no consolidated total, so no exchange rate needed)
+  const byCurrency = <T extends { currency: string | null }>(rows: T[], amount: (r: T) => number) =>
+    rows.reduce<Record<string, number>>((acc, r) => {
+      const cur = r.currency ?? "GNF"
+      acc[cur] = (acc[cur] ?? 0) + Number(amount(r) || 0)
+      return acc
+    }, {})
+
   // Calcul stats factures clients
   const allInvoices = invoices ?? []
   const clientStats = {
@@ -77,6 +85,9 @@ export default async function ComptabilitePage({ params }: { params: Promise<{ l
     draftAmount:   allInvoices.filter(i => i.status === "draft").reduce((s, i) => s + Number(i.total_ht), 0),
     unpaidAmount:  allInvoices.filter(i => i.status === "sent" || i.status === "partial").reduce((s, i) => s + Number(i.balance), 0),
     overdueAmount: allInvoices.filter(i => (i.status === "sent" || i.status === "partial") && i.due_date && i.due_date < today).reduce((s, i) => s + Number(i.balance), 0),
+    draftAmounts:   byCurrency(allInvoices.filter(i => i.status === "draft"), i => Number(i.total_ht)),
+    unpaidAmounts:  byCurrency(allInvoices.filter(i => i.status === "sent" || i.status === "partial"), i => Number(i.balance)),
+    overdueAmounts: byCurrency(allInvoices.filter(i => (i.status === "sent" || i.status === "partial") && i.due_date && i.due_date < today), i => Number(i.balance)),
   }
 
   // A3: real chart data (no simulated value). Heights use counts, amounts are listed per currency (never added
@@ -119,6 +130,8 @@ export default async function ComptabilitePage({ params }: { params: Promise<{ l
     toPay:        allPurchases.filter(p => p.status === "pending" || p.status === "partial"),
     draftAmount:  allPurchases.filter(p => p.status === "draft").reduce((s, p) => s + Number(p.total_ht), 0),
     toPayAmount:  allPurchases.filter(p => p.status === "pending" || p.status === "partial").reduce((s, p) => s + Number(p.balance ?? p.total_ht), 0),
+    draftAmounts: byCurrency(allPurchases.filter(p => p.status === "draft"), p => Number(p.total_ht)),
+    toPayAmounts: byCurrency(allPurchases.filter(p => p.status === "pending" || p.status === "partial"), p => Number(p.balance ?? p.total_ht)),
   }
 
   const accounts = (treasuryAccounts ?? []).map(a => {

@@ -7,7 +7,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { db } = await createCompanyClient()
     { const { data: so } = await db.from("sales_orders").select("status").eq("id", id).single()
-      if (so?.status === "invoiced") return NextResponse.json({ error: "Devis facturé : ses lignes ne sont plus modifiables" }, { status: 409 }) }
+      if (so?.status === "invoiced" || so?.status === "cancelled") return NextResponse.json({ error: so.status === "cancelled" ? "Devis annulé : ses lignes ne sont plus modifiables" : "Devis facturé : ses lignes ne sont plus modifiables" }, { status: 409 }) }
 
   const { data: existing } = await db
     .from("sales_order_lines")

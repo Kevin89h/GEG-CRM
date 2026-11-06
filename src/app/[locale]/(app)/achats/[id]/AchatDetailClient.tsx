@@ -130,9 +130,39 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
   const [noteSaving, setNoteSaving] = useState(false)
   const [noteFeedback, setNoteFeedback] = useState<{ ok: boolean; text: string } | null>(null)
   const noteInputRef = useRef<HTMLTextAreaElement>(null)
+  // Conditions / notes PRINTED on the purchase order (purchase_orders.notes, F5): distinct from the internal notes above
+  const [printedTerms, setPrintedTerms] = useState(order.notes ?? "")
+  const [savedPrintedTerms, setSavedPrintedTerms] = useState(order.notes ?? "")
+  const [printedTermsSaving, setPrintedTermsSaving] = useState(false)
+  const [printedTermsFeedback, setPrintedTermsFeedback] = useState<{ ok: boolean; text: string } | null>(null)
   const [attachments, setAttachments] = useState<{ name: string; url: string; size: number }[]>([])
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Saves the printed conditions: PATCH /api/achats/[id] { notes } (409 when the order is cancelled)
+  async function savePrintedTerms() {
+    setPrintedTermsSaving(true)
+    setPrintedTermsFeedback(null)
+    try {
+      const res = await fetch(`/api/achats/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notes: printedTerms }),
+      })
+      const json = await res.json().catch(() => null) as { notes?: string | null; error?: string } | null
+      if (!res.ok) {
+        setPrintedTermsFeedback({ ok: false, text: json?.error ?? `Erreur ${res.status}` })
+      } else {
+        const saved = json?.notes ?? ""
+        setPrintedTerms(saved)
+        setSavedPrintedTerms(saved)
+        setPrintedTermsFeedback({ ok: true, text: "Conditions enregistrées" })
+      }
+    } catch {
+      setPrintedTermsFeedback({ ok: false, text: "Erreur réseau" })
+    }
+    setPrintedTermsSaving(false)
+  }
 
   // Fetches the internal notes (newest first): { notes } on success, { error } otherwise
   async function fetchNotes(orderId: string): Promise<{ notes?: OrderNote[]; error?: string }> {
@@ -220,6 +250,8 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
 
   const isDraft = !["received", "cancelled"].includes(order.status)
   const isReceived = order.status === "received"
+  // F5: printed conditions editable with "achats.modifier" unless the order is cancelled (server answers 409)
+  const canEditPrintedTerms = canModify && order.status !== "cancelled"
   const cur = order.currency as "USD" | "GNF" | "EUR"
   const stepIndex = getStepIndex(order.status)
   const [statusChanging, setStatusChanging] = useState(false)
@@ -949,11 +981,34 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
                 {/* Notes + Totals */}
                 <div className="flex border-t border-gray-100">
                   <div className="flex-1 p-4">
-                    <textarea
-                      defaultValue={order.notes ?? ""}
-                      placeholder={t("termsPlaceholder")}
-                      className="w-full h-16 text-xs text-gray-500 resize-none focus:outline-none placeholder:text-gray-300 bg-transparent"
-                    />
+                    <p className="text-[11px] font-medium text-gray-500 mb-1">Conditions / notes imprimées sur la commande</p>
+                    {canEditPrintedTerms ? (
+                      <>
+                        <textarea
+                          value={printedTerms}
+                          onChange={e => { setPrintedTerms(e.target.value); setPrintedTermsFeedback(null) }}
+                          placeholder={t("termsPlaceholder")}
+                          maxLength={4000}
+                          className="w-full h-16 text-xs text-gray-700 resize-none border border-gray-100 rounded px-2 py-1 focus:outline-none focus:border-[#7c3aed] placeholder:text-gray-300 bg-transparent"
+                        />
+                        <div className="flex items-center gap-3 mt-1">
+                          {printedTerms !== savedPrintedTerms && (
+                            <button
+                              onClick={savePrintedTerms}
+                              disabled={printedTermsSaving}
+                              className="text-xs px-2.5 py-1 rounded bg-[#7c3aed] text-white hover:bg-[#6d28d9] disabled:opacity-50"
+                            >
+                              {printedTermsSaving ? "Enregistrement..." : "Enregistrer"}
+                            </button>
+                          )}
+                          {printedTermsFeedback && (
+                            <span className={`text-xs ${printedTermsFeedback.ok ? "text-green-600" : "text-red-600"}`}>{printedTermsFeedback.text}</span>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-xs text-gray-500 whitespace-pre-line">{savedPrintedTerms || "—"}</p>
+                    )}
                   </div>
                   <div className="w-64 p-4 border-l border-gray-100 space-y-2 text-xs">
                     {order.global_discount_pct > 0 && (
@@ -1368,7 +1423,7 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
             unit_price: l.fob_unit_price,
             discount: 0,
           }))}
-          notes={order.notes ?? undefined}
+          notes={savedPrintedTerms || undefined}
           currency={order.currency}
           locale={locale}
         />

@@ -25,6 +25,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   // E1: an invoiced quote is frozen; only its project stays editable (audited by the database)
   {
     const { data: cur } = await db.from("sales_orders").select("status").eq("id", id).single()
+    // F3: a cancelled quote is entirely frozen (no exception)
+    if (cur?.status === "cancelled") {
+      return NextResponse.json({ error: "Devis annulé : il n'est plus modifiable" }, { status: 409 })
+    }
     if (cur?.status === "invoiced" && Object.keys(body).some(k => k !== "project_code")) {
       return NextResponse.json({ error: "Devis facturé : seul le projet reste modifiable" }, { status: 409 })
     }

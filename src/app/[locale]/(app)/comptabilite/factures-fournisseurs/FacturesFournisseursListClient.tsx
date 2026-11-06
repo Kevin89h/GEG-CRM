@@ -101,8 +101,14 @@ export default function FacturesFournisseursListClient({
     return list
   }, [invoices, search, statusFilters, dateFrom, dateTo, sortKey, sortDir])
 
-  const totalPending = filtered.filter(i => i.status === "pending" || i.status === "partial").reduce((s, i) => s + Number(i.balance ?? i.total_ttc), 0)
-  const totalPaid = filtered.filter(i => i.status === "paid").reduce((s, i) => s + Number(i.total_ttc), 0)
+  // F6: totals per currency (currency code -> amount), never added across currencies
+  function sumByCurrency(list: typeof filtered, value: (i: (typeof filtered)[number]) => number): Record<string, number> {
+    const totals: Record<string, number> = {}
+    for (const inv of list) totals[inv.currency] = (totals[inv.currency] ?? 0) + value(inv)
+    return totals
+  }
+  const totalPending = sumByCurrency(filtered.filter(i => i.status === "pending" || i.status === "partial"), i => Number(i.balance ?? i.total_ttc))
+  const totalPaid = sumByCurrency(filtered.filter(i => i.status === "paid"), i => Number(i.total_ttc))
 
   const selectionTotals = useMemo(() => {
     if (selected.size === 0) return null
@@ -122,7 +128,10 @@ export default function FacturesFournisseursListClient({
   }
 
   const selectedInvoices = filtered.filter(i => selected.has(i.id))
-  const bulkPayTotal = selectedInvoices.reduce((s, i) => s + Number(i.balance ?? i.total_ttc), 0)
+  const bulkPayTotals = sumByCurrency(selectedInvoices, i => Number(i.balance ?? i.total_ttc))
+  const bulkPayCurrencies = Object.keys(bulkPayTotals)
+  // A single payment cannot cover several currencies: no pre-filled amount in that case
+  const bulkPayMixed = bulkPayCurrencies.length > 1
 
   async function submitBulkPayment() {
     setBulkPayLoading(true)
@@ -229,11 +238,19 @@ export default function FacturesFournisseursListClient({
         </div>
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
           <p className="text-xs font-medium text-amber-500 uppercase tracking-wide">À payer</p>
-          <p className="text-2xl font-bold text-amber-600 mt-1">{totalPending.toLocaleString("fr")} <span className="text-sm font-normal text-gray-400">GNF</span></p>
+          {Object.keys(totalPending).length === 0 ? (
+            <p className="text-2xl font-bold text-amber-600 mt-1">—</p>
+          ) : Object.entries(totalPending).map(([cur, total]) => (
+            <p key={cur} className="text-2xl font-bold text-amber-600 mt-1">{total.toLocaleString("fr")} <span className="text-sm font-normal text-gray-400">{cur}</span></p>
+          ))}
         </div>
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
           <p className="text-xs font-medium text-emerald-500 uppercase tracking-wide">Payées</p>
-          <p className="text-2xl font-bold text-emerald-600 mt-1">{totalPaid.toLocaleString("fr")} <span className="text-sm font-normal text-gray-400">GNF</span></p>
+          {Object.keys(totalPaid).length === 0 ? (
+            <p className="text-2xl font-bold text-emerald-600 mt-1">—</p>
+          ) : Object.entries(totalPaid).map(([cur, total]) => (
+            <p key={cur} className="text-2xl font-bold text-emerald-600 mt-1">{total.toLocaleString("fr")} <span className="text-sm font-normal text-gray-400">{cur}</span></p>
+          ))}
         </div>
       </div>
 
@@ -292,7 +309,13 @@ export default function FacturesFournisseursListClient({
             ))}
             {canPay && (
               <button
-                onClick={() => { setBulkPayForm(f => ({ ...f, amount: String(bulkPayTotal) })); setBulkPayOpen(true) }}
+                onClick={() => {
+                  // Pre-fill amount and currency only when all selected invoices share one currency
+                  setBulkPayForm(f => bulkPayMixed || bulkPayCurrencies.length === 0
+                    ? { ...f, amount: "" }
+                    : { ...f, amount: String(bulkPayTotals[bulkPayCurrencies[0]]), currency: bulkPayCurrencies[0] })
+                  setBulkPayOpen(true)
+                }}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
               >
                 <PayIcon className="w-3.5 h-3.5" /> Enregistrer un paiement
@@ -398,8 +421,13 @@ export default function FacturesFournisseursListClient({
             </div>
 
             <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 mb-4 text-sm text-amber-800">
-              Total à payer : <strong>{bulkPayTotal.toLocaleString("fr")} {bulkPayForm.currency}</strong> — réparti de la plus ancienne à la plus récente
+              Total à payer : <strong>{Object.entries(bulkPayTotals).map(([cur, total]) => `${total.toLocaleString("fr")} ${cur}`).join(" · ") || "—"}</strong> — réparti de la plus ancienne à la plus récente
             </div>
+            {bulkPayMixed && (
+              <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-2 mb-4 text-sm text-red-700">
+                Les factures sélectionnées sont dans plusieurs devises ({bulkPayCurrencies.join(", ")}). Un seul paiement ne peut pas couvrir plusieurs devises : sélectionnez des factures d&apos;une seule devise.
+              </div>
+            )}
 
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">

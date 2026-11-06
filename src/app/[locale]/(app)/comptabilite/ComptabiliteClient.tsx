@@ -34,10 +34,14 @@ interface Props {
   clientStats: {
     draft: InvoiceStat[]; unpaid: InvoiceStat[]; overdue: InvoiceStat[]
     draftAmount: number; unpaidAmount: number; overdueAmount: number
+    /** Amounts per currency (currency code -> amount), never added across currencies (F6) */
+    draftAmounts: Record<string, number>; unpaidAmounts: Record<string, number>; overdueAmounts: Record<string, number>
   }
   purchaseStats: {
     draft: PurchaseStat[]; toPay: PurchaseStat[]
     draftAmount: number; toPayAmount: number
+    /** Amounts per currency (currency code -> amount), never added across currencies (F6) */
+    draftAmounts: Record<string, number>; toPayAmounts: Record<string, number>
   }
   /** Customer invoices still due, by due-date bucket (A3, computed on the server) */
   invoiceAgeing: ChartBucket[]
@@ -65,6 +69,14 @@ const txTypeConfig = {
   debit:        { label: "Sortie",          icon: ArrowUpRight,  color: "text-red-500",     credit: false },
   transfer_in:  { label: "Virement reçu",  icon: ArrowDownLeft, color: "text-blue-600",    credit: true },
   transfer_out: { label: "Virement émis",  icon: ArrowUpRight,  color: "text-amber-600",   credit: false },
+}
+
+/** One amount per currency, e.g. "12 000 000 GNF · 5 000 USD"; "—" when empty (F6: never a cross-currency sum) */
+function formatAmountsByCurrency(amounts: Record<string, number> | undefined): string {
+  const parts = Object.entries(amounts ?? {})
+    .filter(([, v]) => v !== 0)
+    .map(([cur, v]) => formatCurrency(v, cur))
+  return parts.length ? parts.join(" · ") : "—"
 }
 
 /* ─── Carte "Factures clients" style Odoo ─────────────── */
@@ -100,7 +112,7 @@ function InvoiceCard({ locale, stats, ageing }: { locale: string; stats: Props["
                 {stats.draft.length} À valider
               </span>
               <span className="text-sm font-semibold text-gray-800">
-                {stats.draftAmount.toLocaleString("fr", { maximumFractionDigits: 0 })} FG
+                {formatAmountsByCurrency(stats.draftAmounts)}
               </span>
             </Link>
           )}
@@ -110,7 +122,7 @@ function InvoiceCard({ locale, stats, ageing }: { locale: string; stats: Props["
                 {stats.unpaid.length} Non payé{stats.unpaid.length > 1 ? "s" : ""}
               </span>
               <span className="text-sm font-semibold text-gray-800">
-                {stats.unpaidAmount.toLocaleString("fr", { maximumFractionDigits: 0 })} FG
+                {formatAmountsByCurrency(stats.unpaidAmounts)}
               </span>
             </Link>
           )}
@@ -120,7 +132,7 @@ function InvoiceCard({ locale, stats, ageing }: { locale: string; stats: Props["
                 {stats.overdue.length} En retard
               </span>
               <span className="text-sm font-semibold text-red-700">
-                {stats.overdueAmount.toLocaleString("fr", { maximumFractionDigits: 0 })} FG
+                {formatAmountsByCurrency(stats.overdueAmounts)}
               </span>
             </Link>
           )}
@@ -166,7 +178,7 @@ function PurchaseCard({ locale, stats, months }: { locale: string; stats: Props[
               {stats.draft.length} À valider
             </span>
             <span className="text-sm font-semibold text-gray-800">
-              {stats.draftAmount.toLocaleString("fr", { maximumFractionDigits: 0 })} FG
+              {formatAmountsByCurrency(stats.draftAmounts)}
             </span>
           </Link>
         ) : null}
@@ -176,7 +188,7 @@ function PurchaseCard({ locale, stats, months }: { locale: string; stats: Props[
               {stats.toPay.length} À payer
             </span>
             <span className="text-sm font-semibold text-gray-800">
-              {stats.toPayAmount.toLocaleString("fr", { maximumFractionDigits: 0 })} FG
+              {formatAmountsByCurrency(stats.toPayAmounts)}
             </span>
           </Link>
         ) : null}

@@ -163,7 +163,8 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
   // Display only (D2): buttons follow the permissions of the active company, the API checks again
   const { can } = usePerms()
   const canEditDeal = can("opportunites.modifier")
-  const canSeeCosts = can("opportunites.couts_voir")
+  // F1: costs/margin visible with either key (whoever enters costs must see them), editable only with couts_modifier
+  const canSeeCosts = can(["opportunites.couts_voir", "opportunites.couts_modifier"])
   const canEditCosts = can("opportunites.couts_modifier")
   const canCreateActivity = can("activites.creer")
   const canEditActivity = can("activites.modifier")

@@ -67,9 +67,10 @@ interface Props {
 }
 
 export default function DealFinancialsPanel({ dealId, dealCurrency, invoiceFromProps }: Props) {
-  // Display only (D2): costs and margin need "opportunites.couts_voir", entering costs "opportunites.couts_modifier"
+  // Display only (D2/F1): costs and margin are visible with "opportunites.couts_voir" or "opportunites.couts_modifier"
+  // (whoever enters costs must see them); entering costs needs "opportunites.couts_modifier"
   const { can } = usePerms()
-  const canSeeCosts = can("opportunites.couts_voir")
+  const canSeeCosts = can(["opportunites.couts_voir", "opportunites.couts_modifier"])
   const canEditCosts = can("opportunites.couts_modifier")
   const canLinkSupplierInvoice = can("factures_fournisseurs.gerer")
   const canDeleteCost = can("suppression")

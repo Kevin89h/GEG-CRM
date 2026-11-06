@@ -80,7 +80,15 @@ export default function PaiementsClient({ payments, locale }: Props) {
   const currentPage = Math.min(page, totalPages)
   const slice = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
 
-  const totalAmount = filtered.reduce((s, p) => s + p.amount, 0)
+  // F6: totals per currency, never added across currencies
+  const totalsByCurrency = filtered.reduce<Record<string, number>>((acc, p) => {
+    acc[p.currency] = (acc[p.currency] ?? 0) + p.amount
+    return acc
+  }, {})
+  const totalsLabel = Object.entries(totalsByCurrency)
+    .filter(([, v]) => v !== 0)
+    .map(([cur, v]) => formatCurrency(v, cur))
+    .join(" · ") || "—"
 
   return (
     <div>
@@ -91,7 +99,7 @@ export default function PaiementsClient({ payments, locale }: Props) {
           <p className="text-sm text-gray-500 mt-0.5">
             {filtered.length} paiement{filtered.length !== 1 ? "s" : ""} &nbsp;·&nbsp;
             <span className="font-semibold text-gray-700">
-              {formatCurrency(totalAmount, "GNF")}
+              {totalsLabel}
             </span>
           </p>
         </div>
