@@ -83,3 +83,15 @@ from p
 where not exists (select 1 from geg_guinee.products x where x.name = p.name);
 
 commit;
+
+-- Codes produit PRD-xxxxx (suite de la numérotation existante) pour les nouvelles fiches qui n'en ont pas
+begin;
+with base as (
+  select coalesce(max(substring(product_code from 5)::int), 0) n from geg_guinee.products where product_code ~ '^PRD-[0-9]+$'
+), todo as (
+  select id, row_number() over (order by name) rn from geg_guinee.products
+  where product_code is null and (to_complete or name = 'Remise commerciale')
+)
+update geg_guinee.products p set product_code = 'PRD-' || lpad((base.n + todo.rn)::text, 5, '0')
+from todo, base where p.id = todo.id;
+commit;
