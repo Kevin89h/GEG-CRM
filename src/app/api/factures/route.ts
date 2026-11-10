@@ -1,4 +1,4 @@
-import { invalidSalesLines } from "@/lib/catalog"
+import { commentFields, invalidSalesLines } from "@/lib/catalog"
 import { NextRequest, NextResponse } from "next/server"
 import { createCompanyClient } from "@/lib/company"
 import { logActivity } from "@/lib/activity-logger"
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest)  {
 
     if (lines.length > 0) {
       const { error: lineErr } = await db.from("invoice_lines").insert(
-        lines.map(l => ({ ...l, invoice_id: invoice.id }))
+        lines.map(l => ({ ...l, ...(commentFields(l) ?? {}), invoice_id: invoice.id }))
       )
       if (lineErr) return NextResponse.json({ error: lineErr.message }, { status: 400 })
     }

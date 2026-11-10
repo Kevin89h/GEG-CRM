@@ -8,7 +8,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const body = await req.json()
 
     // product_id: attach a draft line to a catalogue product (R1; the database refuses an inactive product)
-    const allowed = ["product_id", "description", "quantity", "unit_price", "discount", "tva_rate"]
+    const allowed = ["product_id", "description", "quantity", "unit_price", "discount", "tva_rate", "print_on_pdf"]
     const updates: Record<string, unknown> = {}
     for (const key of allowed) {
       if (key in body) updates[key] = body[key]

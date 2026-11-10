@@ -15,6 +15,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     "product_type", "can_be_sold", "can_be_purchased",
     "sell_price", "currency", "buy_price", "buy_price_currency",
     "tva_vente", "tva_achat", "barcode", "sku", "origin", "internal_notes", "is_active",
+    "brand", "to_complete", "missing_info",
   ]
   const update: Record<string, unknown> = {}
   for (const key of ALLOWED_FIELDS) {

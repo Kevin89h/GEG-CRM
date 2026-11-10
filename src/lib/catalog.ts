@@ -15,21 +15,54 @@ export const NOT_FOUND_MESSAGE =
 // R1 / R2: every new sales line is an active catalogue product
 // ---------------------------------------------------------------------------------------------
 
-/** Error message (French) when one of the lines has no product or an inactive one, null when all are valid */
-export async function invalidSalesLines(db: Db, lines: { product_id?: string | null; description?: string | null }[]): Promise<string | null> {
-  const missing = lines.map((l, i) => ({ l, i })).filter(x => !x.l.product_id)
+export type SalesLineInput = {
+  product_id?: string | null; description?: string | null; line_type?: string | null
+  quantity?: number | string | null; unit_price?: number | string | null; discount?: number | string | null
+}
+
+/** True for a comment line (text only: no product, quantity, price nor amount) */
+export const isComment = (l: { line_type?: string | null }) => l.line_type === "comment"
+
+/**
+ * Normalises a comment line before saving: no product, zero quantity / price / discount.
+ * Returns null for a sales line (left untouched).
+ */
+export function commentFields(l: SalesLineInput & { print_on_pdf?: boolean | null }) {
+  if (!isComment(l)) return null
+  return { line_type: "comment", product_id: null, quantity: 0, unit_price: 0, discount: 0, print_on_pdf: l.print_on_pdf !== false, description: (l.description ?? "").trim() }
+}
+
+/**
+ * Error message (French) when a line breaks the catalogue rules, null when all are valid:
+ * sales lines must be ACTIVE catalogue products (R1, R2); comment lines carry text only;
+ * a negative amount is accepted on a SERVICE line only (e.g. "Remise commerciale").
+ */
+export async function invalidSalesLines(db: Db, lines: SalesLineInput[]): Promise<string | null> {
+  const comments = lines.map((l, i) => ({ l, i })).filter(x => isComment(x.l))
+  const badComment = comments.find(x => !(x.l.description ?? "").trim() || x.l.product_id ||
+    Number(x.l.quantity ?? 0) !== 0 || Number(x.l.unit_price ?? 0) !== 0 || Number(x.l.discount ?? 0) !== 0)
+  if (badComment) {
+    return `Ligne ${badComment.i + 1} : une ligne de commentaire contient seulement du texte (ni produit, ni quantité, ni prix, ni remise).`
+  }
+  const sales = lines.map((l, i) => ({ l, i })).filter(x => !isComment(x.l))
+  const missing = sales.filter(x => !x.l.product_id)
   if (missing.length) {
     return `Ligne${missing.length > 1 ? "s" : ""} ${missing.map(x => x.i + 1).join(", ")} sans produit du catalogue` +
       ` (${missing.map(x => `« ${(x.l.description ?? "").trim() || "vide"} »`).join(", ")}). ` +
-      "Chaque ligne doit être un produit ou un service du catalogue GEG."
+      "Chaque ligne doit être un produit ou un service du catalogue GEG (ou une ligne de commentaire)."
   }
-  const ids = [...new Set(lines.map(l => l.product_id as string))]
-  const { data } = await db.from("products").select("id, name, is_active").in("id", ids)
-  const found = new Map<string, { name: string; is_active: boolean }>((data ?? []).map((p: { id: string; name: string; is_active: boolean }) => [p.id, p]))
+  if (!sales.length) return null
+  const ids = [...new Set(sales.map(x => x.l.product_id as string))]
+  const { data } = await db.from("products").select("id, name, is_active, product_type").in("id", ids)
+  const found = new Map<string, { name: string; is_active: boolean; product_type: string | null }>((data ?? []).map((p: { id: string; name: string; is_active: boolean; product_type: string | null }) => [p.id, p]))
   const unknown = ids.filter(id => !found.has(id))
   if (unknown.length) return "Produit introuvable dans le catalogue."
   const inactive = ids.map(id => found.get(id)!).filter(p => !p.is_active)
   if (inactive.length) return `Produit désactivé, il ne peut plus être vendu : ${inactive.map(p => p.name).join(", ")}.`
+  const negative = sales.find(x => Number(x.l.unit_price ?? 0) < 0 && found.get(x.l.product_id as string)?.product_type !== "service")
+  if (negative) {
+    return `Ligne ${negative.i + 1} : un montant négatif n'est possible que sur un service (par exemple « Remise commerciale »), pas sur une marchandise.`
+  }
   return null
 }
 
@@ -59,9 +92,31 @@ export function packaging(s: string | null | undefined): string | null {
 }
 
 export interface CatalogItem {
-  id: string; name: string; reference: string | null; product_code: string | null; merchant_reference: string | null
+  id: string; name: string; brand?: string | null; to_complete?: boolean; missing_info?: string | null; reference: string | null; product_code: string | null; merchant_reference: string | null
   product_type: string | null; is_active: boolean; category: string | null; unit: string | null; packagings: string[]
   sell_price: number | null; currency: string | null
+}
+
+// Brands and product ranges: a different brand, or a different range of the same brand, is a DISTINCT product
+// (catalogue rule of 10/11/2026), even with identical dimensions, viscosity or packaging.
+const BRANDS = ["geg", "total", "totalenergies", "shell", "fuchs", "petronas", "mobil", "castrol", "eurotec", "elf",
+  "double road", "doubleroad", "triangle", "luxxan", "joyroad", "michelin", "bridgestone", "goodyear", "weichai", "toyota", "caterpillar"]
+const RANGES = ["carter ep", "carter xep", "carter", "rubia", "rimula", "helix", "tellus", "omala", "spirax", "renolin", "titan",
+  "reductor", "compressor", "diesel extra", "diesel premium", "extra", "premium", "atf", "gear", "hydraulic", "hydraulique", "antifreeze", "sf12+", "sf12"]
+
+/** Brand found in the item's brand field or in its designation */
+export function brandOf(text: string | null | undefined, field?: string | null): string | null {
+  const b = normalize(field)
+  if (b) return b.replace(/s+/g, " ")
+  const n = ` ${normalize(text)} `
+  const hit = BRANDS.find(x => n.includes(` ${x} `))
+  return hit ? hit.replace("doubleroad", "double road").replace("totalenergies", "total") : null
+}
+
+/** Product range (most specific first), e.g. "carter xep" vs "carter ep" */
+export function rangeOf(text: string | null | undefined): string | null {
+  const n = ` ${normalize(text)} `
+  return RANGES.find(x => n.includes(` ${x} `)) ?? null
 }
 
 export interface Candidate extends CatalogItem { score: number; reasons: string[] }
@@ -78,6 +133,13 @@ export function similarItems(query: string, items: CatalogItem[], limit = 12): C
     let score = common.length / q.length
     const reasons: string[] = []
     if (common.length) reasons.push(`mots communs : ${common.join(", ")}`)
+    const qBrand = brandOf(query), iBrand = brandOf(it.name, it.brand)
+    if (qBrand && iBrand) {
+      if (qBrand === iBrand) { score += 0.1; reasons.push(`même marque ${iBrand.toUpperCase()}`) }
+      else { score -= 0.3; reasons.push(`marque différente (${iBrand.toUpperCase()}) : article distinct`) }
+    }
+    const qRange = rangeOf(query), iRange = rangeOf(text)
+    if (qRange && iRange && qRange !== iRange) { score -= 0.2; reasons.push(`gamme différente (${iRange.toUpperCase()}) : article distinct`) }
     const v = viscosity(text)
     if (qVisc && v) { if (qVisc === v) { score += 0.3; reasons.push(`même viscosité ${v.toUpperCase()}`) } else { score -= 0.3; reasons.push(`viscosité différente (${v.toUpperCase()})`) } }
     const itemPacks = [packaging(text), ...it.packagings.map(p => packaging(p)), packaging(it.unit)].filter(Boolean) as string[]
@@ -86,6 +148,7 @@ export function similarItems(query: string, items: CatalogItem[], limit = 12): C
       else reasons.push(`conditionnement différent (${[...new Set(itemPacks)].map(p => p.toUpperCase()).join(", ")}) : article distinct`)
     }
     if (!it.is_active) reasons.push("désactivé : non sélectionnable")
+    if (it.is_active && it.to_complete) reasons.push("fiche à compléter")
     return { ...it, score: Math.round(score * 100) / 100, reasons }
   }).filter(c => c.score >= 0.34).sort((a, b) => b.score - a.score).slice(0, limit)
 }
@@ -93,11 +156,11 @@ export function similarItems(query: string, items: CatalogItem[], limit = 12): C
 /** Catalogue items with the fields useful to compare them (no purchase price nor internal data) */
 export async function loadCatalog(db: Db): Promise<CatalogItem[]> {
   const { data } = await db.from("products")
-    .select("id, name, reference, product_code, merchant_reference, product_type, is_active, sell_price, currency, category:product_categories(name), unit:units(name), packaging:product_packaging(unit:units(name))")
+    .select("id, name, brand, to_complete, missing_info, reference, product_code, merchant_reference, product_type, is_active, sell_price, currency, category:product_categories(name), unit:units(name), packaging:product_packaging(unit:units(name))")
     .order("name")
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((p: any) => ({
-    id: p.id, name: p.name, reference: p.reference, product_code: p.product_code, merchant_reference: p.merchant_reference,
+    id: p.id, name: p.name, brand: p.brand ?? null, to_complete: !!p.to_complete, missing_info: p.missing_info ?? null, reference: p.reference, product_code: p.product_code, merchant_reference: p.merchant_reference,
     product_type: p.product_type, is_active: p.is_active, sell_price: p.sell_price, currency: p.currency,
     category: (Array.isArray(p.category) ? p.category[0] : p.category)?.name ?? null,
     unit: (Array.isArray(p.unit) ? p.unit[0] : p.unit)?.name ?? null,

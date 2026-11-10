@@ -20,7 +20,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data: origLines } = await db
     .from("invoice_lines")
-    .select("description, quantity, unit_price, discount, position, tva_rate, product_id")
+    .select("description, quantity, unit_price, discount, position, tva_rate, product_id, line_type, print_on_pdf")
     .eq("invoice_id", id)
     .order("position")
 
@@ -62,6 +62,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       tva_rate: Number(l.tva_rate) || 0,
       position: l.position,
       product_id: l.product_id ?? null,
+      line_type: l.line_type ?? "product",
+      print_on_pdf: l.print_on_pdf !== false,
     }))
 
     const { error: lineErr } = await db.from("invoice_lines").insert(cnLines)

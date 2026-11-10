@@ -15,7 +15,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const { data: sourceLines } = await db
     .from("sales_order_lines")
-    .select("product_id, description, quantity, unit_price, discount, position, tva_exempt")
+    .select("product_id, description, quantity, unit_price, discount, position, tva_exempt, line_type, print_on_pdf")
     .eq("order_id", id)
     .order("position")
 

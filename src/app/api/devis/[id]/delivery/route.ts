@@ -14,7 +14,8 @@ interface DeliveryLine {
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const body = await req.json()
-  const { lines, warehouse_id, notes, user_id } = body as {
+  let { lines } = body as { lines: DeliveryLine[] }
+  const { warehouse_id, notes, user_id } = body as {
     lines: DeliveryLine[]
     warehouse_id: string
     notes?: string
@@ -28,6 +29,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const schema = await getCompanySchema()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = (createAdminClient() as any).schema(schema)
+
+  // Comment lines (text only) are never delivered
+  const { data: commentRows } = await db.from("sales_order_lines").select("id").eq("order_id", id).eq("line_type", "comment")
+  const commentIds = new Set((commentRows ?? []).map((r: { id: string }) => r.id))
+  lines = lines.filter(l => !commentIds.has(l.order_line_id))
+  if (lines.length === 0) return NextResponse.json({ error: "Aucune ligne à livrer" }, { status: 400 })
 
   // R4: stock check BEFORE creating the delivery note; derogation only with "stock.livraison_hors_stock",
   // explicit confirmation and justification (audited). R5: services never move stock.

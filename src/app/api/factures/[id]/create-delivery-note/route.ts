@@ -29,9 +29,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: dnError?.message ?? "Failed to create delivery note" }, { status: 400 })
   }
 
-  if (lines && lines.length > 0) {
+  // Comment lines (text only, no quantity) are never delivered
+  const deliverable = (lines ?? []).filter((l: { line_type?: string | null; product_id?: string | null; quantity?: number }) =>
+    l.line_type !== "comment" && !(!l.product_id && Number(l.quantity ?? 0) === 0))
+  if (deliverable.length > 0) {
     const { error: linesError } = await db.from("delivery_note_lines").insert(
-      lines.map((l: { product_id: string | null; description: string; quantity: number }, i: number) => ({
+      deliverable.map((l: { product_id: string | null; description: string; quantity: number }, i: number) => ({
         delivery_note_id: dn.id,
         product_id: l.product_id ?? null,
         description: l.description,

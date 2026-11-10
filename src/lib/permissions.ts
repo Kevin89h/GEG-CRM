@@ -171,6 +171,7 @@ export const PAGE_RULES: Record<string, string[]> = {
   "achats/fournisseurs": ["fournisseurs.voir"],
   "stock": ["stock.voir"],
   "stock/produits": ["produits.voir"],
+  "stock/produits/rattachements": ["produits.voir"],
   "stock/inventaire": ["stock.inventaire"],
   "stock/mouvements/nouveau": ["stock.mouvement_manuel"],
   "stock/pertes": ["stock.mouvement_manuel"],

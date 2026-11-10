@@ -7,6 +7,8 @@ interface OrderLine {
   unit_price: number
   discount: number
   product_id?: string | null
+  line_type?: string | null
+  print_on_pdf?: boolean | null
   tva_exempt?: boolean | null
 }
 
@@ -71,7 +73,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       unit_price: l.unit_price,
       discount: l.discount,
       position: i,
-      tva_rate: tva && !l.tva_exempt ? 18 : 0,
+      // comment lines are copied as comments (text only, no VAT nor amount)
+      tva_rate: l.line_type === "comment" ? 0 : tva && !l.tva_exempt ? 18 : 0,
+      line_type: l.line_type === "comment" ? "comment" : "product",
+      print_on_pdf: l.print_on_pdf !== false,
     }))
     const { error: lineErr } = await db.from("invoice_lines").insert(lineRows)
     if (lineErr) return NextResponse.json({ error: lineErr.message }, { status: 400 })

@@ -8,7 +8,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   // Fetch original invoice + lines
   const { data: original, error: fetchErr } = await db
     .from("invoices")
-    .select("account_id, currency, notes, lines:invoice_lines(description, product_id, quantity, unit_price, discount, tva_rate, position)")
+    .select("account_id, currency, notes, lines:invoice_lines(description, product_id, quantity, unit_price, discount, tva_rate, position, line_type, print_on_pdf)")
     .eq("id", id)
     .single()
 
@@ -51,6 +51,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
         discount: l.discount,
         tva_rate: l.tva_rate,
         position: l.position ?? i,
+        line_type: l.line_type ?? "product",
+        print_on_pdf: l.print_on_pdf !== false,
       }))
     )
   }
