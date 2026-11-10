@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Printer, Download, Share2, CheckCircle, Truck, X } from "lucide-react"
+import { ArrowLeft, Printer, Download, Share2, CheckCircle, Truck, X, AlertTriangle } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/Button"
 import { Select } from "@/components/ui/Select"
@@ -54,6 +54,14 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [defaultWarehouse, setDefaultWarehouse] = useState(firstWarehouseId)
+  // R4/H3: stock shortages returned by the server (409 = derogation possible, 403 = not allowed)
+  const [shortages, setShortages] = useState<Shortage[] | null>(null)
+  const [serverCanOverride, setServerCanOverride] = useState(false)
+  const [derogationOpen, setDerogationOpen] = useState(false)
+  const [derogationReason, setDerogationReason] = useState("")
+  const [derogationConfirmed, setDerogationConfirmed] = useState(false)
+  const [derogationError, setDerogationError] = useState<string | null>(null)
+  const canOverride = serverCanOverride && can("stock.livraison_hors_stock")
 
   const isDraft = dn.status === "draft"
   // Display only (D2): cancel before delivery needs "livraisons.annuler", confirm needs "livraisons.confirmer".
@@ -63,11 +71,14 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
 
   function setLineWarehouse(lineId: string, warehouseId: string) {
     setLines(prev => prev.map(l => l.id === lineId ? { ...l, warehouse_id: warehouseId } : l))
+    setShortages(null)
   }
 
   function setLineQuantity(lineId: string, value: string) {
     const qty = parseFloat(value) || 0
     setLines(prev => prev.map(l => l.id === lineId ? { ...l, quantity: qty } : l))
+    // The previous stock check no longer matches the edited lines
+    setShortages(null)
   }
 
   // Appliquer l'entrepôt par défaut à toutes les lignes sans entrepôt
@@ -76,7 +87,7 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
     setLines(prev => prev.map(l => ({ ...l, warehouse_id: l.warehouse_id || wid })))
   }
 
-  async function confirmDelivery() {
+  async function confirmDelivery(derogation?: { reason: string; confirmed: true }) {
     const stockLines = lines.filter(l => l.product_id)
     if (stockLines.some(l => !l.warehouse_id)) {
       setError("Assigne un entrepôt à chaque produit avant de confirmer.")
@@ -85,6 +96,7 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
 
     setSaving(true)
     setError(null)
+    setDerogationError(null)
     const { supabase } = getCompanyClientBrowser()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setSaving(false); return }
@@ -92,18 +104,38 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
     const res = await fetch(`/api/bons-livraison/${dn.id}/confirm`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lines, userId: user.id }),
+      body: JSON.stringify({ lines, userId: user.id, ...(derogation ? { derogation } : {}) }),
     })
-    const json = await res.json()
+    const json = await res.json().catch(() => ({}))
     if (!res.ok) {
-      setError(json.error ?? "Erreur lors de la confirmation")
+      // Stock shortage: show the detailed panel on the page instead of a bare error
+      if ((res.status === 409 || res.status === 403) && Array.isArray(json.shortages) && json.shortages.length > 0) {
+        setShortages(json.shortages)
+        setServerCanOverride(!!json.canOverride)
+        setConfirmOpen(false)
+        if (derogation) setDerogationError(json.error ?? "La dérogation a été refusée")
+        else setError(json.error ?? null)
+      } else if (derogation) {
+        setDerogationError(json.error ?? "Erreur lors de la confirmation")
+      } else {
+        setError(json.error ?? "Erreur lors de la confirmation")
+      }
       setSaving(false)
       return
     }
 
     setConfirmOpen(false)
+    setDerogationOpen(false)
+    setShortages(null)
     setSaving(false)
     router.refresh()
+  }
+
+  function openDerogation() {
+    setDerogationReason("")
+    setDerogationConfirmed(false)
+    setDerogationError(null)
+    setDerogationOpen(true)
   }
 
   async function cancel() {
@@ -217,6 +249,33 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
         </div>
       )}
 
+      {/* Stock insuffisant (R4/H3) */}
+      {shortages && shortages.length > 0 && isDraft && (
+        <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4 mb-6 text-sm text-red-800">
+          <div className="flex items-start gap-3 mb-3">
+            <AlertTriangle className="w-5 h-5 flex-shrink-0 text-red-600" />
+            <div>
+              <p className="font-semibold">Stock insuffisant — livraison bloquée</p>
+              {error && <p className="mt-0.5">{error}</p>}
+            </div>
+          </div>
+          <ShortageTable shortages={shortages} />
+          {canOverride ? (
+            <div className="mt-3 flex items-center justify-between gap-3 flex-wrap">
+              <p className="text-xs text-red-700">Vous pouvez exceptionnellement autoriser cette livraison (dérogation tracée).</p>
+              <Button variant="danger" onClick={openDerogation}>
+                <AlertTriangle className="w-4 h-4" /> Livrer malgré le stock insuffisant
+              </Button>
+            </div>
+          ) : (
+            <p className="mt-3 text-xs text-red-700">
+              La livraison est impossible tant que le stock est insuffisant. Réapprovisionnez le dépôt, changez d&apos;entrepôt ou de quantité,
+              ou demandez à un Manager (droit « livraison hors stock ») de l&apos;autoriser.
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Lignes */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden mb-6">
         <table className="w-full text-sm">
@@ -316,12 +375,97 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
 
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" onClick={() => { setConfirmOpen(false); setError(null) }}>Annuler</Button>
-            <Button onClick={confirmDelivery} disabled={saving}>
+            <Button onClick={() => confirmDelivery()} disabled={saving}>
               {saving ? "Confirmation…" : "Confirmer la livraison"}
             </Button>
           </div>
         </div>
       </Modal>
+
+      {/* Modal dérogation : livraison au-delà du stock disponible */}
+      <Modal open={derogationOpen && canOverride && !!shortages} onClose={() => setDerogationOpen(false)} title="Livrer malgré le stock insuffisant" className="max-w-2xl">
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-800">
+            <AlertTriangle className="w-5 h-5 flex-shrink-0 text-red-600" />
+            <div>
+              <p className="font-semibold mb-1">Attention : livraison au-delà du stock disponible</p>
+              <p>
+                Le stock des produits ci-dessous deviendra négatif. Cette dérogation est exceptionnelle,
+                enregistrée avec votre nom et votre justification dans le journal d&apos;audit.
+              </p>
+            </div>
+          </div>
+          {shortages && <ShortageTable shortages={shortages} />}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Justification (obligatoire, 10 caractères minimum)</label>
+            <textarea
+              value={derogationReason}
+              onChange={e => setDerogationReason(e.target.value)}
+              rows={3}
+              placeholder="Ex : marchandise physiquement présente, réception fournisseur pas encore saisie…"
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
+            />
+            <p className={`text-xs mt-1 ${derogationReason.trim().length >= 10 ? "text-gray-400" : "text-red-500"}`}>
+              {derogationReason.trim().length} / 10 caractères minimum
+            </p>
+          </div>
+          <label className="flex items-start gap-2 text-sm text-gray-800 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={derogationConfirmed}
+              onChange={e => setDerogationConfirmed(e.target.checked)}
+              className="mt-0.5"
+            />
+            Je confirme cette livraison au-delà du stock disponible
+          </label>
+          {derogationError && <p className="text-sm text-red-600">{derogationError}</p>}
+          <div className="flex justify-end gap-3 pt-2">
+            <Button variant="secondary" onClick={() => setDerogationOpen(false)}>Annuler</Button>
+            <Button
+              variant="danger"
+              onClick={() => confirmDelivery({ reason: derogationReason.trim(), confirmed: true })}
+              disabled={saving || derogationReason.trim().length < 10 || !derogationConfirmed}
+            >
+              {saving ? "Confirmation…" : "Livrer malgré le stock insuffisant"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  )
+}
+
+interface Shortage { product_id?: string; product: string; warehouse_id?: string; warehouse: string; requested: number; available: number; missing: number; result: number }
+
+// Shortage detail per product and warehouse; the resulting stock is shown even when negative
+function ShortageTable({ shortages }: { shortages: Shortage[] }) {
+  const fmt = (n: number) => Number(n).toLocaleString("fr")
+  return (
+    <div className="overflow-x-auto rounded-lg border border-red-200 bg-white">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="bg-red-50 text-red-800">
+            <th className="text-left px-3 py-2 font-medium">Produit</th>
+            <th className="text-left px-3 py-2 font-medium">Dépôt</th>
+            <th className="text-right px-3 py-2 font-medium">Qté à livrer</th>
+            <th className="text-right px-3 py-2 font-medium">Stock disponible</th>
+            <th className="text-right px-3 py-2 font-medium">Manquant</th>
+            <th className="text-right px-3 py-2 font-medium">Stock résultant</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-red-100">
+          {shortages.map((s, i) => (
+            <tr key={`${s.product_id ?? s.product}-${s.warehouse_id ?? s.warehouse}-${i}`}>
+              <td className="px-3 py-2 font-medium text-gray-900">{s.product}</td>
+              <td className="px-3 py-2 text-gray-700">{s.warehouse}</td>
+              <td className="px-3 py-2 text-right tabular-nums">{fmt(s.requested)}</td>
+              <td className={`px-3 py-2 text-right tabular-nums ${s.available < 0 ? "text-red-600 font-semibold" : ""}`}>{fmt(s.available)}</td>
+              <td className="px-3 py-2 text-right tabular-nums text-red-600 font-semibold">{fmt(s.missing)}</td>
+              <td className={`px-3 py-2 text-right tabular-nums font-semibold ${s.result < 0 ? "text-red-600" : "text-gray-900"}`}>{fmt(s.result)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }

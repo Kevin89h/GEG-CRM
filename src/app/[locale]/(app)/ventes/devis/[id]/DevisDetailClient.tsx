@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { useTranslations } from "next-intl"
 import { CheckCircle, Receipt, X, Printer, ArrowLeft, RotateCcw, Truck, Plus, Trash2, Copy } from "lucide-react"
@@ -14,6 +14,8 @@ import ActivityLog from "@/components/ActivityLog"
 import ShareButton from "@/components/ShareButton"
 import { PROJECT_OPTIONS } from "@/lib/projects"
 import { usePerms } from "@/components/PermissionsProvider"
+import { ProductPickerDialog, type CatalogProduct } from "@/components/sales/ProductPicker"
+import StockAlert, { type Availability } from "@/components/sales/StockAlert"
 
 interface Line {
   id: string
@@ -75,11 +77,13 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
   const { can } = usePerms()
   const [loading, setLoading] = useState(false)
   const [addingLine, setAddingLine] = useState(false)
-  const selectingProductRef = useRef(false)
+  // Catalogue picker: "new" adds a line, a line id attaches that free line to a product (R1)
+  const [pickerTarget, setPickerTarget] = useState<"new" | string | null>(null)
+  // Stock per product from /api/stock/disponibilite (used to recognise services, never stock-checked)
+  const [availability, setAvailability] = useState<Record<string, Availability>>({})
   const [activeTab, setActiveTab] = useState<"lines" | "other" | "notes">("lines")
   const [tva, setTva] = useState<boolean>(order.tva ?? false)
   const [lines, setLines] = useState<Line[]>(order.lines)
-  const [productSearch, setProductSearch] = useState<Record<string, string>>({})
   const [orderFields, setOrderFields] = useState({
     payment_terms: order.payment_terms ?? "",
     valid_until: order.valid_until ?? "",
@@ -267,40 +271,37 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
     }
   }
 
-  async function addLine() {
+  // R1: a new line is always created from an active catalogue product (designation and price taken from it)
+  async function addLine(p: CatalogProduct) {
     if (addingLine) return
     setAddingLine(true)
     try {
       const res = await fetch(`/api/devis/${order.id}/lines`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ description: "Nouvelle ligne", quantity: 1, unit_price: 0, discount: 0 }),
+        body: JSON.stringify({ product_id: p.id, quantity: 1, discount: 0 }),
       })
       const data = await res.json()
       if (!res.ok) {
         alert(`Erreur: ${data.error ?? res.status}`)
         return
       }
-      setLines(prev => [...prev, { ...data, product: null, unit: null, tva_exempt: false }])
+      const unit = allProducts.find(ap => ap.id === p.id)?.unit ?? (p.unit ? { name: p.unit } : null)
+      setLines(prev => [...prev, { ...data, product: { name: p.name, reference: p.reference }, unit, tva_exempt: data.tva_exempt ?? false }])
     } finally {
       setAddingLine(false)
     }
   }
 
-  async function selectProduct(lineId: string, productId: string) {
-    const p = allProducts.find(p => p.id === productId)
-    if (!p) return
-    selectingProductRef.current = false
-    setProductSearch(prev => ({ ...prev, [lineId]: "" }))
-    setLines(prev => prev.map(l => l.id === lineId ? {
-      ...l,
-      description: p.name,
-      unit_price: p.sale_price ?? l.unit_price,
-      product: { name: p.name, reference: p.reference },
-      unit: p.unit,
-    } : l))
-    await patchOrder({ product_id: productId, description: p.name, unit_price: p.sale_price ?? 0 }, `/api/devis/${order.id}/lines/${lineId}`)
+  // Attaches an old free line (no product) to a catalogue product; its description and price are kept
+  async function attachProduct(lineId: string, p: CatalogProduct) {
+    const ok = await patchOrder({ product_id: p.id }, `/api/devis/${order.id}/lines/${lineId}`)
+    if (!ok) return
+    const unit = allProducts.find(ap => ap.id === p.id)?.unit ?? (p.unit ? { name: p.unit } : null)
+    setLines(prev => prev.map(l => l.id === lineId ? { ...l, product_id: p.id, product: { name: p.name, reference: p.reference }, unit } : l))
   }
+
+  const freeLines = lines.filter(l => !l.product_id)
 
   // Sends only the changed field: for project_code the body is exactly { project_code }
   async function updateOrderField(field: string, value: string) {
@@ -767,45 +768,29 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                             />
                           )}
                         <div className="relative flex-1">
+                          {/* The product is fixed (chosen from the catalogue); only the line text stays editable */}
                           <input
                             className="w-full text-sm font-medium text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none py-0.5"
-                            value={productSearch[l.id] !== undefined ? productSearch[l.id] : l.description}
-                            onChange={e => setProductSearch(prev => ({ ...prev, [l.id]: e.target.value }))}
-                            onBlur={e => {
-                              if (selectingProductRef.current) return
-                              if (!productSearch[l.id]) return
-                              updateLine(l.id, "description", e.target.value)
-                              setTimeout(() => setProductSearch(prev => { const n = { ...prev }; delete n[l.id]; return n }), 200)
-                            }}
-                            placeholder="Description ou produit..."
+                            defaultValue={l.description}
+                            onBlur={e => { if (e.target.value !== l.description) updateLine(l.id, "description", e.target.value) }}
+                            placeholder="Description de la ligne"
                           />
-                          {productSearch[l.id] && productSearch[l.id].length > 0 && (() => {
-                            const q = productSearch[l.id].toLowerCase()
-                            const matches = allProducts.filter(p =>
-                              p.name.toLowerCase().includes(q) || (p.reference ?? "").toLowerCase().includes(q)
-                            ).slice(0, 8)
-                            return matches.length > 0 ? (
-                              <div className="absolute z-20 left-0 top-full mt-1 w-80 bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
-                                {matches.map(p => (
-                                  <button
-                                    key={p.id}
-                                    onMouseDown={() => { selectingProductRef.current = true; selectProduct(l.id, p.id) }}
-                                    className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center gap-2"
-                                  >
-                                    {p.image_url
-                                      ? <img src={p.image_url} alt="" className="w-8 h-8 rounded object-cover border border-gray-100 flex-shrink-0" />
-                                      : <div className="w-8 h-8 rounded bg-gray-100 flex-shrink-0" />
-                                    }
-                                    <span className="font-medium text-gray-900 truncate flex-1">{p.name}</span>
-                                    <span className="text-gray-400 text-xs shrink-0">
-                                      {p.sale_price != null ? `${formatNumber(p.sale_price)}` : ""}
-                                      {p.reference ? ` · ${p.reference}` : ""}
-                                    </span>
-                                  </button>
-                                ))}
-                              </div>
-                            ) : null
-                          })()}
+                          {l.product_id ? (
+                            l.product && (
+                              <p className="text-xs text-gray-400">
+                                {l.product.name}{l.product.reference && <span className="font-mono"> · {l.product.reference}</span>}
+                              </p>
+                            )
+                          ) : (
+                            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                              <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-medium">
+                                Ligne libre — à rattacher à un produit
+                              </span>
+                              <button type="button" onClick={() => setPickerTarget(l.id)} className="text-xs text-blue-600 hover:text-blue-500 font-medium">
+                                Rattacher à un produit
+                              </button>
+                            </div>
+                          )}
                         </div>
                         </div>
                       ) : (
@@ -817,6 +802,11 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                           <div>
                             <p className="font-medium text-gray-900">{l.description}</p>
                             {l.product?.reference && <p className="text-xs text-gray-400 font-mono">{l.product.reference}</p>}
+                            {!l.product_id && !isCancelled && !isInvoiced && (
+                              <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-medium">
+                                Ligne libre — à rattacher à un produit
+                              </span>
+                            )}
                           </div>
                         </div>
                       )}
@@ -862,6 +852,8 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                         const pid = (l as unknown as { product_id: string }).product_id
                         const status = getStockStatus(pid, l.quantity)
                         if (!pid) return <span className="text-gray-300 text-xs">—</span>
+                        // Services are never stock-checked (R5)
+                        if (availability[pid]?.service) return <span className="text-xs px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 font-medium">Service</span>
                         if (status === "ok") return <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">✓ {t("stockOk")}</span>
                         if (status === "low") return <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium">⚠ {t("stockLow")}</span>
                         return <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700 font-medium">✗ {t("stockNone")}</span>
@@ -897,16 +889,36 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
               </tbody>
             </table>
             {canEdit && (
-              <div className="px-4 py-3 border-t border-gray-50">
+              <div className="px-4 py-3 border-t border-gray-50 flex items-center gap-4 flex-wrap">
                 <button
-                  onClick={addLine}
+                  onClick={() => setPickerTarget("new")}
                   disabled={addingLine}
                   className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Plus className="w-4 h-4" />
                   {addingLine ? "Ajout..." : "Ajouter une ligne"}
                 </button>
+                <span className="text-xs text-gray-400">Chaque ligne doit être un produit ou un service du catalogue.</span>
               </div>
+            )}
+
+            {/* R1: free lines left from before the rule block the confirmation */}
+            {freeLines.length > 0 && !isCancelled && !isInvoiced && (
+              <div className="mx-4 mb-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                {freeLines.length > 1 ? `${freeLines.length} lignes libres` : "1 ligne libre"} sans produit du catalogue.
+                {order.status === "draft"
+                  ? " Le devis ne pourra pas être confirmé tant qu'elles ne sont pas rattachées à un produit ou un service du catalogue (ou supprimées)."
+                  : " Rattachez-les à un produit ou un service du catalogue."}
+              </div>
+            )}
+
+            {/* R3: non-blocking stock alerts (services never checked) */}
+            {!isCancelled && !isInvoiced && (
+              <StockAlert
+                className="mx-4 mb-3"
+                lines={lines.map(l => ({ product_id: l.product_id, quantity: l.quantity }))}
+                onAvailability={setAvailability}
+              />
             )}
 
             <div className="border-t border-gray-100 px-6 py-4 flex items-start justify-between gap-4">
@@ -993,6 +1005,20 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
         <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-4">Activité</p>
         <ActivityLog resource="devis" resourceId={order.id} />
       </div>
+
+      {/* Catalogue picker: add a line or attach a free line (creation inside, gated by "produits.gerer") */}
+      <ProductPickerDialog
+        open={pickerTarget !== null}
+        onClose={() => setPickerTarget(null)}
+        title={pickerTarget === "new" ? "Ajouter une ligne" : "Rattacher la ligne à un produit ou un service"}
+        locale={locale}
+        currency={orderFields.currency}
+        initialQuery={pickerTarget && pickerTarget !== "new" ? (lines.find(l => l.id === pickerTarget)?.description ?? "") : ""}
+        onSelect={p => {
+          if (pickerTarget === "new") addLine(p)
+          else if (pickerTarget) attachProduct(pickerTarget, p)
+        }}
+      />
 
       {/* Modal annulation devis */}
       <Modal open={cancelModalOpen} onClose={() => setCancelModalOpen(false)} title="Annuler le devis ?">

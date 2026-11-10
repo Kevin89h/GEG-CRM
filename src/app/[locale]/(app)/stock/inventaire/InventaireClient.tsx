@@ -11,6 +11,8 @@ interface Product {
   id: string
   name: string
   reference: string | null
+  /** false: deactivated product, listed only while it still holds stock */
+  is_active?: boolean
   unit: { name: string } | null
 }
 
@@ -65,12 +67,23 @@ export default function InventaireClient({ products, warehouses, levels }: Props
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [onlyNegative, setOnlyNegative] = useState(false)
+
+  // Products whose recorded stock is negative in at least one warehouse (delivery with derogation)
+  const negativeIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (const p of products) {
+      if (warehouses.some(w => (initialMap[p.id]?.[w.id] ?? 0) < 0)) ids.add(p.id)
+    }
+    return ids
+  }, [products, warehouses, initialMap])
 
   const filtered = useMemo(() =>
     products.filter(p =>
+      (!onlyNegative || negativeIds.has(p.id)) && (
       p.name.toLowerCase().includes(search.toLowerCase()) ||
-      (p.reference ?? "").toLowerCase().includes(search.toLowerCase())
-    ), [products, search])
+      (p.reference ?? "").toLowerCase().includes(search.toLowerCase()))
+    ), [products, search, onlyNegative, negativeIds])
 
   // Count modified cells
   const changedCount = useMemo(() => {
@@ -157,15 +170,26 @@ export default function InventaireClient({ products, warehouses, levels }: Props
       </div>
 
       {/* Search */}
-      <div className="relative mb-4">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-        <input
-          type="text"
-          placeholder="Rechercher un produit..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
+      <div className="flex flex-col sm:flex-row gap-3 mb-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Rechercher un produit..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+        </div>
+        {(negativeIds.size > 0 || onlyNegative) && (
+          <button
+            onClick={() => setOnlyNegative(v => !v)}
+            className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs rounded-lg font-medium transition ${onlyNegative ? "bg-red-600 text-white" : "bg-red-50 border border-red-200 text-red-700 hover:bg-red-100"}`}
+          >
+            <AlertTriangle className="w-3.5 h-3.5" />
+            Stock négatif ({negativeIds.size})
+          </button>
+        )}
       </div>
 
       {error && (
@@ -194,11 +218,17 @@ export default function InventaireClient({ products, warehouses, levels }: Props
                 return newVal !== (initialMap[p.id]?.[w.id] ?? 0)
               })
               return (
-                <tr key={p.id} className={`hover:bg-blue-50/20 transition-colors ${hasChange ? "bg-amber-50/40" : ""}`}>
+                <tr key={p.id} className={`hover:bg-blue-50/20 transition-colors ${hasChange ? "bg-amber-50/40" : negativeIds.has(p.id) ? "bg-red-50/40" : ""}`}>
                   <td className="px-4 py-2.5">
                     <span className="font-medium text-gray-900">{p.name}</span>
                     {p.reference && <span className="ml-2 text-xs text-gray-400 font-mono">{p.reference}</span>}
                     {p.unit && <span className="ml-2 text-xs text-gray-500">({p.unit.name})</span>}
+                    {p.is_active === false && (
+                      <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-gray-200 text-gray-700" title="Produit désactivé : non vendable, affiché car il détient encore du stock">Désactivé</span>
+                    )}
+                    {negativeIds.has(p.id) && (
+                      <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-red-100 text-red-700">Stock négatif</span>
+                    )}
                   </td>
                   {warehouses.map(w => {
                     const original = initialMap[p.id]?.[w.id] ?? 0
@@ -216,16 +246,18 @@ export default function InventaireClient({ products, warehouses, levels }: Props
                           className={`w-24 px-2 py-1.5 text-sm text-center border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition ${
                             changed
                               ? "border-amber-400 bg-amber-50 text-amber-900 font-semibold"
-                              : "border-gray-200 bg-white text-gray-700"
+                              : current < 0
+                                ? "border-red-300 bg-red-50 text-red-700 font-semibold"
+                                : "border-gray-200 bg-white text-gray-700"
                           }`}
                         />
                         {changed && (
-                          <div className="text-[10px] text-amber-600 mt-0.5">était {original}</div>
+                          <div className={`text-[10px] mt-0.5 ${original < 0 ? "text-red-600 font-semibold" : "text-amber-600"}`}>était {original}</div>
                         )}
                       </td>
                     )
                   })}
-                  <td className="px-4 py-2.5 text-right font-semibold text-gray-900">
+                  <td className={`px-4 py-2.5 text-right font-semibold ${total < 0 ? "text-red-600" : "text-gray-900"}`}>
                     {total.toLocaleString("fr")}
                   </td>
                 </tr>

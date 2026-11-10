@@ -7,6 +7,8 @@ import { useTranslations } from "next-intl"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { formatNumber } from "@/lib/utils"
 import { usePerms } from "@/components/PermissionsProvider"
+import { ProductPickerDialog, productTypeLabel, type CatalogProduct } from "@/components/sales/ProductPicker"
+import StockAlert from "@/components/sales/StockAlert"
 
 interface Account { id: string; name: string }
 interface Product { id: string; name: string; reference: string | null; sell_price: number; currency: string }
@@ -15,6 +17,7 @@ interface TreasuryAccount { id: string; name: string; type: string; currency: st
 interface Props {
   locale: string
   accounts: Account[]
+  // Still provided by the page; lines are now chosen through the catalogue picker (server search)
   products: Product[]
   treasuryAccounts: TreasuryAccount[]
 }
@@ -22,10 +25,13 @@ interface Props {
 let _uid = 0
 const uid = () => ++_uid
 
+// R1/H1: every line is an active catalogue product or service, chosen through the picker (no free or note line)
 interface Line {
   id: number
-  kind: "product" | "note"
   product_id: string
+  product_name: string
+  product_reference: string | null
+  product_type: string | null
   description: string
   quantity: string
   unit_price: string
@@ -123,102 +129,7 @@ function AccountPicker({ accounts, value, onSelect, onCreated, canCreate }: {
   )
 }
 
-function ProductPicker({ products, value, onChange, lineIndex, onCreated, canCreate }: {
-  products: Product[]
-  value: string
-  onChange: (lineIndex: number, product: Product | null, raw: string) => void
-  lineIndex: number
-  onCreated: (p: Product) => void
-  // Inline creation needs "produits.gerer"
-  canCreate: boolean
-}) {
-  const t = useTranslations("factures")
-  const [query, setQuery] = useState("")
-  const [open, setOpen] = useState(false)
-  const [creating, setCreating] = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-  const selected = products.find(p => p.id === value)
-
-  useEffect(() => {
-    if (selected) setQuery(selected.name)
-  }, [selected])
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false) }
-    document.addEventListener("mousedown", handler)
-    return () => document.removeEventListener("mousedown", handler)
-  }, [])
-
-  const filtered = products.filter(p =>
-    p.name.toLowerCase().includes(query.toLowerCase()) ||
-    (p.reference ?? "").toLowerCase().includes(query.toLowerCase())
-  ).slice(0, 20)
-
-  async function handleCreate() {
-    if (!query.trim() || creating) return
-    setCreating(true)
-    const res = await fetch("/api/stock/produits", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: query.trim() }),
-    })
-    const json = await res.json()
-    setCreating(false)
-    if (res.ok && json.id) {
-      const newProduct: Product = {
-        id: json.id,
-        name: json.name,
-        reference: json.reference ?? null,
-        sell_price: json.sell_price ?? 0,
-        currency: json.currency ?? "GNF",
-      }
-      onCreated(newProduct)
-      onChange(lineIndex, newProduct, newProduct.name)
-      setQuery(newProduct.name)
-      setOpen(false)
-    }
-  }
-
-  return (
-    <div ref={ref} className="relative">
-      <input
-        className="w-full text-sm px-2 py-1 outline-none bg-transparent placeholder-gray-300"
-        placeholder={t("searchProduct")}
-        value={query}
-        onFocus={() => setOpen(true)}
-        onChange={e => { setQuery(e.target.value); setOpen(true); onChange(lineIndex, null, e.target.value) }}
-      />
-      {open && (
-        <div className="absolute z-50 top-full mt-0.5 left-0 w-72 bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
-          <div className="max-h-48 overflow-y-auto">
-            {filtered.map(p => (
-              <div key={p.id} onMouseDown={() => { onChange(lineIndex, p, p.name); setQuery(p.name); setOpen(false) }}
-                className="px-3 py-2 hover:bg-blue-50 cursor-pointer">
-                <p className="text-sm font-medium text-gray-900">{p.name}</p>
-                {p.reference && <p className="text-xs text-gray-400 font-mono">{p.reference}</p>}
-              </div>
-            ))}
-          </div>
-          {canCreate && query.trim() && (
-            <div className="border-t border-gray-100 p-1.5">
-              <button
-                type="button"
-                onMouseDown={handleCreate}
-                disabled={creating}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-blue-600 hover:bg-blue-50 rounded-lg transition disabled:opacity-50"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                {creating ? "Création…" : `Créer « ${query.trim()} »`}
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
-export default function NouvelleFactureClient({ locale, accounts: initialAccounts, products: initialProducts, treasuryAccounts }: Props) {
+export default function NouvelleFactureClient({ locale, accounts: initialAccounts }: Props) {
   const t = useTranslations("factures")
   const router = useRouter()
   const { can } = usePerms()
@@ -226,7 +137,8 @@ export default function NouvelleFactureClient({ locale, accounts: initialAccount
   const [error, setError] = useState<string | null>(null)
 
   const [localAccounts, setLocalAccounts] = useState(initialAccounts)
-  const [localProducts, setLocalProducts] = useState(initialProducts)
+  // Catalogue picker: "new" adds a line, a line id replaces the product of that line
+  const [pickerTarget, setPickerTarget] = useState<"new" | number | null>(null)
 
   const [accountId, setAccountId] = useState("")
   const [currency, setCurrency] = useState<"GNF" | "USD" | "EUR" | "XOF">("GNF")
@@ -236,19 +148,24 @@ export default function NouvelleFactureClient({ locale, accounts: initialAccount
   const [lines, setLines] = useState<Line[]>([])
 
   const totals = lines.reduce((acc, l) => {
-    if (l.kind !== "product") return acc
     const qty = parseFloat(l.quantity) || 0
     const price = parseFloat(l.unit_price) || 0
     const disc = parseFloat(l.discount) || 0
     return acc + qty * price * (1 - disc / 100)
   }, 0)
 
-  function addProductLine() {
-    setLines(ls => [...ls, { id: uid(), kind: "product", product_id: "", description: "", quantity: "1", unit_price: "", discount: "0" }])
-  }
-
-  function addNoteLine() {
-    setLines(ls => [...ls, { id: uid(), kind: "note", product_id: "", description: "", quantity: "", unit_price: "", discount: "" }])
+  // A product chosen (or created) in the catalogue picker: adds a line or replaces the product of a line
+  function onProductPicked(target: "new" | number, p: CatalogProduct) {
+    const patch = {
+      product_id: p.id,
+      product_name: p.name,
+      product_reference: p.reference,
+      product_type: p.product_type,
+      description: p.name,
+      unit_price: String(p.sell_price ?? 0),
+    }
+    if (target === "new") setLines(ls => [...ls, { id: uid(), quantity: "1", discount: "0", ...patch }])
+    else setLines(ls => ls.map(l => l.id === target ? { ...l, ...patch } : l))
   }
 
   function removeLine(id: number) {
@@ -259,28 +176,25 @@ export default function NouvelleFactureClient({ locale, accounts: initialAccount
     setLines(ls => ls.map(l => l.id === id ? { ...l, [field]: val } : l))
   }
 
-  function handleProductSelect(lineIndex: number, product: Product | null, raw: string) {
-    setLines(ls => ls.map((l, i) => {
-      if (i !== lineIndex) return l
-      if (!product) return { ...l, description: raw, product_id: "" }
-      return { ...l, product_id: product.id, description: product.name, unit_price: String(product.sell_price) }
-    }))
-  }
-
   async function handleSave(status: "draft" | "sent") {
     if (!accountId) { setError(t("errorChooseClient")); return }
+    // R1: a line without catalogue product cannot be submitted (the server and the database refuse it too)
+    const missing = lines.map((l, i) => (l.product_id ? null : i + 1)).filter((n): n is number => n !== null)
+    if (missing.length) {
+      setError(`Ligne${missing.length > 1 ? "s" : ""} ${missing.join(", ")} sans produit du catalogue : chaque ligne doit être un produit ou un service du catalogue GEG. Choisissez-le avec « Changer » ou supprimez la ligne.`)
+      return
+    }
     setSaving(true); setError(null)
     const { supabase } = getCompanyClientBrowser()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setError(t("errorNotAuthenticated")); setSaving(false); return }
 
     const lineRows = lines
-      .filter(l => l.kind === "note" ? l.description.trim() : l.description.trim() || l.product_id)
       .map((l, i) => ({
-        product_id: l.product_id || null,
-        description: l.description || "",
-        quantity: l.kind === "note" ? 0 : parseFloat(l.quantity) || 1,
-        unit_price: l.kind === "note" ? 0 : parseFloat(l.unit_price) || 0,
+        product_id: l.product_id,
+        description: l.description.trim() || l.product_name,
+        quantity: parseFloat(l.quantity) || 1,
+        unit_price: parseFloat(l.unit_price) || 0,
         discount: parseFloat(l.discount) || 0,
         position: i,
         tva_rate: 0,
@@ -382,30 +296,27 @@ export default function NouvelleFactureClient({ locale, accounts: initialAccount
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {lines.map((line, idx) => {
-                if (line.kind === "note") return (
-                  <tr key={line.id} className="group">
-                    <td colSpan={5} className="py-2">
-                      <input
-                        className="w-full text-sm px-2 py-1 italic text-gray-500 outline-none bg-transparent placeholder-gray-300"
-                        placeholder={t("notePlaceholder")}
-                        value={line.description}
-                        onChange={e => updateLine(line.id, "description", e.target.value)}
-                      />
-                    </td>
-                    <td className="py-2 text-right">
-                      <button onClick={() => removeLine(line.id)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 transition-opacity">
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                )
-
+              {lines.map(line => {
                 const sub = (parseFloat(line.quantity) || 0) * (parseFloat(line.unit_price) || 0) * (1 - (parseFloat(line.discount) || 0) / 100)
                 return (
                   <tr key={line.id} className="group">
                     <td className="py-1.5 pr-2">
-                      <ProductPicker products={localProducts} value={line.product_id} onChange={handleProductSelect} lineIndex={idx} onCreated={(p) => setLocalProducts(prev => [...prev, p])} canCreate={can("produits.gerer")} />
+                      <div className="flex items-center gap-2 flex-wrap px-2">
+                        <span className="text-sm font-medium text-gray-900">{line.product_name}</span>
+                        {line.product_reference && <span className="text-xs text-gray-400 font-mono">{line.product_reference}</span>}
+                        <span className={`text-[11px] px-1.5 py-0.5 rounded font-medium ${line.product_type === "service" ? "bg-violet-100 text-violet-700" : "bg-gray-100 text-gray-500"}`}>
+                          {productTypeLabel(line.product_type)}
+                        </span>
+                        <button type="button" onClick={() => setPickerTarget(line.id)} className="text-xs text-gray-400 hover:text-blue-600 hover:underline">
+                          Changer
+                        </button>
+                      </div>
+                      <input
+                        className="w-full text-xs px-2 py-0.5 text-gray-500 outline-none bg-transparent placeholder-gray-300 border-b border-dashed border-transparent focus:border-gray-300"
+                        placeholder="Description (facultatif)"
+                        value={line.description}
+                        onChange={e => updateLine(line.id, "description", e.target.value)}
+                      />
                     </td>
                     <td className="py-1.5 px-1">
                       <input type="number" value={line.quantity} onChange={e => updateLine(line.id, "quantity", e.target.value)}
@@ -433,14 +344,16 @@ export default function NouvelleFactureClient({ locale, accounts: initialAccount
             </tbody>
           </table>
 
-          <div className="flex gap-4 mt-3">
-            <button onClick={addProductLine} className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-500 font-medium">
+          {/* Every line comes from the catalogue (R1: no free or note line) */}
+          <div className="flex items-center gap-4 mt-3">
+            <button onClick={() => setPickerTarget("new")} className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-500 font-medium">
               <Plus className="w-4 h-4" /> {t("addProduct")}
             </button>
-            <button onClick={addNoteLine} className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-600">
-              <Plus className="w-4 h-4" /> {t("addNote")}
-            </button>
+            <span className="text-xs text-gray-400">Chaque ligne doit être un produit ou un service du catalogue.</span>
           </div>
+
+          {/* R3: non-blocking stock alerts (services never checked) */}
+          <StockAlert className="mt-3" lines={lines.map(l => ({ product_id: l.product_id, quantity: l.quantity }))} />
         </div>
 
         {/* Total */}
@@ -461,6 +374,15 @@ export default function NouvelleFactureClient({ locale, accounts: initialAccount
             placeholder={t("notesPlaceholder")} />
         </div>
       </div>
+
+      {/* Catalogue picker (creation inside, gated by "produits.gerer") */}
+      <ProductPickerDialog
+        open={pickerTarget !== null}
+        onClose={() => setPickerTarget(null)}
+        locale={locale}
+        currency={currency}
+        onSelect={p => { if (pickerTarget !== null) onProductPicked(pickerTarget, p) }}
+      />
     </div>
   )
 }

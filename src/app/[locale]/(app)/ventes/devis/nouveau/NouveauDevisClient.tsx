@@ -9,6 +9,8 @@ import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { formatNumber } from "@/lib/utils"
 import { PROJECT_OPTIONS } from "@/lib/projects"
 import { usePerms } from "@/components/PermissionsProvider"
+import { ProductPickerDialog, productTypeLabel, type CatalogProduct } from "@/components/sales/ProductPicker"
+import StockAlert from "@/components/sales/StockAlert"
 
 /* --- Types ----------------------------------------------- */
 interface Account  { id: string; name: string; salesperson_id: string | null; cgv_text?: string | null }
@@ -26,11 +28,13 @@ interface Props {
   locale:    string
 }
 
-type LineKind = "product" | "note"
+// R1/H1: every line is an active catalogue product or service, chosen through the picker (no free or note line)
 interface Line {
   id: number
-  kind: LineKind
   product_id: string
+  product_name: string
+  product_reference: string | null
+  product_type: string | null
   description: string
   quantity: string
   unit_id: string
@@ -43,13 +47,6 @@ type Currency = "GNF" | "USD" | "EUR" | "XOF"
 
 let _id = 0
 const uid = () => ++_id
-
-function newProductLine(): Line {
-  return { id: uid(), kind: "product", product_id: "", description: "", quantity: "1", unit_id: "", unit_price: "0", discount: "0", tva_exempt: false }
-}
-function newNoteLine(): Line {
-  return { id: uid(), kind: "note", product_id: "", description: "", quantity: "", unit_id: "", unit_price: "", discount: "", tva_exempt: false }
-}
 
 /* --- Composant autocomplete client ------------------------ */
 function AccountPicker({ accounts, value, onSelect, onCreateNew }: {
@@ -134,88 +131,6 @@ function AccountPicker({ accounts, value, onSelect, onCreateNew }: {
   )
 }
 
-/* --- Composant autocomplete produit ----------------------- */
-function ProductPicker({ products, value, onChange, onCreateNew, lineIndex }: {
-  products: Product[]
-  value: string
-  onChange: (productId: string) => void
-  // Omitted when the user cannot create products ("produits.gerer")
-  onCreateNew?: (lineIndex: number) => void
-  lineIndex: number
-}) {
-  const t = useTranslations("devis")
-  const [query, setQuery] = useState("")
-  const [open, setOpen]   = useState(false)
-  const ref = useRef<HTMLDivElement>(null)
-  const selected = products.find(p => p.id === value)
-
-  const filtered = query.length > 0
-    ? products.filter(p =>
-        p.name.toLowerCase().includes(query.toLowerCase()) ||
-        (p.reference ?? "").toLowerCase().includes(query.toLowerCase())
-      ).slice(0, 12)
-    : products.slice(0, 12)
-
-  useEffect(() => {
-    function onClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener("mousedown", onClick)
-    return () => document.removeEventListener("mousedown", onClick)
-  }, [])
-
-  return (
-    <div ref={ref} className="relative">
-      <div
-        onClick={() => { setOpen(true); setQuery("") }}
-        className="flex items-center gap-1.5 cursor-text min-w-[180px]"
-      >
-        {selected && !open ? (
-          <span className="text-sm text-blue-700 font-medium">{selected.name}</span>
-        ) : (
-          <input
-            autoFocus={open}
-            value={query}
-            onChange={e => { setQuery(e.target.value); setOpen(true) }}
-            placeholder={t("chercherUnProduit")}
-            className="w-full text-sm outline-none bg-transparent placeholder-gray-400"
-          />
-        )}
-      </div>
-
-      {open && (
-        <div className="absolute z-50 top-full left-0 mt-1 min-w-[300px] bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
-          <div className="max-h-56 overflow-y-auto">
-            {filtered.length === 0 && (
-              <p className="px-4 py-2 text-sm text-gray-400">{t("aucunProduitTrouve")}</p>
-            )}
-            {filtered.map(p => (
-              <button
-                key={p.id}
-                onMouseDown={() => { onChange(p.id); setOpen(false); setQuery("") }}
-                className="w-full text-left px-4 py-2 text-sm hover:bg-blue-50 transition-colors"
-              >
-                <span className="font-medium">{p.name}</span>
-                {p.reference && <span className="text-xs text-gray-400 ml-2 font-mono">[{p.reference}]</span>}
-              </button>
-            ))}
-          </div>
-          {onCreateNew && (
-            <div className="border-t border-gray-100">
-              <button
-                onMouseDown={() => { setOpen(false); onCreateNew(lineIndex) }}
-                className="w-full text-left px-4 py-2 text-sm text-blue-600 font-medium hover:bg-blue-50 flex items-center gap-2"
-              >
-                <span className="text-lg leading-none">+</span> {t("nouveauProduit")}
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
 /* --- Modal wrapper ---------------------------------------- */
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
@@ -268,12 +183,8 @@ export default function NouveauDevisClient({
   const [cSaving, setCSaving] = useState(false)
   const [cError,  setCError]  = useState<string | null>(null)
 
-  /* Modal produit */
-  const [showProductModal, setShowProductModal] = useState(false)
-  const [pendingLineIndex,  setPendingLineIndex] = useState<number | null>(null)
-  const [pForm, setPForm] = useState({ name: "", reference: "", sell_price: "", unit_id: "" })
-  const [pSaving, setPSaving] = useState(false)
-  const [pError,  setPError]  = useState<string | null>(null)
+  /* Catalogue picker: "new" adds a line, a line id replaces the product of that line */
+  const [pickerTarget, setPickerTarget] = useState<"new" | number | null>(null)
 
   const PAYMENT_TERMS = [
     { value: "",          label: t("paymentTermImmediat") },
@@ -302,22 +213,36 @@ export default function NouveauDevisClient({
   }
 
   /* -- Helpers lignes -- */
-  function addProductLine() { setLines(ls => [...ls, newProductLine()]) }
-  function addNoteLine()    { setLines(ls => [...ls, newNoteLine()]) }
-
   function updateLine(lineId: number, patch: Partial<Line>) {
     setLines(ls => ls.map(l => l.id === lineId ? { ...l, ...patch } : l))
   }
 
-  function onProductSelected(lineId: number, productId: string) {
-    const p = products.find(p => p.id === productId)
-    const firstPkg = p?.packaging?.[0]
-    updateLine(lineId, {
-      product_id:  productId,
-      description: p?.name ?? "",
-      unit_price:  String(firstPkg?.sell_price ?? p?.sell_price ?? 0),
-      unit_id:     firstPkg?.unit_id ?? p?.unit?.id ?? "",
-    })
+  // A product chosen (or created) in the catalogue picker: adds a line or replaces the product of a line
+  function onProductPicked(target: "new" | number, cp: CatalogProduct) {
+    const known = products.find(p => p.id === cp.id)
+    const unitByName = cp.unit ? units.find(u => u.name === cp.unit) : undefined
+    if (!known) {
+      // Product created inline or not in the preloaded list: keep it for the unit selector
+      setProducts(prev => [...prev, {
+        id: cp.id, name: cp.name, reference: cp.reference, sell_price: cp.sell_price, currency: cp.currency ?? form.currency,
+        unit: unitByName ? { id: unitByName.id, name: unitByName.name } : null, unit_ids: null, packaging: null,
+      }].sort((a, b) => a.name.localeCompare(b.name)))
+    }
+    const firstPkg = known?.packaging?.[0]
+    const patch: Omit<Line, "id" | "quantity" | "discount" | "tva_exempt"> = {
+      product_id:        cp.id,
+      product_name:      cp.name,
+      product_reference: cp.reference,
+      product_type:      cp.product_type,
+      description:       cp.name,
+      unit_price:        String(firstPkg?.sell_price ?? known?.sell_price ?? cp.sell_price ?? 0),
+      unit_id:           firstPkg?.unit_id ?? known?.unit?.id ?? unitByName?.id ?? "",
+    }
+    if (target === "new") {
+      setLines(ls => [...ls, { id: uid(), quantity: "1", discount: "0", tva_exempt: false, ...patch }])
+    } else {
+      updateLine(target, patch)
+    }
   }
 
   function onUnitChanged(lineId: number, unitId: string) {
@@ -336,7 +261,6 @@ export default function NouveauDevisClient({
   }
 
   function lineTotal(l: Line) {
-    if (l.kind === "note") return 0
     return (parseFloat(l.quantity) || 0) * (parseFloat(l.unit_price) || 0) * (1 - (parseFloat(l.discount) || 0) / 100)
   }
 
@@ -368,49 +292,16 @@ export default function NouveauDevisClient({
     }
   }
 
-  /* -- Création produit -- */
-  function openProductModal(lineIndex: number) {
-    setPendingLineIndex(lineIndex)
-    setPForm({ name: "", reference: "", sell_price: "", unit_id: units[0]?.id ?? "" })
-    setPError(null)
-    setShowProductModal(true)
-  }
-
-  async function handleCreateProduct() {
-    if (!pForm.name.trim()) { setPError(t("erreurNomRequis")); return }
-    setPSaving(true); setPError(null)
-    const res = await fetch("/api/stock/produits", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: pForm.name.trim(), reference: pForm.reference || null, sell_price: pForm.sell_price ? parseFloat(pForm.sell_price) : null, currency: form.currency, unit_id: pForm.unit_id || null, is_active: true }),
-    })
-    const json = await res.json()
-    if (!res.ok) { setPError(json.error ?? t("erreur")); setPSaving(false); return }
-    const unitObj = units.find(u => u.id === json.unit_id) ?? null
-    const productWithUnit = { ...json, unit: unitObj ? { id: unitObj.id, name: unitObj.name } : null }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    setProducts(prev => [...prev, productWithUnit as any].sort((a, b) => a.name.localeCompare(b.name)))
-    if (pendingLineIndex !== null) {
-      const targetLine = lines[pendingLineIndex]
-      if (targetLine) {
-        updateLine(targetLine.id, {
-          product_id: json.id,
-          description: json.name,
-          unit_price: String(json.sell_price ?? 0),
-          unit_id: unitObj?.id ?? "",
-        })
-      }
-    }
-    setShowProductModal(false)
-    setPSaving(false)
-  }
-
   /* -- Enregistrement -- */
   async function handleSave() {
     if (!form.account_id) { setError(t("veuillezselectionnerclient")); return }
-    const productLines = lines.filter(l => l.kind === "product")
-    if (productLines.length === 0) { setError(t("ajoutezAuMoinsUnProduit")); return }
-    if (productLines.some(l => !l.description.trim() && !l.product_id)) { setError(t("chaqueLineProduitDescription")); return }
+    if (lines.length === 0) { setError(t("ajoutezAuMoinsUnProduit")); return }
+    // R1: a line without catalogue product cannot be submitted (the server and the database refuse it too)
+    const missing = lines.map((l, i) => (l.product_id ? null : i + 1)).filter((n): n is number => n !== null)
+    if (missing.length) {
+      setError(`Ligne${missing.length > 1 ? "s" : ""} ${missing.join(", ")} sans produit du catalogue : chaque ligne doit être un produit ou un service du catalogue GEG. Choisissez-le avec « Changer » ou supprimez la ligne.`)
+      return
+    }
 
     setSaving(true); setError(null)
     const { supabase } = getCompanyClientBrowser()
@@ -440,8 +331,8 @@ export default function NouveauDevisClient({
           terms_conditions: tc,
         },
         lines: lines.map((l, i) => ({
-          product_id: l.product_id || null,
-          description: l.description.trim() || (l.product_id ? (products.find(p => p.id === l.product_id)?.name ?? "") : ""),
+          product_id: l.product_id,
+          description: l.description.trim() || l.product_name,
           quantity: parseFloat(l.quantity) || 1,
           unit_price: parseFloat(l.unit_price) || 0,
           discount: parseFloat(l.discount) || 0,
@@ -694,121 +585,102 @@ export default function NouveauDevisClient({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {lines.map((l, i) => (
+                  {lines.map(l => (
                     <tr key={l.id} className="group hover:bg-gray-50/50">
-                      {l.kind === "note" ? (
-                        <>
-                          <td colSpan={5} className="px-8 py-2">
-                            <input
-                              value={l.description}
-                              onChange={e => updateLine(l.id, { description: e.target.value })}
-                              placeholder={t("notePlaceholder")}
-                              className="w-full text-sm text-gray-500 italic outline-none bg-transparent border-b border-dashed border-gray-200 focus:border-blue-400 py-0.5"
-                            />
-                          </td>
-                          <td className="px-8 py-2 text-right text-gray-400 text-xs">note</td>
-                          <td className="pr-2 py-2">
-                            <button onClick={() => removeLine(l.id)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 transition">
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          </td>
-                        </>
-                      ) : (
-                        <>
-                          <td className="px-8 py-2">
-                            <ProductPicker
-                              products={products}
-                              value={l.product_id}
-                              onChange={productId => onProductSelected(l.id, productId)}
-                              onCreateNew={can("produits.gerer") ? () => openProductModal(i) : undefined}
-                              lineIndex={i}
-                            />
-                            {l.product_id && (
-                              <input
-                                value={l.description}
-                                onChange={e => updateLine(l.id, { description: e.target.value })}
-                                placeholder={t("descriptionPlaceholder")}
-                                className="mt-0.5 w-full text-xs text-gray-500 outline-none bg-transparent border-b border-dashed border-transparent focus:border-gray-300 py-0.5"
-                              />
-                            )}
-                          </td>
-                          <td className="px-3 py-2">
-                            <input
-                              type="number" min="0" step="any" value={l.quantity}
-                              onChange={e => updateLine(l.id, { quantity: e.target.value })}
-                              className="w-full text-right text-sm outline-none bg-transparent border-b border-transparent hover:border-gray-200 focus:border-blue-400 py-0.5"
-                            />
-                          </td>
-                          <td className="px-3 py-2">
-                            {(() => {
-                              const prod = products.find(p => p.id === l.product_id)
-                              const pkgUnitIds = prod?.packaging?.map(pk => pk.unit_id)
-                              const availableUnits = pkgUnitIds?.length
-                                ? units.filter(u => pkgUnitIds.includes(u.id))
-                                : prod?.unit_ids?.length
-                                  ? units.filter(u => prod.unit_ids!.includes(u.id))
-                                  : units
-                              return (
-                                <select
-                                  value={l.unit_id}
-                                  onChange={e => onUnitChanged(l.id, e.target.value)}
-                                  className="w-full text-sm bg-transparent outline-none border-b border-transparent hover:border-gray-200 focus:border-blue-400 py-0.5"
-                                >
-                                  <option value="">—</option>
-                                  {availableUnits.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                                </select>
-                              )
-                            })()}
-                          </td>
-                          <td className="px-3 py-2">
-                            <input
-                              type="number" min="0" step="any" value={l.unit_price}
-                              onChange={e => updateLine(l.id, { unit_price: e.target.value })}
-                              className="w-full text-right text-sm outline-none bg-transparent border-b border-transparent hover:border-gray-200 focus:border-blue-400 py-0.5"
-                            />
-                          </td>
-                          <td className="px-3 py-2">
-                            <input
-                              type="number" min="0" max="100" step="0.1" value={l.discount}
-                              onChange={e => updateLine(l.id, { discount: e.target.value })}
-                              className="w-full text-right text-sm outline-none bg-transparent border-b border-transparent hover:border-gray-200 focus:border-blue-400 py-0.5"
-                            />
-                          </td>
-                          <td className="px-8 py-2 text-right text-sm font-medium text-gray-800 whitespace-nowrap">
-                            {formatNumber(lineTotal(l))}
-                          </td>
-                          {form.tva && (
-                            <td className="px-3 py-2 text-center">
-                              <button
-                                onClick={() => updateLine(l.id, { tva_exempt: !l.tva_exempt })}
-                                className={`w-8 h-4 rounded-full transition-colors relative cursor-pointer ${l.tva_exempt ? "bg-orange-500" : "bg-gray-200"}`}
-                              >
-                                <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${l.tva_exempt ? "translate-x-4" : "translate-x-0.5"}`} />
-                              </button>
-                            </td>
-                          )}
-                          <td className="pr-2 py-2">
-                            <button onClick={() => removeLine(l.id)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 transition">
-                              <X className="w-3.5 h-3.5" />
-                            </button>
-                          </td>
-                        </>
+                      <td className="px-8 py-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm text-blue-700 font-medium">{l.product_name}</span>
+                          {l.product_reference && <span className="text-xs text-gray-400 font-mono">[{l.product_reference}]</span>}
+                          <span className={`text-[11px] px-1.5 py-0.5 rounded font-medium ${l.product_type === "service" ? "bg-violet-100 text-violet-700" : "bg-gray-100 text-gray-500"}`}>
+                            {productTypeLabel(l.product_type)}
+                          </span>
+                          <button type="button" onClick={() => setPickerTarget(l.id)} className="text-xs text-gray-400 hover:text-blue-600 hover:underline">
+                            Changer
+                          </button>
+                        </div>
+                        <input
+                          value={l.description}
+                          onChange={e => updateLine(l.id, { description: e.target.value })}
+                          placeholder={t("descriptionPlaceholder")}
+                          className="mt-0.5 w-full text-xs text-gray-500 outline-none bg-transparent border-b border-dashed border-transparent focus:border-gray-300 py-0.5"
+                        />
+                      </td>
+                      <td className="px-3 py-2">
+                        <input
+                          type="number" min="0" step="any" value={l.quantity}
+                          onChange={e => updateLine(l.id, { quantity: e.target.value })}
+                          className="w-full text-right text-sm outline-none bg-transparent border-b border-transparent hover:border-gray-200 focus:border-blue-400 py-0.5"
+                        />
+                      </td>
+                      <td className="px-3 py-2">
+                        {(() => {
+                          const prod = products.find(p => p.id === l.product_id)
+                          const pkgUnitIds = prod?.packaging?.map(pk => pk.unit_id)
+                          const availableUnits = pkgUnitIds?.length
+                            ? units.filter(u => pkgUnitIds.includes(u.id))
+                            : prod?.unit_ids?.length
+                              ? units.filter(u => prod.unit_ids!.includes(u.id))
+                              : units
+                          return (
+                            <select
+                              value={l.unit_id}
+                              onChange={e => onUnitChanged(l.id, e.target.value)}
+                              className="w-full text-sm bg-transparent outline-none border-b border-transparent hover:border-gray-200 focus:border-blue-400 py-0.5"
+                            >
+                              <option value="">—</option>
+                              {availableUnits.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                            </select>
+                          )
+                        })()}
+                      </td>
+                      <td className="px-3 py-2">
+                        <input
+                          type="number" min="0" step="any" value={l.unit_price}
+                          onChange={e => updateLine(l.id, { unit_price: e.target.value })}
+                          className="w-full text-right text-sm outline-none bg-transparent border-b border-transparent hover:border-gray-200 focus:border-blue-400 py-0.5"
+                        />
+                      </td>
+                      <td className="px-3 py-2">
+                        <input
+                          type="number" min="0" max="100" step="0.1" value={l.discount}
+                          onChange={e => updateLine(l.id, { discount: e.target.value })}
+                          className="w-full text-right text-sm outline-none bg-transparent border-b border-transparent hover:border-gray-200 focus:border-blue-400 py-0.5"
+                        />
+                      </td>
+                      <td className="px-8 py-2 text-right text-sm font-medium text-gray-800 whitespace-nowrap">
+                        {formatNumber(lineTotal(l))}
+                      </td>
+                      {form.tva && (
+                        <td className="px-3 py-2 text-center">
+                          <button
+                            onClick={() => updateLine(l.id, { tva_exempt: !l.tva_exempt })}
+                            className={`w-8 h-4 rounded-full transition-colors relative cursor-pointer ${l.tva_exempt ? "bg-orange-500" : "bg-gray-200"}`}
+                          >
+                            <div className={`absolute top-0.5 w-3 h-3 rounded-full bg-white shadow transition-transform ${l.tva_exempt ? "translate-x-4" : "translate-x-0.5"}`} />
+                          </button>
+                        </td>
                       )}
+                      <td className="pr-2 py-2">
+                        <button onClick={() => removeLine(l.id)} className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 transition">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             )}
 
-            {/* Liens Ajouter — style Odoo */}
+            {/* Liens Ajouter — style Odoo. Every line comes from the catalogue (R1: no free or note line) */}
             <div className="px-8 py-3 flex items-center gap-5 border-t border-gray-50">
-              <button onClick={addProductLine} className="text-sm text-blue-600 hover:text-blue-500 font-medium transition-colors">
+              <button onClick={() => setPickerTarget("new")} className="text-sm text-blue-600 hover:text-blue-500 font-medium transition-colors">
                 {t("ajouterUnProduit")}
               </button>
-              <button onClick={addNoteLine} className="text-sm text-blue-600 hover:text-blue-500 font-medium transition-colors">
-                {t("ajouterUneNote")}
-              </button>
+              <span className="text-xs text-gray-400">Chaque ligne doit être un produit ou un service du catalogue.</span>
             </div>
+
+            {/* R3: non-blocking stock alerts (services never checked) */}
+            <StockAlert className="px-8 pb-3" lines={lines.map(l => ({ product_id: l.product_id, quantity: l.quantity }))} />
 
             {/* Zone conditions + totaux */}
             <div className="border-t border-gray-100 px-8 py-5 flex gap-8">
@@ -920,6 +792,15 @@ export default function NouveauDevisClient({
         <div className="mt-4 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">{error}</div>
       )}
 
+      {/* -- Catalogue picker (creation inside, gated by "produits.gerer") -- */}
+      <ProductPickerDialog
+        open={pickerTarget !== null}
+        onClose={() => setPickerTarget(null)}
+        locale={locale}
+        currency={form.currency}
+        onSelect={p => { if (pickerTarget !== null) onProductPicked(pickerTarget, p) }}
+      />
+
       {/* -- Modal Nouveau client ------------------------------- */}
       {showClientModal && (
         <Modal title={t("modalNouveauClient")} onClose={() => setShowClientModal(false)}>
@@ -950,37 +831,6 @@ export default function NouveauDevisClient({
               <button onClick={() => setShowClientModal(false)} className="flex-1 py-2 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">{t("annuler")}</button>
               <button onClick={handleCreateClient} disabled={cSaving || !cForm.name.trim()} className="flex-1 py-2 text-sm font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-40">
                 {cSaving ? t("creationEnCours") : t("creerEtSelectionner")}
-              </button>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {/* -- Modal Nouveau produit ------------------------------ */}
-      {showProductModal && (
-        <Modal title={t("modalNouveauProduit")} onClose={() => setShowProductModal(false)}>
-          <div className="space-y-4">
-            <LabeledInput label={t("nomDuProduitLabel")} value={pForm.name} onChange={v => setPForm(f => ({ ...f, name: v }))} placeholder={t("nomDuProduitPlaceholder")} autoFocus />
-            <div className="grid grid-cols-2 gap-3">
-              <LabeledInput label={t("referenceLabel")} value={pForm.reference} onChange={v => setPForm(f => ({ ...f, reference: v }))} placeholder="LUB-20L" />
-              <div>
-                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">{t("uniteDeMesureLabel")}</label>
-                <select
-                  value={pForm.unit_id}
-                  onChange={e => setPForm(f => ({ ...f, unit_id: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">—</option>
-                  {units.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                </select>
-              </div>
-            </div>
-            <LabeledInput label={t("prixDeVenteLabel", { currency: form.currency })} type="number" value={pForm.sell_price} onChange={v => setPForm(f => ({ ...f, sell_price: v }))} placeholder="0" />
-            {pError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg">{pError}</p>}
-            <div className="flex gap-3 pt-2">
-              <button onClick={() => setShowProductModal(false)} className="flex-1 py-2 text-sm border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">{t("annuler")}</button>
-              <button onClick={handleCreateProduct} disabled={pSaving || !pForm.name.trim()} className="flex-1 py-2 text-sm font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-40">
-                {pSaving ? t("creationEnCours") : t("creerEtAjouter")}
               </button>
             </div>
           </div>

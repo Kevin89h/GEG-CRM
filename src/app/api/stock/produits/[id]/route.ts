@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSchemaFromRequest } from "@/lib/company"
 import { createSchemaClient } from "@/lib/supabase/admin"
-import { hasPermission } from "@/lib/access"
+import { errorResponse, hasPermission, requirePermission } from "@/lib/access"
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try { await requirePermission("produits.gerer") } catch (e) { return errorResponse(e) }
   const { id } = await params
   const body = await req.json()
   const schema = await getSchemaFromRequest(req)

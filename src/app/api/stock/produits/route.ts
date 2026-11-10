@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getSchemaFromRequest } from "@/lib/company"
 import { createSchemaClient } from "@/lib/supabase/admin"
-import { errorResponse, requirePermission } from "@/lib/access"
+import { errorResponse, hasPermission, requirePermission } from "@/lib/access"
 import { SENSITIVE, sensitiveFilter } from "@/lib/sensitive"
 
 // GET: active products for pickers (e.g. new purchase order). Purchase price blanked without "produits.prix_achat".
@@ -19,9 +19,18 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest)  {
   try {
+    await requirePermission("produits.gerer")
     const body = await req.json()
     const schema = await getSchemaFromRequest(req)
     const db = createSchemaClient(schema)
+
+    // Product type is a required, explicit choice (R5: services never hold stock)
+    const TYPES = ["storable", "consumable", "service"]
+    if (body.product_type !== undefined && !TYPES.includes(body.product_type)) {
+      return NextResponse.json({ error: "Type de produit invalide (marchandise, consommable ou service)" }, { status: 400 })
+    }
+    // Purchase price only with "produits.prix_achat" (E5)
+    const seeBuy = await hasPermission("produits.prix_achat")
 
     const ALLOWED_CURRENCIES = ["GNF", "USD", "EUR"]
     const normalizeCurrency = (c: string) => ALLOWED_CURRENCIES.includes(c) ? c : "GNF"
@@ -45,12 +54,13 @@ export async function POST(req: NextRequest)  {
       .insert([{
         name: body.name,
         product_code,
+        product_type: body.product_type ?? "storable",
         reference: body.reference ?? null,
         description: body.description ?? null,
         category_id: body.category_id ?? null,
         unit_id: (body.unit_ids as string[] | null)?.length ? body.unit_ids[0] : (body.unit_id ?? null),
         unit_ids: (body.unit_ids as string[] | null)?.length ? body.unit_ids : null,
-        buy_price: body.buy_price ?? null,
+        buy_price: seeBuy ? body.buy_price ?? null : null,
         buy_price_currency: normalizeCurrency(body.buy_price_currency ?? "GNF"),
         sell_price: body.sell_price ?? null,
         currency: normalizeCurrency(body.currency ?? "GNF"),

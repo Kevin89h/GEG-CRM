@@ -1,10 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useTranslations } from "next-intl"
-import { Plus, Search, Package, Download, Trash2 } from "lucide-react"
+import { Plus, Search, Package, Download, Trash2, AlertTriangle, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { Badge } from "@/components/ui/Badge"
 import { Modal } from "@/components/ui/Modal"
@@ -53,6 +53,39 @@ const colorMap: Record<string, "blue" | "yellow" | "gray" | "green" | "purple"> 
   blue: "blue", yellow: "yellow", gray: "gray", green: "green", purple: "purple",
 }
 
+type ProductType = "storable" | "service" | "consumable"
+
+const PRODUCT_TYPE_OPTIONS: { value: ProductType; label: string; hint: string }[] = [
+  { value: "storable", label: "Marchandise", hint: "Article stocké, suivi en stock" },
+  { value: "consumable", label: "Consommable", hint: "Article consommé, non suivi en stock" },
+  { value: "service", label: "Service", hint: "Prestation : jamais de stock" },
+]
+
+const PRODUCT_TYPE_LABELS: Record<string, string> = { storable: "Marchandise", consumable: "Consommable", service: "Service" }
+
+/** Catalogue search result (/api/produits/recherche), without purchase prices */
+interface SimilarItem {
+  id: string
+  name: string
+  reference: string | null
+  product_code: string | null
+  merchant_reference: string | null
+  product_type: string | null
+  is_active: boolean
+  category: string | null
+  unit: string | null
+  packagings: string[]
+  score: number
+  reasons: string[]
+}
+
+// A close match that the server already flags as a different article (other packaging or viscosity)
+// must not block the creation (e.g. 20 L vs 205 L of the same oil)
+function isDistinctItem(s: SimilarItem): boolean {
+  if (s.reasons.includes("correspondance exacte")) return false
+  return s.reasons.some(r => r.includes("article distinct") || r.startsWith("viscosité différente"))
+}
+
 export default function ProduitsClient({ products: initial, categories, units, canWrite }: Props) {
   const t = useTranslations("produits")
   const params = useParams()
@@ -77,9 +110,15 @@ export default function ProduitsClient({ products: initial, categories, units, c
   const [form, setForm] = useState({
     reference: "", name: "", description: "",
     category_id: categories[0]?.id ?? "",
+    product_type: "" as ProductType | "",
     sell_price: "", currency: "GNF" as Currency,
     buy_price: "", buy_price_currency: "GNF" as Currency,
   })
+  // Anti-duplicate check (H1): similar catalogue items for the designation being typed
+  const [similar, setSimilar] = useState<SimilarItem[]>([])
+  const [similarFor, setSimilarFor] = useState("")
+  const [similarLoading, setSimilarLoading] = useState(false)
+  const [confirmNoMatch, setConfirmNoMatch] = useState(false)
   const [pkgRows, setPkgRows] = useState<PkgFormRow[]>([])
   const [showNewFormat, setShowNewFormat] = useState(false)
   const [newFormatName, setNewFormatName] = useState("")
@@ -113,6 +152,43 @@ export default function ProduitsClient({ products: initial, categories, units, c
     setNewFormatSaving(false)
   }
 
+  async function fetchSimilar(q: string, signal?: AbortSignal): Promise<SimilarItem[]> {
+    if (q.length < 2) return []
+    const res = await fetch(`/api/produits/recherche?q=${encodeURIComponent(q)}`, { signal })
+    if (!res.ok) return []
+    const json = await res.json()
+    return (json.results ?? []) as SimilarItem[]
+  }
+
+  // Debounced search while the designation is typed
+  useEffect(() => {
+    if (!modalOpen) return
+    const q = form.name.trim()
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => {
+      if (q.length < 2) { setSimilar([]); setSimilarFor(q); setSimilarLoading(false); return }
+      setSimilarLoading(true)
+      fetchSimilar(q, ctrl.signal)
+        .then(results => { setSimilar(results); setSimilarFor(q); setConfirmNoMatch(false) })
+        .catch(() => { /* aborted or network error: the check runs again on save */ })
+        .finally(() => { if (!ctrl.signal.aborted) setSimilarLoading(false) })
+    }, 400)
+    return () => { clearTimeout(timer); ctrl.abort() }
+  }, [form.name, modalOpen])
+
+  // Active close matches that are not flagged as distinct articles require an explicit confirmation
+  const blockingSimilar = similar.filter(s => s.is_active && !isDistinctItem(s))
+
+  function resetModal() {
+    setModalOpen(false)
+    setSaveError("")
+    setShowNewFormat(false)
+    setNewFormatName("")
+    setSimilar([])
+    setSimilarFor("")
+    setConfirmNoMatch(false)
+  }
+
   const filtered = products.filter(p => {
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
       (p.reference ?? "").toLowerCase().includes(search.toLowerCase()) ||
@@ -122,8 +198,31 @@ export default function ProduitsClient({ products: initial, categories, units, c
   })
 
   async function handleSave() {
+    if (!form.product_type) {
+      setSaveError("Choisissez le type d'article : Marchandise, Service ou Consommable.")
+      return
+    }
     setSaving(true)
     setSaveError("")
+    // Anti-duplicate check before saving: make sure the results match the final designation
+    let current = similar
+    const q = form.name.trim()
+    if (similarFor !== q) {
+      try {
+        current = await fetchSimilar(q)
+        setSimilar(current)
+        setSimilarFor(q)
+        setConfirmNoMatch(false)
+      } catch {
+        current = []
+      }
+    }
+    const blocking = current.filter(s => s.is_active && !isDistinctItem(s))
+    if (blocking.length > 0 && !(confirmNoMatch && similarFor === q)) {
+      setSaveError("Des articles similaires existent déjà. Vérifiez-les ou confirmez qu'aucun ne correspond avant de créer.")
+      setSaving(false)
+      return
+    }
     // Derive unit_ids from packaging rows for backwards compat
     const validPkg = pkgRows.filter(r => r.unit_id)
     const unit_ids = validPkg.length > 0 ? validPkg.map(r => r.unit_id) : null
@@ -135,6 +234,7 @@ export default function ProduitsClient({ products: initial, categories, units, c
         reference: form.reference || null,
         description: form.description || null,
         category_id: form.category_id || null,
+        product_type: form.product_type,
         unit_ids,
         buy_price: form.buy_price ? parseFloat(form.buy_price) : null,
         buy_price_currency: form.buy_price_currency,
@@ -147,6 +247,15 @@ export default function ProduitsClient({ products: initial, categories, units, c
       setSaveError(json.error ?? "Erreur serveur")
       setSaving(false)
       return
+    }
+    // The creation route may ignore the type: set it explicitly when it differs
+    if (json.product_type !== form.product_type) {
+      const typeRes = await fetch(`/api/stock/produits/${json.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ product_type: form.product_type }),
+      })
+      if (typeRes.ok) json.product_type = form.product_type
     }
     // Save packaging rows if any
     if (validPkg.length > 0) {
@@ -165,12 +274,9 @@ export default function ProduitsClient({ products: initial, categories, units, c
       })
     }
     setProducts(prev => [{ ...json, packaging: validPkg.length > 0 ? validPkg : null }, ...prev])
-    setModalOpen(false)
-    setSaveError("")
-    setShowNewFormat(false)
-    setNewFormatName("")
+    resetModal()
     setPkgRows([])
-    setForm({ reference: "", name: "", description: "", category_id: categories[0]?.id ?? "", sell_price: "", currency: "GNF", buy_price: "", buy_price_currency: "GNF" })
+    setForm({ reference: "", name: "", description: "", category_id: categories[0]?.id ?? "", product_type: "", sell_price: "", currency: "GNF", buy_price: "", buy_price_currency: "GNF" })
     setSaving(false)
   }
 
@@ -260,7 +366,12 @@ export default function ProduitsClient({ products: initial, categories, units, c
             <tbody className="divide-y divide-gray-50">
               {filtered.map(p => (
                 <tr key={p.id} className="hover:bg-blue-50/30 transition-colors cursor-pointer" onClick={() => window.location.href = `/${locale}/stock/produits/${p.id}`}>
-                  <td className="px-4 py-3 font-medium text-gray-900">{p.name}</td>
+                  <td className={`px-4 py-3 font-medium ${p.is_active ? "text-gray-900" : "text-gray-500"}`}>
+                    {p.name}
+                    {!p.is_active && (
+                      <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-gray-200 text-gray-700 align-middle" title="Non vendable ; reste dans l'historique et les écrans de stock">Désactivé</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-blue-700 font-mono text-xs font-semibold">{p.product_code ?? "—"}</td>
                   <td className="px-4 py-3 text-gray-500 font-mono text-xs">{p.reference ?? "—"}</td>
                   <td className="px-4 py-3">
@@ -299,13 +410,109 @@ export default function ProduitsClient({ products: initial, categories, units, c
       )}
 
       {/* Modal nouveau produit */}
-      <Modal open={modalOpen && canWrite} onClose={() => setModalOpen(false)} title={t("nouveauProduit")}>
+      <Modal open={modalOpen && canWrite} onClose={resetModal} title={t("nouveauProduit")} className="max-w-2xl">
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="col-span-1 sm:col-span-2">
               <Input label={t("nomDuProduit")} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} required />
             </div>
             <Input label={`${t("reference")} (optionnel)`} value={form.reference} onChange={e => setForm(f => ({ ...f, reference: e.target.value }))} placeholder="ex: CIM-42.5-001" />
+          </div>
+
+          {/* Articles similaires (contrôle anti-doublon) */}
+          {form.name.trim().length >= 2 && (similarLoading || similar.length > 0) && (
+            <div className={`rounded-lg border p-3 ${blockingSimilar.length > 0 ? "border-amber-300 bg-amber-50" : "border-gray-200 bg-gray-50"}`}>
+              <div className="flex items-center gap-2 mb-2">
+                <AlertTriangle className={`w-4 h-4 ${blockingSimilar.length > 0 ? "text-amber-600" : "text-gray-400"}`} />
+                <p className="text-sm font-semibold text-gray-800">
+                  Articles similaires {similarLoading ? "(recherche…)" : `(${similar.length})`}
+                </p>
+              </div>
+              {similar.length > 0 && (
+                <>
+                  <p className="text-xs text-gray-600 mb-2">
+                    Vérifiez que l&apos;article n&apos;existe pas déjà. Un conditionnement ou une viscosité différente correspond à un article distinct.
+                  </p>
+                  <ul className="space-y-2 max-h-64 overflow-y-auto">
+                    {similar.map(s => {
+                      const distinct = isDistinctItem(s)
+                      return (
+                        <li key={s.id} className={`rounded-md border bg-white px-3 py-2 text-xs ${!s.is_active ? "border-gray-200 opacity-75" : distinct ? "border-gray-200" : "border-amber-300"}`}>
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="font-semibold text-gray-900 text-sm">
+                                {s.name}
+                                {!s.is_active && <span className="ml-2 inline-flex px-1.5 py-0.5 rounded bg-gray-200 text-gray-700 text-[10px] font-semibold align-middle">Désactivé</span>}
+                                {s.is_active && distinct && <span className="ml-2 inline-flex px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 text-[10px] font-semibold align-middle">Article distinct</span>}
+                              </p>
+                              <p className="text-gray-600 mt-0.5">
+                                {[
+                                  s.product_code,
+                                  s.reference ? `Réf. ${s.reference}` : null,
+                                  s.merchant_reference,
+                                  s.product_type ? (PRODUCT_TYPE_LABELS[s.product_type] ?? s.product_type) : null,
+                                  s.category ? `Catégorie : ${s.category}` : null,
+                                  s.unit ? `Unité : ${s.unit}` : null,
+                                  s.packagings.length > 0 ? `Conditionnements : ${s.packagings.join(", ")}` : null,
+                                ].filter(Boolean).join(" · ")}
+                              </p>
+                              {s.reasons.length > 0 && (
+                                <p className="text-gray-500 mt-0.5 italic">{s.reasons.join(" ; ")}</p>
+                              )}
+                            </div>
+                            <a
+                              href={`/${locale}/stock/produits/${s.id}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex-shrink-0 inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 font-medium whitespace-nowrap"
+                            >
+                              Voir la fiche <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                  {blockingSimilar.length > 0 && (
+                    <label className="mt-3 flex items-start gap-2 text-sm text-amber-900 font-medium cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={confirmNoMatch}
+                        onChange={e => { setConfirmNoMatch(e.target.checked); setSaveError("") }}
+                        className="mt-0.5"
+                      />
+                      Aucun de ces articles ne correspond, créer quand même
+                    </label>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Type d'article (obligatoire) */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Type d&apos;article <span className="text-red-500">*</span></label>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              {PRODUCT_TYPE_OPTIONS.map(opt => (
+                <label
+                  key={opt.value}
+                  className={`flex items-start gap-2 rounded-lg border px-3 py-2 cursor-pointer transition ${form.product_type === opt.value ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:bg-gray-50"}`}
+                >
+                  <input
+                    type="radio"
+                    name="new_product_type"
+                    value={opt.value}
+                    checked={form.product_type === opt.value}
+                    onChange={() => setForm(f => ({ ...f, product_type: opt.value }))}
+                    className="mt-0.5 accent-blue-600"
+                  />
+                  <span>
+                    <span className="block text-sm font-medium text-gray-800">{opt.label}</span>
+                    <span className="block text-xs text-gray-500">{opt.hint}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -499,8 +706,8 @@ export default function ProduitsClient({ products: initial, categories, units, c
             <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{saveError}</p>
           )}
           <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" onClick={() => setModalOpen(false)}>{t("annuler")}</Button>
-            <Button onClick={handleSave} disabled={!form.name || saving}>
+            <Button variant="secondary" onClick={resetModal}>{t("annuler")}</Button>
+            <Button onClick={handleSave} disabled={!form.name.trim() || !form.product_type || saving || (blockingSimilar.length > 0 && !confirmNoMatch)}>
               {saving ? t("enregistrement") : t("enregistrer")}
             </Button>
           </div>

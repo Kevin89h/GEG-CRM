@@ -15,6 +15,8 @@ import { formatDate, formatCurrency, formatNumber } from "@/lib/utils"
 import DocumentLayout from "@/components/print/DocumentLayout"
 import ActivityLog from "@/components/ActivityLog"
 import ShareButton from "@/components/ShareButton"
+import { ProductPickerDialog, type CatalogProduct } from "@/components/sales/ProductPicker"
+import StockAlert from "@/components/sales/StockAlert"
 
 interface Line {
   id: string
@@ -107,6 +109,9 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
   const [loadingRate, setLoadingRate] = useState(false)
   const [globalDiscount, setGlobalDiscount] = useState("")
   const [applyingDiscount, setApplyingDiscount] = useState(false)
+  // Catalogue picker: "new" adds a line, a line id attaches that free line to a product (R1)
+  const [pickerTarget, setPickerTarget] = useState<"new" | string | null>(null)
+  const [lineError, setLineError] = useState<string | null>(null)
 
   // Fetch exchange rate whenever payment currency differs from invoice currency
   useEffect(() => {
@@ -330,17 +335,40 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
     setInvoice(prev => ({ ...prev, lines: prev.lines.filter(l => l.id !== lineId) }))
   }
 
-  async function addLine() {
+  // R1: a new line is always created from an active catalogue product (designation and price taken from it)
+  async function addLine(p: CatalogProduct) {
+    setLineError(null)
     const position = invoice.lines.length
     const defaultTvaRate = 0
     const res = await fetch(`/api/invoices/${invoice.id}/lines`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ description: "", quantity: 1, unit_price: 0, discount: 0, position, tva_rate: defaultTvaRate }),
+      body: JSON.stringify({ product_id: p.id, quantity: 1, discount: 0, position, tva_rate: defaultTvaRate }),
     })
-    const json = await res.json()
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok) { setLineError(json.error ?? `Erreur lors de l'ajout de la ligne (${res.status})`); return }
     if (json.line) setInvoice(prev => ({ ...prev, lines: [...prev.lines, json.line as Line] }))
   }
+
+  // Attaches an old free line (no product) of a draft invoice to a catalogue product; description and price are kept
+  async function attachProduct(lineId: string, p: CatalogProduct) {
+    setLineError(null)
+    const res = await fetch(`/api/invoices/${invoice.id}/lines/${lineId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ product_id: p.id }),
+    })
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}))
+      setLineError(json.error ?? `Erreur lors du rattachement (${res.status})`)
+      return
+    }
+    setInvoice(prev => ({ ...prev, lines: prev.lines.map(l => l.id === lineId ? { ...l, product_id: p.id } : l) }))
+  }
+
+  const freeLines = invoice.lines.filter(l => !l.product_id)
+  // Credit notes ("AVR-…") are exempt from the catalogue rule
+  const isCreditNote = invoice.number?.startsWith("AVR-") ?? false
 
   async function updateStatus(status: string) {
     setSaving(true)
@@ -873,6 +901,19 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
                   ) : (
                     <span className="font-medium text-gray-900">{l.description}</span>
                   )}
+                  {/* R1: an old free line of a draft must be attached to a catalogue product before emission */}
+                  {!l.product_id && isDraft && !isCreditNote && (
+                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                      <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-medium">
+                        Ligne libre — à rattacher à un produit
+                      </span>
+                      {canEdit && (
+                        <button type="button" onClick={() => setPickerTarget(l.id)} className="text-xs text-blue-600 hover:text-blue-500 font-medium">
+                          Rattacher à un produit
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </td>
                 <td className="px-4 py-2 text-right">
                   {canEdit ? (
@@ -931,7 +972,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
         {canEdit && (
           <div className="px-4 py-2 border-t border-gray-50 flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-3">
-              <button onClick={addLine} className="text-sm text-blue-600 hover:text-blue-500 font-medium transition-colors">
+              <button onClick={() => setPickerTarget("new")} className="text-sm text-blue-600 hover:text-blue-500 font-medium transition-colors">
                 + Ajouter une ligne
               </button>
               <span className="text-gray-200">|</span>
@@ -956,6 +997,20 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
             </div>
             <span className="text-xs text-gray-400 italic">TVA : cliquer sur le badge de chaque ligne</span>
           </div>
+        )}
+        {lineError && (
+          <div className="mx-4 mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{lineError}</div>
+        )}
+        {/* R1: free lines left from before the rule block the emission (credit notes excepted) */}
+        {isDraft && !isCreditNote && freeLines.length > 0 && (
+          <div className="mx-4 mb-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {freeLines.length > 1 ? `${freeLines.length} lignes libres` : "1 ligne libre"} sans produit du catalogue.
+            La facture ne pourra pas être émise tant qu&apos;elles ne sont pas rattachées à un produit ou un service du catalogue (ou supprimées).
+          </div>
+        )}
+        {/* R3: non-blocking stock alerts on draft invoices (services never checked) */}
+        {isDraft && (
+          <StockAlert className="mx-4 mb-3" lines={invoice.lines.map(l => ({ product_id: l.product_id, quantity: l.quantity }))} />
         )}
         <div className="border-t border-gray-100 px-4 py-3 flex flex-col items-end gap-1 text-sm">
           <div className="flex gap-8 text-gray-600">
@@ -1115,6 +1170,22 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
         <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-4">Activité</p>
         <ActivityLog resource="invoice" resourceId={invoice.id} />
       </div>
+
+      {/* Catalogue picker: add a line or attach a free line (creation inside, gated by "produits.gerer") */}
+      {canEdit && (
+        <ProductPickerDialog
+          open={pickerTarget !== null}
+          onClose={() => setPickerTarget(null)}
+          title={pickerTarget === "new" ? "Ajouter une ligne" : "Rattacher la ligne à un produit ou un service"}
+          locale={locale}
+          currency={invoice.currency}
+          initialQuery={pickerTarget && pickerTarget !== "new" ? (invoice.lines.find(l => l.id === pickerTarget)?.description ?? "") : ""}
+          onSelect={p => {
+            if (pickerTarget === "new") addLine(p)
+            else if (pickerTarget) attachProduct(pickerTarget, p)
+          }}
+        />
+      )}
 
       {/* Modal annulation facture */}
       <Modal open={cancelModalOpen} onClose={() => setCancelModalOpen(false)} title="Annuler la facture ?">

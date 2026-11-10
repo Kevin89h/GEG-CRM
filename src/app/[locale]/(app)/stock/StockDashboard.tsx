@@ -36,6 +36,7 @@ export default function StockDashboard({ levels, warehouses, products }: Props) 
   const canMove = can("stock.mouvement_manuel")
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>("all")
   const [search, setSearch] = useState("")
+  const [onlyNegative, setOnlyNegative] = useState(false)
 
   // Pivot: produit → { warehouseId → quantity }
   const pivot: Record<string, { product: StockLevelRow["product"]; byWarehouse: Record<string, number> }> = {}
@@ -48,15 +49,21 @@ export default function StockDashboard({ levels, warehouses, products }: Props) 
 
   const filteredWarehouses = selectedWarehouse === "all" ? warehouses : warehouses.filter(w => w.id === selectedWarehouse)
 
-  const rows = Object.values(pivot).filter(r => {
-    const totalQty = Object.values(r.byWarehouse).reduce((s, q) => s + q, 0)
-    if (totalQty <= 0) return false
+  // Negative stock (delivery with derogation) must stay visible: a row is kept as soon as one warehouse is not zero
+  const isNegativeRow = (r: { byWarehouse: Record<string, number> }) =>
+    selectedWarehouse === "all"
+      ? Object.values(r.byWarehouse).some(q => q < 0)
+      : (r.byWarehouse[selectedWarehouse] ?? 0) < 0
+  const baseRows = Object.values(pivot).filter(r => {
+    if (!Object.values(r.byWarehouse).some(q => q !== 0)) return false
     const matchSearch = r.product.name.toLowerCase().includes(search.toLowerCase()) ||
       (r.product.reference ?? "").toLowerCase().includes(search.toLowerCase())
     const matchWarehouse = selectedWarehouse === "all" ||
-      (r.byWarehouse[selectedWarehouse] ?? 0) > 0
+      (r.byWarehouse[selectedWarehouse] ?? 0) !== 0
     return matchSearch && matchWarehouse
   })
+  const negativeCount = baseRows.filter(isNegativeRow).length
+  const rows = onlyNegative ? baseRows.filter(isNegativeRow) : baseRows
 
   const totalProducts = products.length
   const totalMovesToday = 0
@@ -166,6 +173,15 @@ export default function StockDashboard({ levels, warehouses, products }: Props) 
               {w.name}
             </button>
           ))}
+          {(negativeCount > 0 || onlyNegative) && (
+            <button
+              onClick={() => setOnlyNegative(v => !v)}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs rounded-lg font-medium transition ${onlyNegative ? "bg-red-600 text-white" : "bg-red-50 border border-red-200 text-red-700 hover:bg-red-100"}`}
+            >
+              <AlertTriangle className="w-3.5 h-3.5" />
+              Stock négatif ({negativeCount})
+            </button>
+          )}
         </div>
       </div>
 
@@ -196,8 +212,9 @@ export default function StockDashboard({ levels, warehouses, products }: Props) 
             <tbody className="divide-y divide-gray-50">
               {rows.map(({ product, byWarehouse }) => {
                 const total = filteredWarehouses.reduce((s, w) => s + (byWarehouse[w.id] ?? 0), 0)
+                const negative = filteredWarehouses.some(w => (byWarehouse[w.id] ?? 0) < 0)
                 return (
-                  <tr key={product.id} className="hover:bg-blue-50/30 transition-colors">
+                  <tr key={product.id} className={`hover:bg-blue-50/30 transition-colors ${negative ? "bg-red-50/40" : ""}`}>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         {product.category && (
@@ -206,6 +223,7 @@ export default function StockDashboard({ levels, warehouses, products }: Props) 
                           </Badge>
                         )}
                         <span className="font-medium text-gray-900">{product.name}</span>
+                        {negative && <Badge variant="red">Stock négatif</Badge>}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-gray-500 font-mono text-xs">{product.reference ?? "—"}</td>
@@ -213,7 +231,7 @@ export default function StockDashboard({ levels, warehouses, products }: Props) 
                     {filteredWarehouses.map(w => {
                       const qty = byWarehouse[w.id] ?? 0
                       return (
-                        <td key={w.id} className={`px-4 py-3 text-right font-medium ${qty === 0 ? "text-gray-300" : qty < 0 ? "text-red-600" : "text-gray-900"}`}>
+                        <td key={w.id} className={`px-4 py-3 text-right font-medium ${qty === 0 ? "text-gray-300" : qty < 0 ? "text-red-600 font-bold" : "text-gray-900"}`}>
                           {qty === 0 ? "—" : qty.toLocaleString("fr")}
                         </td>
                       )

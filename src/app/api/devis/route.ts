@@ -1,3 +1,4 @@
+import { invalidSalesLines } from "@/lib/catalog"
 import { NextRequest, NextResponse } from "next/server"
 import { createCompanyClient } from "@/lib/company"
 import { logActivity } from "@/lib/activity-logger"
@@ -24,6 +25,9 @@ export async function POST(req: NextRequest)  {
     }
 
     const { db, schema } = await createCompanyClient()
+    // R1 / R2: every line is an active product or service of the catalogue
+    const invalid = await invalidSalesLines(db, lines ?? [])
+    if (invalid) return NextResponse.json({ error: invalid }, { status: 400 })
 
     const now = new Date()
     const year = now.getFullYear()

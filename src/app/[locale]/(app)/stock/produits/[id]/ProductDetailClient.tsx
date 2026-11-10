@@ -286,6 +286,36 @@ export default function ProductDetailClient({
   }
 
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  // Deactivation / reactivation ("produits.gerer"): a deactivated product cannot be sold anymore
+  // but stays in history and in the stock screens
+  const canManage = can("produits.gerer")
+  const [confirmToggle, setConfirmToggle] = useState(false)
+  const [toggling, setToggling] = useState(false)
+  const [toggleError, setToggleError] = useState<string | null>(null)
+  const [toggleResult, setToggleResult] = useState<string | null>(null)
+
+  async function toggleActive() {
+    const next = !product.is_active
+    setToggling(true)
+    setToggleError(null)
+    const res = await fetch(`/api/stock/produits/${product.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ is_active: next }),
+    })
+    const json = await res.json().catch(() => ({}))
+    setToggling(false)
+    if (!res.ok) {
+      setToggleError(json.error ?? "Erreur lors de la mise à jour")
+      return
+    }
+    setProduct(p => ({ ...p, is_active: next }))
+    setConfirmToggle(false)
+    setToggleResult(next
+      ? "Produit réactivé : il peut de nouveau être vendu."
+      : "Produit désactivé : il ne peut plus être vendu, mais reste dans l'historique et les écrans de stock.")
+    router.refresh()
+  }
 
   async function deleteProduct() {
     setDeleting(true)
@@ -347,8 +377,14 @@ export default function ProductDetailClient({
                 <Save className="w-4 h-4" /> {saving ? "…" : <span className="hidden sm:inline">{t("btnEnregistrer")}</span>}
               </Button>
             </>
-          ) : (isAdmin || canDelete) && (
+          ) : (isAdmin || canDelete || canManage) && (
             <>
+              {canManage && (
+              <Button variant="secondary" onClick={() => { setToggleError(null); setConfirmToggle(true) }}
+                className={product.is_active ? "text-amber-700 border-amber-200 hover:bg-amber-50" : "text-emerald-700 border-emerald-200 hover:bg-emerald-50"}>
+                {product.is_active ? "Désactiver" : "Réactiver"}
+              </Button>
+              )}
               {canDelete && (
               <button onClick={() => setConfirmDelete(true)}
                 className="p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition">
@@ -366,6 +402,17 @@ export default function ProductDetailClient({
       </div>
 
       <div className="max-w-5xl mx-auto px-4 md:px-6 py-4 md:py-6">
+        {toggleResult && (
+          <div className={`flex items-start justify-between gap-3 mb-4 rounded-lg px-4 py-2.5 text-sm border ${product.is_active ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-amber-50 border-amber-200 text-amber-800"}`}>
+            <span>{toggleResult}</span>
+            <button onClick={() => setToggleResult(null)} className="opacity-60 hover:opacity-100"><X className="w-4 h-4" /></button>
+          </div>
+        )}
+        {!product.is_active && !toggleResult && (
+          <div className="mb-4 rounded-lg px-4 py-2.5 text-sm border bg-gray-100 border-gray-200 text-gray-700">
+            Ce produit est désactivé : il ne peut plus être vendu, mais reste dans l&apos;historique et les écrans de stock.
+          </div>
+        )}
         {/* Product header */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm mb-4">
           <div className="px-4 md:px-6 pt-5 pb-4 border-b border-gray-100">
@@ -398,7 +445,17 @@ export default function ProductDetailClient({
                     className="text-xl md:text-2xl font-bold text-gray-900 w-full border-b-2 border-blue-500 outline-none bg-transparent pb-1"
                   />
                 ) : (
-                  <h1 className="text-xl md:text-2xl font-bold text-gray-900">{product.name}</h1>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h1 className="text-xl md:text-2xl font-bold text-gray-900">{product.name}</h1>
+                    {!product.is_active && (
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-gray-200 text-gray-700" title="Non vendable ; reste dans l'historique et les écrans de stock">
+                        Désactivé
+                      </span>
+                    )}
+                    {totalStock < 0 && (
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-red-100 text-red-700">Stock négatif</span>
+                    )}
+                  </div>
                 )}
                 {/* References row */}
                 <div className="flex flex-wrap items-center gap-3 mt-1.5">
@@ -576,12 +633,15 @@ export default function ProductDetailClient({
                     <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{t("labelStockParEntrepot")}</label>
                     <div className="flex gap-3 flex-wrap">
                       {stockLevels.map((sl, i) => (
-                        <div key={i} className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-4 py-2">
+                        <div key={i} className={`flex items-center gap-2 rounded-lg px-4 py-2 border ${Number(sl.quantity) < 0 ? "bg-red-50 border-red-200" : "bg-gray-50 border-gray-200"}`}>
                           <Warehouse className="w-4 h-4 text-gray-400" />
                           <span className="text-sm text-gray-600">{(sl.warehouse as { name: string } | null)?.name ?? "—"}</span>
                           <span className={`text-sm font-bold ml-2 ${Number(sl.quantity) < 0 ? "text-red-600" : "text-blue-600"}`}>
                             {formatNumber(Number(sl.quantity))}
                           </span>
+                          {Number(sl.quantity) < 0 && (
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-100 text-red-700">Stock négatif</span>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -724,8 +784,36 @@ export default function ProductDetailClient({
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t("labelQuantiteDisponible")}</label>
                   <p className={`text-2xl font-bold ${totalStock < 0 ? "text-red-600" : totalStock === 0 ? "text-gray-400" : "text-blue-600"}`}>
                     {formatNumber(totalStock)} <span className="text-sm font-normal text-gray-500">{initial.unit?.name ?? t("defaultUnit")}</span>
+                    {totalStock < 0 && (
+                      <span className="ml-2 align-middle text-xs font-semibold px-2 py-0.5 rounded-md bg-red-100 text-red-700">Stock négatif</span>
+                    )}
                   </p>
                 </div>
+
+                {/* Stock per warehouse: negative quantities (delivery with derogation) are shown as recorded */}
+                {stockLevels.length > 0 && (
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{t("labelStockParEntrepot")}</label>
+                    <div className="border border-gray-200 rounded-lg overflow-hidden">
+                      <table className="w-full text-sm">
+                        <tbody className="divide-y divide-gray-100">
+                          {stockLevels.map((sl, i) => {
+                            const q = Number(sl.quantity)
+                            return (
+                              <tr key={i} className={q < 0 ? "bg-red-50/60" : ""}>
+                                <td className="px-4 py-2 text-gray-700">{sl.warehouse?.name ?? "—"}</td>
+                                <td className={`px-4 py-2 text-right font-bold tabular-nums ${q < 0 ? "text-red-600" : q === 0 ? "text-gray-400" : "text-blue-600"}`}>
+                                  {formatNumber(q)}
+                                  {q < 0 && <span className="ml-2 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-100 text-red-700">Stock négatif</span>}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
 
                 <div className="sm:col-span-2">
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">{t("labelPrevisionStock")}</label>
@@ -736,7 +824,7 @@ export default function ProductDetailClient({
                     </div>
                     <div className="flex items-center gap-2 md:gap-4 text-center overflow-x-auto">
                       {[
-                        { label: t("prevDisponible"), value: formatNumber(totalStock), color: "text-blue-600" },
+                        { label: t("prevDisponible"), value: formatNumber(totalStock), color: totalStock < 0 ? "text-red-600" : "text-blue-600" },
                         { label: "+", value: null, color: "text-gray-300" },
                         { label: t("prevEntrant"), value: formatNumber(incoming), color: "text-emerald-600" },
                         { label: "−", value: null, color: "text-gray-300" },
@@ -927,6 +1015,44 @@ export default function ProductDetailClient({
               <button onClick={deleteProduct} disabled={deleting}
                 className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-red-600 rounded-xl hover:bg-red-700 transition disabled:opacity-50">
                 {deleting ? t("suppression") : t("btnSupprimer")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Deactivation / reactivation confirmation */}
+      {confirmToggle && canManage && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${product.is_active ? "bg-amber-100" : "bg-emerald-100"}`}>
+                <AlertTriangle className={`w-5 h-5 ${product.is_active ? "text-amber-600" : "text-emerald-600"}`} />
+              </div>
+              <h3 className="font-semibold text-gray-900">{product.is_active ? "Désactiver ce produit ?" : "Réactiver ce produit ?"}</h3>
+            </div>
+            <div className="text-sm text-gray-600 bg-gray-50 rounded-lg px-4 py-3 mb-5 space-y-1.5">
+              <p><span className="font-semibold">{product.name}</span></p>
+              {product.is_active ? (
+                <>
+                  <p>Un produit désactivé ne peut plus être ajouté à un devis ni vendu.</p>
+                  <p>Il reste visible dans l&apos;historique (devis, factures, mouvements) et dans les écrans de stock tant qu&apos;il détient du stock. Vous pourrez le réactiver à tout moment.</p>
+                </>
+              ) : (
+                <p>Le produit pourra de nouveau être sélectionné dans les devis et vendu.</p>
+              )}
+            </div>
+            {toggleError && (
+              <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">{toggleError}</p>
+            )}
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmToggle(false)}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition">
+                {t("btnAnnuler")}
+              </button>
+              <button onClick={toggleActive} disabled={toggling}
+                className={`flex-1 px-4 py-2.5 text-sm font-medium text-white rounded-xl transition disabled:opacity-50 ${product.is_active ? "bg-amber-600 hover:bg-amber-700" : "bg-emerald-600 hover:bg-emerald-700"}`}>
+                {toggling ? "…" : product.is_active ? "Désactiver" : "Réactiver"}
               </button>
             </div>
           </div>

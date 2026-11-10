@@ -1,3 +1,4 @@
+import { invalidSalesLines } from "@/lib/catalog"
 import { NextRequest, NextResponse } from "next/server"
 import Anthropic from "@anthropic-ai/sdk"
 import { createCompanyClient } from "@/lib/company"
@@ -55,7 +56,7 @@ const TOOLS: Anthropic.Tool[] = [
           items: {
             type: "object",
             properties: {
-              product_id: { type: "string", description: "ID du produit (null si inconnu)" },
+              product_id: { type: "string", description: "ID d'un produit ou service ACTIF du catalogue (obligatoire : chercher d'abord avec search_products ; aucune ligne libre n'est acceptée)" },
               description: { type: "string", description: "Description de la ligne" },
               quantity: { type: "number", description: "Quantité" },
               unit: { type: "string", description: "Unité (fût, litre, tonne, unité, etc.)" },
@@ -119,7 +120,7 @@ async function executeTool(name: string, input: Record<string, unknown>, perms: 
 
   if (name === "search_products") {
     const q = (input.query as string).toLowerCase()
-    const { data } = await db.from("products").select("id, name, sell_price, currency, unit:units(name)").ilike("name", `%${q}%`).limit(5)
+    const { data } = await db.from("products").select("id, name, reference, product_type, sell_price, currency, unit:units(name)").eq("is_active", true).ilike("name", `%${q}%`).limit(8)
     return data ?? []
   }
 
@@ -131,6 +132,9 @@ async function executeTool(name: string, input: Record<string, unknown>, perms: 
       unit?: string
       unit_price: number
     }>
+    // R1 / R2: no free line — every line must be an active catalogue product
+    const invalid = await invalidSalesLines(db, lines)
+    if (invalid) return { error: `${invalid} Recherchez le produit avec search_products. S'il n'existe pas, demandez à l'utilisateur de créer la fiche dans le catalogue (Stock > Produits) avant de refaire le devis.` }
     const total = lines.reduce((s, l) => s + l.quantity * l.unit_price, 0)
 
     // Generate order number
@@ -291,6 +295,7 @@ Règles importantes :
 - Un "fût" de lubrifiant = 208 litres standard
 - Toujours confirmer les détails avant de créer un document
 - Si le client n'est pas dans la base, créer le devis sans account_id et le mentionner
+- Chaque ligne de devis doit être un produit ou service ACTIF du catalogue (product_id obligatoire) : chercher avec search_products ; si rien ne correspond, ne pas inventer de ligne, expliquer qu'il faut d'abord créer la fiche produit
 - Réponds en français, de façon concise et professionnelle
 - Quand tu crées un devis, donne le numéro et un lien direct
 

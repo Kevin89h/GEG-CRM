@@ -1,3 +1,4 @@
+import { invalidSalesLines } from "@/lib/catalog"
 import { NextRequest, NextResponse } from "next/server"
 import { createCompanyClient } from "@/lib/company"
 
@@ -8,6 +9,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { db } = await createCompanyClient()
     { const { data: so } = await db.from("sales_orders").select("status").eq("id", id).single()
       if (so?.status === "invoiced" || so?.status === "cancelled") return NextResponse.json({ error: so.status === "cancelled" ? "Devis annulé : ses lignes ne sont plus modifiables" : "Devis facturé : ses lignes ne sont plus modifiables" }, { status: 409 }) }
+
+  // R1 / R2: a new line is created FROM an active catalogue product (designation and price taken from it)
+  const invalid = await invalidSalesLines(db, [{ product_id: body.product_id, description: body.description }])
+  if (invalid) return NextResponse.json({ error: invalid }, { status: 400 })
+  const { data: product } = await db.from("products").select("name, sell_price").eq("id", body.product_id).single()
 
   const { data: existing } = await db
     .from("sales_order_lines")
@@ -21,9 +27,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const { data, error } = await db.from("sales_order_lines").insert([{
     order_id: id,
-    description: body.description ?? "Nouvelle ligne",
+    product_id: body.product_id,
+    description: body.description ?? product?.name ?? "",
     quantity: body.quantity ?? 1,
-    unit_price: body.unit_price ?? 0,
+    unit_price: body.unit_price ?? product?.sell_price ?? 0,
     discount: body.discount ?? 0,
     position: nextPosition,
   }]).select("id, description, quantity, unit_price, discount, position, product_id, tva_exempt").single()
