@@ -10,7 +10,7 @@ export default async function BonLivraisonPage({ params }: { params: Promise<{ l
     .from("sales_orders")
     .select(`
       id, number,
-      lines:sales_order_lines(id, description, quantity, qty_delivered, position, product_id, product:products(name, reference))
+      lines:sales_order_lines(id, description, quantity, qty_delivered, position, product_id, line_type, product:products(name, reference))
     `)
     .eq("id", id)
     .single()
@@ -23,7 +23,9 @@ export default async function BonLivraisonPage({ params }: { params: Promise<{ l
     .eq("is_active", true)
     .order("name")
 
+  // Comment lines (text only) are never delivered
   const lines = ((order.lines ?? []) as Record<string, unknown>[])
+    .filter(l => l.line_type !== "comment")
     .sort((a, b) => (a.position as number) - (b.position as number))
     .map(l => ({
       id: String(l.id ?? ""),

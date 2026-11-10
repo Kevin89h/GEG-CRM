@@ -25,9 +25,12 @@ interface Props {
 let _uid = 0
 const uid = () => ++_uid
 
-// R1/H1: every line is an active catalogue product or service, chosen through the picker (no free or note line)
+// R1/H1: every sales line is an active catalogue product or service, chosen through the picker.
+// A comment line (line_type "comment") is text only: no product, quantity, price nor amount.
 interface Line {
   id: number
+  line_type: "product" | "comment"
+  print_on_pdf: boolean
   product_id: string
   product_name: string
   product_reference: string | null
@@ -148,6 +151,7 @@ export default function NouvelleFactureClient({ locale, accounts: initialAccount
   const [lines, setLines] = useState<Line[]>([])
 
   const totals = lines.reduce((acc, l) => {
+    if (l.line_type === "comment") return acc
     const qty = parseFloat(l.quantity) || 0
     const price = parseFloat(l.unit_price) || 0
     const disc = parseFloat(l.discount) || 0
@@ -164,8 +168,21 @@ export default function NouvelleFactureClient({ locale, accounts: initialAccount
       description: p.name,
       unit_price: String(p.sell_price ?? 0),
     }
-    if (target === "new") setLines(ls => [...ls, { id: uid(), quantity: "1", discount: "0", ...patch }])
+    if (target === "new") setLines(ls => [...ls, { id: uid(), line_type: "product", print_on_pdf: true, quantity: "1", discount: "0", ...patch }])
     else setLines(ls => ls.map(l => l.id === target ? { ...l, ...patch } : l))
+  }
+
+  // Comment line: text only, printed on the PDF by default
+  function addComment() {
+    setLines(ls => [...ls, {
+      id: uid(), line_type: "comment", print_on_pdf: true,
+      product_id: "", product_name: "", product_reference: null, product_type: null,
+      description: "", quantity: "0", unit_price: "0", discount: "0",
+    }])
+  }
+
+  function setPrintOnPdf(id: number, value: boolean) {
+    setLines(ls => ls.map(l => l.id === id ? { ...l, print_on_pdf: value } : l))
   }
 
   function removeLine(id: number) {
@@ -178,10 +195,15 @@ export default function NouvelleFactureClient({ locale, accounts: initialAccount
 
   async function handleSave(status: "draft" | "sent") {
     if (!accountId) { setError(t("errorChooseClient")); return }
-    // R1: a line without catalogue product cannot be submitted (the server and the database refuse it too)
-    const missing = lines.map((l, i) => (l.product_id ? null : i + 1)).filter((n): n is number => n !== null)
+    // R1: a sales line without catalogue product cannot be submitted (the server and the database refuse it too)
+    const missing = lines.map((l, i) => (l.line_type === "comment" || l.product_id ? null : i + 1)).filter((n): n is number => n !== null)
     if (missing.length) {
       setError(`Ligne${missing.length > 1 ? "s" : ""} ${missing.join(", ")} sans produit du catalogue : chaque ligne doit être un produit ou un service du catalogue GEG. Choisissez-le avec « Changer » ou supprimez la ligne.`)
+      return
+    }
+    const emptyComments = lines.map((l, i) => (l.line_type === "comment" && !l.description.trim() ? i + 1 : null)).filter((n): n is number => n !== null)
+    if (emptyComments.length) {
+      setError(`Ligne${emptyComments.length > 1 ? "s" : ""} ${emptyComments.join(", ")} : le commentaire est vide. Saisissez un texte ou supprimez la ligne.`)
       return
     }
     setSaving(true); setError(null)
@@ -190,7 +212,19 @@ export default function NouvelleFactureClient({ locale, accounts: initialAccount
     if (!user) { setError(t("errorNotAuthenticated")); setSaving(false); return }
 
     const lineRows = lines
-      .map((l, i) => ({
+      .map((l, i) => l.line_type === "comment" ? {
+        line_type: "comment",
+        product_id: null,
+        description: l.description.trim(),
+        quantity: 0,
+        unit_price: 0,
+        discount: 0,
+        position: i,
+        tva_rate: 0,
+        print_on_pdf: l.print_on_pdf,
+      } : {
+        line_type: "product",
+        print_on_pdf: true,
         product_id: l.product_id,
         description: l.description.trim() || l.product_name,
         quantity: parseFloat(l.quantity) || 1,
@@ -198,7 +232,7 @@ export default function NouvelleFactureClient({ locale, accounts: initialAccount
         discount: parseFloat(l.discount) || 0,
         position: i,
         tva_rate: 0,
-      }))
+      })
 
     const res = await fetch("/api/factures", {
       method: "POST",
@@ -297,6 +331,31 @@ export default function NouvelleFactureClient({ locale, accounts: initialAccount
             </thead>
             <tbody className="divide-y divide-gray-50">
               {lines.map(line => {
+                if (line.line_type === "comment") return (
+                  <tr key={line.id} className="group bg-gray-50">
+                    <td colSpan={5} className="py-1.5 px-2">
+                      <div className="flex items-start gap-3">
+                        <span className="mt-1 shrink-0 text-[11px] px-1.5 py-0.5 rounded font-medium bg-gray-200 text-gray-600">Commentaire</span>
+                        <textarea
+                          value={line.description}
+                          onChange={e => updateLine(line.id, "description", e.target.value)}
+                          rows={1}
+                          placeholder="Texte du commentaire…"
+                          className="flex-1 text-sm italic text-gray-600 outline-none bg-transparent border-b border-dashed border-gray-300 focus:border-blue-400 resize-y py-0.5"
+                        />
+                        <label className="mt-1 shrink-0 flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
+                          <input type="checkbox" checked={line.print_on_pdf} onChange={e => setPrintOnPdf(line.id, e.target.checked)} />
+                          Imprimer sur le PDF
+                        </label>
+                      </div>
+                    </td>
+                    <td className="py-1.5 text-right">
+                      <button onClick={() => removeLine(line.id)} title="Supprimer le commentaire" className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 transition-opacity ml-2">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                )
                 const sub = (parseFloat(line.quantity) || 0) * (parseFloat(line.unit_price) || 0) * (1 - (parseFloat(line.discount) || 0) / 100)
                 return (
                   <tr key={line.id} className="group">
@@ -324,7 +383,7 @@ export default function NouvelleFactureClient({ locale, accounts: initialAccount
                     </td>
                     <td className="py-1.5 px-1">
                       <input type="number" value={line.unit_price} onChange={e => updateLine(line.id, "unit_price", e.target.value)}
-                        className="w-full text-right text-sm px-2 py-1 outline-none bg-transparent" min="0" step="any" placeholder="0" />
+                        className="w-full text-right text-sm px-2 py-1 outline-none bg-transparent" step="any" placeholder="0" />
                     </td>
                     <td className="py-1.5 px-1">
                       <input type="number" value={line.discount} onChange={e => updateLine(line.id, "discount", e.target.value)}
@@ -344,16 +403,19 @@ export default function NouvelleFactureClient({ locale, accounts: initialAccount
             </tbody>
           </table>
 
-          {/* Every line comes from the catalogue (R1: no free or note line) */}
+          {/* Every sales line comes from the catalogue (R1); comments carry text only */}
           <div className="flex items-center gap-4 mt-3">
             <button onClick={() => setPickerTarget("new")} className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-500 font-medium">
               <Plus className="w-4 h-4" /> {t("addProduct")}
             </button>
-            <span className="text-xs text-gray-400">Chaque ligne doit être un produit ou un service du catalogue.</span>
+            <button onClick={addComment} className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-500 font-medium">
+              <Plus className="w-4 h-4" /> Ajouter un commentaire
+            </button>
+            <span className="text-xs text-gray-400">Chaque ligne de vente doit être un produit ou un service du catalogue. Un commentaire contient seulement du texte.</span>
           </div>
 
-          {/* R3: non-blocking stock alerts (services never checked) */}
-          <StockAlert className="mt-3" lines={lines.map(l => ({ product_id: l.product_id, quantity: l.quantity }))} />
+          {/* R3: non-blocking stock alerts (services and comments never checked) */}
+          <StockAlert className="mt-3" lines={lines.filter(l => l.line_type !== "comment").map(l => ({ product_id: l.product_id, quantity: l.quantity }))} />
         </div>
 
         {/* Total */}

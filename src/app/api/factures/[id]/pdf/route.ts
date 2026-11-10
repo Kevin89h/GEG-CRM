@@ -27,7 +27,7 @@ export async function GET(
     .select(`
       id, number, status, currency, issue_date, due_date, notes, order_id,
       account:accounts(id, name, city, country, phone, address, nif),
-      lines:invoice_lines(id, description, quantity, unit_price, discount, position, tva_rate, product_id)
+      lines:invoice_lines(id, description, quantity, unit_price, discount, position, tva_rate, product_id, line_type, print_on_pdf)
     `)
     .eq("id", id)
     .single()
@@ -62,6 +62,8 @@ export async function GET(
     discount: Number(l.discount) || 0,
     tva_rate: l.tva_rate != null ? Number(l.tva_rate) : null,
     image_url: showImages && l.product_id ? (productImageMap[l.product_id as string] ?? null) : null,
+    line_type: (l.line_type as string | null) ?? "product",
+    print_on_pdf: l.print_on_pdf !== false,
   }))
 
   const paymentList = (payments ?? []).map(p => ({

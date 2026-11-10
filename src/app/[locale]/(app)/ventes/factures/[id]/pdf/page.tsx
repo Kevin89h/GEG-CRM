@@ -22,7 +22,7 @@ export default async function FacturePdfPage({ params }: { params: Promise<{ loc
   const INVOICE_SELECT = `
     id, number, status, currency, issue_date, due_date, notes, order_id,
     account:accounts(id, name, address, city, country, phone, nif),
-    lines:invoice_lines(id, description, quantity, unit_price, discount, position, tva_rate, product:products(id, name, reference))
+    lines:invoice_lines(id, description, quantity, unit_price, discount, position, tva_rate, line_type, print_on_pdf, product:products(id, name, reference))
   `
 
   let { data: invoice, error: invoiceError } = await db
@@ -111,6 +111,8 @@ export default async function FacturePdfPage({ params }: { params: Promise<{ loc
       product: Array.isArray(l.product)
         ? (l.product[0] ?? null)
         : (l.product as { name: string; reference: string | null } | null),
+      line_type: (l.line_type as string | null) ?? "product",
+      print_on_pdf: l.print_on_pdf !== false,
     }
   })
 

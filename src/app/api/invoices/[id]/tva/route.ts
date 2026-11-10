@@ -14,6 +14,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     .from("invoice_lines")
     .update({ tva_rate })
     .eq("invoice_id", id)
+    // Comment lines never carry VAT (the database refuses a rate on them)
+    .neq("line_type", "comment")
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
   return NextResponse.json({ ok: true })

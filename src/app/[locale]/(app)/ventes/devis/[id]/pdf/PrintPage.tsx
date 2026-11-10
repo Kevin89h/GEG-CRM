@@ -26,7 +26,12 @@ interface Line {
   image_url?: string | null
   unit_label?: string | null
   product: { name: string; reference: string | null } | null
+  // "comment": text only, printed full width when print_on_pdf is not false
+  line_type?: string | null
+  print_on_pdf?: boolean | null
 }
+
+const isComment = (l: Line) => l.line_type === "comment"
 
 interface BankDetails {
   swift?: string
@@ -92,9 +97,12 @@ export default function PrintPage({
   id, number, status, currency, createdAt, validUntil, notes,
   accountName, accountCountry, accountNif, salespersonName, deliveryAddress, paymentTerms,
   termsConditions,
-  lines, locale, docType, docSettings, bankAccounts = [],
+  lines: allLines, locale, docType, docSettings, bankAccounts = [],
 }: Props) {
   const [showImages, setShowImages] = useState(true)
+  // Sales lines carry the amounts; comment lines are printed (when print_on_pdf) but never counted
+  const lines = allLines.filter(l => !isComment(l))
+  const printedLines = allLines.filter(l => !isComment(l) || l.print_on_pdf !== false)
 
   useEffect(() => {
     document.title = `${docType === "bon-livraison" ? "BL" : status === "confirmed" ? "BC" : "DEVIS"} - ${number}`
@@ -328,7 +336,12 @@ export default function PrintPage({
                       </tr>
                     </thead>
                     <tbody>
-                      {lines.map(l => {
+                      {printedLines.map(l => {
+                        if (isComment(l)) return (
+                          <tr key={l.id}>
+                            <td colSpan={tvaRate > 0 ? 6 : 5} style={{ fontStyle: "italic", color: "#555", whiteSpace: "pre-line" }}>{l.description}</td>
+                          </tr>
+                        )
                         const sub = l.quantity * l.unit_price * (1 - (l.discount ?? 0) / 100)
                         const lineTva = l.tva_rate ?? tvaRate
                         return (
@@ -364,7 +377,11 @@ export default function PrintPage({
                       </tr>
                     </thead>
                     <tbody>
-                      {lines.map(l => (
+                      {printedLines.map(l => isComment(l) ? (
+                        <tr key={l.id}>
+                          <td colSpan={3} style={{ fontStyle: "italic", color: "#555", whiteSpace: "pre-line" }}>{l.description}</td>
+                        </tr>
+                      ) : (
                         <tr key={l.id}>
                           <td><div className="td-desc">{l.description}</div></td>
                           <td className="td-r">{fmt(l.quantity, 2)} U</td>

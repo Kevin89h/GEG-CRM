@@ -26,7 +26,12 @@ interface Line {
   unit_price: number
   discount: number
   tva_rate?: number | null
+  // "comment": text only (no product, quantity, price, VAT nor amount); "product" (default): sales line
+  line_type?: string | null
+  print_on_pdf?: boolean | null
 }
+
+const isComment = (l: { line_type?: string | null }) => l.line_type === "comment"
 
 interface Payment {
   id: string
@@ -112,6 +117,10 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
   // Catalogue picker: "new" adds a line, a line id attaches that free line to a product (R1)
   const [pickerTarget, setPickerTarget] = useState<"new" | string | null>(null)
   const [lineError, setLineError] = useState<string | null>(null)
+  // Comment being typed before it is added (null: no comment form open)
+  const [newComment, setNewComment] = useState<string | null>(null)
+  const [newCommentPrint, setNewCommentPrint] = useState(true)
+  const [addingComment, setAddingComment] = useState(false)
 
   // Fetch exchange rate whenever payment currency differs from invoice currency
   useEffect(() => {
@@ -135,6 +144,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
   }
 
   function lineTotal(l: Line) {
+    if (isComment(l)) return 0
     return l.quantity * l.unit_price * (1 - l.discount / 100)
   }
 
@@ -144,7 +154,8 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
     return s + (rate > 0 ? lineTotal(l) * rate / 100 : 0)
   }, 0)
   const totalTTC = totalHT + totalTVA
-  const hasTva = totalTVA > 0
+  // A negative line (e.g. "Remise commerciale") lowers the VAT: test the lines, not only the VAT total
+  const hasTva = invoice.lines.some(l => (l.tva_rate ?? 0) > 0 && lineTotal(l) !== 0)
   const balance = totalTTC - invoice.total_paid
 
   const isPaid = invoice.status === "paid"
@@ -310,7 +321,8 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
     })
     setInvoice(prev => ({
       ...prev,
-      lines: prev.lines.map(l => ({ ...l, tva_rate: newRate })),
+      // Comment lines never carry VAT
+      lines: prev.lines.map(l => isComment(l) ? l : { ...l, tva_rate: newRate }),
     }))
   }
 
@@ -318,14 +330,15 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
     const pct = parseFloat(globalDiscount)
     if (isNaN(pct) || pct < 0 || pct > 100) return
     setApplyingDiscount(true)
-    await Promise.all(invoice.lines.map(l =>
+    // Comment lines carry no discount
+    await Promise.all(invoice.lines.filter(l => !isComment(l)).map(l =>
       fetch(`/api/invoices/${invoice.id}/lines/${l.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ discount: pct }),
       })
     ))
-    setInvoice(prev => ({ ...prev, lines: prev.lines.map(l => ({ ...l, discount: pct })) }))
+    setInvoice(prev => ({ ...prev, lines: prev.lines.map(l => isComment(l) ? l : { ...l, discount: pct }) }))
     setApplyingDiscount(false)
     setGlobalDiscount("")
   }
@@ -350,6 +363,61 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
     if (json.line) setInvoice(prev => ({ ...prev, lines: [...prev.lines, json.line as Line] }))
   }
 
+  // Comment line: text only, no impact on totals, VAT or stock
+  async function addComment() {
+    const text = (newComment ?? "").trim()
+    if (!text) { setLineError("Saisissez le texte du commentaire."); return }
+    setLineError(null)
+    setAddingComment(true)
+    try {
+      const res = await fetch(`/api/invoices/${invoice.id}/lines`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ line_type: "comment", description: text, print_on_pdf: newCommentPrint, position: invoice.lines.length }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { setLineError(json.error ?? `Erreur lors de l'ajout du commentaire (${res.status})`); return }
+      if (json.line) setInvoice(prev => ({ ...prev, lines: [...prev.lines, { ...json.line, line_type: "comment" } as Line] }))
+      setNewComment(null)
+      setNewCommentPrint(true)
+    } finally {
+      setAddingComment(false)
+    }
+  }
+
+  async function saveCommentText(lineId: string, value: string, previous: string) {
+    if (!value.trim()) { setLineError("Un commentaire ne peut pas être vide : supprimez la ligne si elle n'est plus utile."); return false }
+    if (value === previous) return true
+    setLineError(null)
+    const res = await fetch(`/api/invoices/${invoice.id}/lines/${lineId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ description: value }),
+    })
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}))
+      setLineError(json.error ?? `Erreur lors de l'enregistrement du commentaire (${res.status})`)
+      return false
+    }
+    setInvoice(prev => ({ ...prev, lines: prev.lines.map(l => l.id === lineId ? { ...l, description: value } : l) }))
+    return true
+  }
+
+  async function togglePrintOnPdf(lineId: string, value: boolean) {
+    setLineError(null)
+    setInvoice(prev => ({ ...prev, lines: prev.lines.map(l => l.id === lineId ? { ...l, print_on_pdf: value } : l) }))
+    const res = await fetch(`/api/invoices/${invoice.id}/lines/${lineId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ print_on_pdf: value }),
+    })
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}))
+      setLineError(json.error ?? `Erreur lors de l'enregistrement (${res.status})`)
+      setInvoice(prev => ({ ...prev, lines: prev.lines.map(l => l.id === lineId ? { ...l, print_on_pdf: !value } : l) }))
+    }
+  }
+
   // Attaches an old free line (no product) of a draft invoice to a catalogue product; description and price are kept
   async function attachProduct(lineId: string, p: CatalogProduct) {
     setLineError(null)
@@ -366,7 +434,8 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
     setInvoice(prev => ({ ...prev, lines: prev.lines.map(l => l.id === lineId ? { ...l, product_id: p.id } : l) }))
   }
 
-  const freeLines = invoice.lines.filter(l => !l.product_id)
+  // Old free lines (sales lines without product); comment lines are not free lines
+  const freeLines = invoice.lines.filter(l => !l.product_id && !isComment(l))
   // Credit notes ("AVR-…") are exempt from the catalogue rule
   const isCreditNote = invoice.number?.startsWith("AVR-") ?? false
 
@@ -417,7 +486,8 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
         body: JSON.stringify({
           userId: user.id,
           accountId,
-          lines: invoice.lines.map(l => ({
+          // Comment lines are never delivered
+          lines: invoice.lines.filter(l => !isComment(l)).map(l => ({
             product_id: l.product_id ?? null,
             description: l.description,
             quantity: l.quantity,
@@ -889,7 +959,45 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
-            {invoice.lines.map(l => (
+            {invoice.lines.map(l => isComment(l) ? (
+              <tr key={l.id} className="group bg-gray-50">
+                <td colSpan={canEdit ? 6 : 5} className="px-4 py-2">
+                  <div className="flex items-start gap-3">
+                    <span className="mt-0.5 shrink-0 text-[11px] px-1.5 py-0.5 rounded font-medium bg-gray-200 text-gray-600">Commentaire</span>
+                    {canEdit ? (
+                      <textarea
+                        rows={1}
+                        defaultValue={l.description}
+                        onBlur={async e => {
+                          const el = e.currentTarget
+                          const ok = await saveCommentText(l.id, el.value, l.description)
+                          if (!ok) el.value = l.description
+                        }}
+                        placeholder="Texte du commentaire…"
+                        className="flex-1 text-sm italic text-gray-600 outline-none border-b border-dashed border-gray-300 focus:border-blue-400 bg-transparent resize-y py-0.5"
+                      />
+                    ) : (
+                      <p className="flex-1 text-sm italic text-gray-600 whitespace-pre-line">{l.description}</p>
+                    )}
+                    {canEdit ? (
+                      <label className="mt-0.5 shrink-0 flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
+                        <input type="checkbox" checked={l.print_on_pdf !== false} onChange={e => togglePrintOnPdf(l.id, e.target.checked)} />
+                        Imprimer sur le PDF
+                      </label>
+                    ) : l.print_on_pdf === false && (
+                      <span className="mt-0.5 shrink-0 text-xs text-gray-400">Non imprimé sur le PDF</span>
+                    )}
+                  </div>
+                </td>
+                {canEdit && (
+                  <td className="pr-2 py-2">
+                    <button onClick={() => deleteLine(l.id)} title="Supprimer le commentaire" className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 transition">
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </td>
+                )}
+              </tr>
+            ) : (
               <tr key={l.id} className="group">
                 <td className="px-4 py-2">
                   {canEdit ? (
@@ -925,7 +1033,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
                 </td>
                 <td className="px-4 py-2 text-right hidden sm:table-cell">
                   {canEdit ? (
-                    <input type="number" min="0" step="any" defaultValue={l.unit_price}
+                    <input type="number" step="any" defaultValue={l.unit_price}
                       onBlur={e => updateLine(l.id, "unit_price", e.target.value)}
                       className="w-28 text-right text-gray-700 outline-none border-b border-transparent focus:border-blue-400 bg-transparent py-0.5"
                     />
@@ -975,6 +1083,13 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
               <button onClick={() => setPickerTarget("new")} className="text-sm text-blue-600 hover:text-blue-500 font-medium transition-colors">
                 + Ajouter une ligne
               </button>
+              <button
+                onClick={() => setNewComment(c => c ?? "")}
+                disabled={newComment !== null}
+                className="text-sm text-blue-600 hover:text-blue-500 font-medium transition-colors disabled:opacity-50"
+              >
+                + Ajouter un commentaire
+              </button>
               <span className="text-gray-200">|</span>
               <div className="flex items-center gap-1.5">
                 <span className="text-xs text-gray-500">Remise globale</span>
@@ -998,6 +1113,35 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
             <span className="text-xs text-gray-400 italic">TVA : cliquer sur le badge de chaque ligne</span>
           </div>
         )}
+        {canEdit && newComment !== null && (
+          <div className="mx-4 mb-3 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 space-y-2">
+            <div className="flex items-start gap-3">
+              <span className="mt-0.5 shrink-0 text-[11px] px-1.5 py-0.5 rounded font-medium bg-gray-200 text-gray-600">Commentaire</span>
+              <textarea
+                autoFocus
+                rows={2}
+                value={newComment}
+                onChange={e => setNewComment(e.target.value)}
+                placeholder="Texte du commentaire…"
+                className="flex-1 text-sm italic text-gray-700 bg-white border border-gray-200 rounded px-2 py-1 focus:border-blue-400 focus:outline-none resize-y"
+              />
+            </div>
+            <div className="flex items-center gap-4 justify-end">
+              <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none mr-auto">
+                <input type="checkbox" checked={newCommentPrint} onChange={e => setNewCommentPrint(e.target.checked)} />
+                Imprimer sur le PDF
+              </label>
+              <button onClick={() => { setNewComment(null); setNewCommentPrint(true) }} className="text-xs text-gray-500 hover:text-gray-700">Annuler</button>
+              <button
+                onClick={addComment}
+                disabled={addingComment || !newComment.trim()}
+                className="text-xs px-3 py-1.5 rounded-md bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50"
+              >
+                {addingComment ? "Ajout…" : "Ajouter le commentaire"}
+              </button>
+            </div>
+          </div>
+        )}
         {lineError && (
           <div className="mx-4 mb-3 rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">{lineError}</div>
         )}
@@ -1010,7 +1154,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
         )}
         {/* R3: non-blocking stock alerts on draft invoices (services never checked) */}
         {isDraft && (
-          <StockAlert className="mx-4 mb-3" lines={invoice.lines.map(l => ({ product_id: l.product_id, quantity: l.quantity }))} />
+          <StockAlert className="mx-4 mb-3" lines={invoice.lines.filter(l => !isComment(l)).map(l => ({ product_id: l.product_id, quantity: l.quantity }))} />
         )}
         <div className="border-t border-gray-100 px-4 py-3 flex flex-col items-end gap-1 text-sm">
           <div className="flex gap-8 text-gray-600">
@@ -1425,6 +1569,8 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
             quantity: l.quantity,
             unit_price: l.unit_price,
             discount: l.discount,
+            line_type: l.line_type,
+            print_on_pdf: l.print_on_pdf,
           }))}
           notes={invoice.notes ?? undefined}
           currency={invoice.currency}

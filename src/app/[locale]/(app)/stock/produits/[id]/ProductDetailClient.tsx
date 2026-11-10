@@ -40,6 +40,11 @@ interface Product {
   unit: { id: string; name: string; type: string } | null
   category_id?: string
   unit_id?: string
+  brand?: string | null
+  /** Catalogue fiche created with missing information, to complete progressively */
+  to_complete?: boolean | null
+  /** Missing information, separated by " ; " */
+  missing_info?: string | null
 }
 
 interface ProductDocument {
@@ -90,6 +95,11 @@ function formatFileSize(bytes: number | null): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
+/** "a ; b ; c" (or one item per line) -> ["a", "b", "c"] */
+function splitMissing(text: string | null | undefined): string[] {
+  return (text ?? "").split(/\s*;\s*|\r?\n/).map(s => s.trim()).filter(Boolean)
+}
+
 export default function ProductDetailClient({
   product: initial, stockLevels, moves, documents: initialDocs,
   totalStock, incoming, outgoing,
@@ -133,6 +143,7 @@ export default function ProductDetailClient({
     name: initial.name,
     reference: initial.reference ?? "",
     merchant_reference: initial.merchant_reference ?? "",
+    brand: initial.brand ?? "",
     sku: initial.sku ?? "",
     origin: initial.origin ?? "",
     internal_notes: initial.internal_notes ?? "",
@@ -160,6 +171,7 @@ export default function ProductDetailClient({
       name: p.name,
       reference: p.reference ?? "",
       merchant_reference: p.merchant_reference ?? "",
+      brand: p.brand ?? "",
       sku: p.sku ?? "",
       origin: p.origin ?? "",
       internal_notes: p.internal_notes ?? "",
@@ -187,6 +199,7 @@ export default function ProductDetailClient({
     const updateData: Record<string, unknown> = {
       name: form.name,
       merchant_reference: form.merchant_reference || null,
+      brand: form.brand.trim() || null,
       description: form.description || null,
       category_id: form.category_id || null,
       unit_id: form.unit_id || null,
@@ -317,6 +330,45 @@ export default function ProductDetailClient({
     router.refresh()
   }
 
+  // "Informations à compléter" block: edited with "produits.gerer" (canManage), read only otherwise
+  const [miEditing, setMiEditing] = useState(false)
+  const [miText, setMiText] = useState("")
+  const [miComplete, setMiComplete] = useState(false)
+  const [miSaving, setMiSaving] = useState(false)
+  const [miError, setMiError] = useState<string | null>(null)
+  const missingItems = splitMissing(product.missing_info)
+
+  function startMiEdit() {
+    setMiText(missingItems.join("\n"))
+    setMiComplete(!product.to_complete)
+    setMiError(null)
+    setMiEditing(true)
+  }
+
+  async function saveMissingInfo(patch: { missing_info?: string | null; to_complete: boolean }) {
+    setMiSaving(true)
+    setMiError(null)
+    const res = await fetch(`/api/stock/produits/${product.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    })
+    const json = await res.json().catch(() => ({}))
+    setMiSaving(false)
+    if (!res.ok) {
+      setMiError(json.error ?? "Erreur lors de l'enregistrement")
+      return
+    }
+    // Only the two fields of this block are taken from the answer (the rest of the page keeps its values)
+    setProduct(p => ({
+      ...p,
+      to_complete: typeof json.to_complete === "boolean" ? json.to_complete : patch.to_complete,
+      missing_info: "missing_info" in json ? json.missing_info : (patch.missing_info ?? p.missing_info),
+    }))
+    setMiEditing(false)
+    router.refresh()
+  }
+
   async function deleteProduct() {
     setDeleting(true)
     setDeleteError(null)
@@ -413,6 +465,74 @@ export default function ProductDetailClient({
             Ce produit est désactivé : il ne peut plus être vendu, mais reste dans l&apos;historique et les écrans de stock.
           </div>
         )}
+        {/* Informations à compléter */}
+        {(product.to_complete || missingItems.length > 0 || miEditing) ? (
+          <div className={`mb-4 rounded-xl border px-4 md:px-5 py-4 ${product.to_complete ? "bg-orange-50 border-orange-200" : "bg-white border-gray-100 shadow-sm"}`}>
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap">
+                <AlertTriangle className={`w-4 h-4 ${product.to_complete ? "text-orange-600" : "text-gray-400"}`} />
+                <h2 className="text-sm font-semibold text-gray-900">Informations à compléter</h2>
+                {product.to_complete
+                  ? <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200">À compléter</span>
+                  : <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-700">Fiche complète</span>}
+              </div>
+              {canManage && !miEditing && (
+                <div className="flex gap-2 flex-wrap">
+                  <button onClick={startMiEdit}
+                    className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition">
+                    <Edit2 className="w-3.5 h-3.5" /> Modifier
+                  </button>
+                  {product.to_complete && (
+                    <button onClick={() => saveMissingInfo({ to_complete: false })} disabled={miSaving}
+                      className="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition">
+                      {miSaving ? "…" : "Marquer la fiche complète"}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {miEditing && canManage ? (
+              <div className="mt-3 space-y-3">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">Ce qu&apos;il manque sur la fiche (une information par ligne)</label>
+                  <textarea value={miText} onChange={e => setMiText(e.target.value)} rows={4}
+                    className={`${inputCls} bg-white resize-y`} placeholder={"ex : prix de vente\nconditionnement\nfiche technique"} />
+                </div>
+                <label className="flex items-center gap-2 text-sm text-gray-800 cursor-pointer select-none">
+                  <input type="checkbox" checked={miComplete} onChange={e => setMiComplete(e.target.checked)} className="w-4 h-4 rounded accent-emerald-600" />
+                  Fiche complète (plus rien à compléter)
+                </label>
+                <div className="flex justify-end gap-2">
+                  <Button variant="secondary" onClick={() => { setMiEditing(false); setMiError(null) }} disabled={miSaving}>Annuler</Button>
+                  <Button onClick={() => saveMissingInfo({ missing_info: splitMissing(miText).join(" ; ") || null, to_complete: !miComplete })} disabled={miSaving}>
+                    <Save className="w-4 h-4" /> {miSaving ? "…" : "Enregistrer"}
+                  </Button>
+                </div>
+              </div>
+            ) : missingItems.length > 0 ? (
+              <ul className="mt-2 list-disc pl-6 space-y-0.5 text-sm text-gray-700">
+                {missingItems.map((m, i) => <li key={i}>{m}</li>)}
+              </ul>
+            ) : (
+              <p className="mt-2 text-sm text-gray-500 italic">Aucune information manquante indiquée.</p>
+            )}
+            {product.to_complete && !miEditing && (
+              <p className="mt-2 text-xs text-gray-500">
+                Cette fiche peut déjà être utilisée dans les devis et factures.{" "}
+                {canManage ? "Complétez-la dès que possible, puis marquez-la complète." : "Un utilisateur autorisé à gérer les produits la complétera."}
+              </p>
+            )}
+            {miError && <p className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{miError}</p>}
+          </div>
+        ) : canManage && (
+          <div className="mb-2 flex justify-end">
+            <button onClick={startMiEdit} className="text-xs text-gray-500 hover:text-orange-700 hover:underline">
+              Signaler des informations manquantes
+            </button>
+          </div>
+        )}
+
         {/* Product header */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm mb-4">
           <div className="px-4 md:px-6 pt-5 pb-4 border-b border-gray-100">
@@ -452,6 +572,11 @@ export default function ProductDetailClient({
                         Désactivé
                       </span>
                     )}
+                    {product.to_complete && (
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-orange-100 text-orange-700 border border-orange-200" title="Des informations manquent sur cette fiche">
+                        À compléter
+                      </span>
+                    )}
                     {totalStock < 0 && (
                       <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-red-100 text-red-700">Stock négatif</span>
                     )}
@@ -462,6 +587,11 @@ export default function ProductDetailClient({
                   {product.product_code && (
                     <span className="text-xs text-blue-800 font-mono font-bold bg-blue-100 px-2 py-0.5 rounded border border-blue-200">
                       {product.product_code}
+                    </span>
+                  )}
+                  {(editing ? form.brand : product.brand) && (
+                    <span className="text-xs text-gray-700 bg-gray-100 px-2 py-0.5 rounded">
+                      Marque : <span className="font-semibold">{editing ? form.brand : product.brand}</span>
                     </span>
                   )}
                   {/* Commercial reference (printed on quotes and invoices): visible to everyone */}
@@ -588,6 +718,19 @@ export default function ProductDetailClient({
                     </select>
                   ) : (
                     <p className="text-sm text-gray-800">{product.unit?.name ?? "—"}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                    Marque
+                    <span className="ml-1.5 text-xs text-gray-400 normal-case font-normal">(une autre marque = un autre article)</span>
+                  </label>
+                  {editing ? (
+                    <input value={form.brand} onChange={e => setF("brand", e.target.value)}
+                      className={inputCls} placeholder="ex: Total, Shell…" />
+                  ) : (
+                    <p className="text-sm text-gray-800">{product.brand ?? "—"}</p>
                   )}
                 </div>
 

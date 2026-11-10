@@ -28,9 +28,12 @@ interface Props {
   locale:    string
 }
 
-// R1/H1: every line is an active catalogue product or service, chosen through the picker (no free or note line)
+// R1/H1: every sales line is an active catalogue product or service, chosen through the picker.
+// A comment line (line_type "comment") is text only: no product, quantity, price nor amount.
 interface Line {
   id: number
+  line_type: "product" | "comment"
+  print_on_pdf: boolean
   product_id: string
   product_name: string
   product_reference: string | null
@@ -229,7 +232,7 @@ export default function NouveauDevisClient({
       }].sort((a, b) => a.name.localeCompare(b.name)))
     }
     const firstPkg = known?.packaging?.[0]
-    const patch: Omit<Line, "id" | "quantity" | "discount" | "tva_exempt"> = {
+    const patch: Omit<Line, "id" | "line_type" | "print_on_pdf" | "quantity" | "discount" | "tva_exempt"> = {
       product_id:        cp.id,
       product_name:      cp.name,
       product_reference: cp.reference,
@@ -239,10 +242,19 @@ export default function NouveauDevisClient({
       unit_id:           firstPkg?.unit_id ?? known?.unit?.id ?? unitByName?.id ?? "",
     }
     if (target === "new") {
-      setLines(ls => [...ls, { id: uid(), quantity: "1", discount: "0", tva_exempt: false, ...patch }])
+      setLines(ls => [...ls, { id: uid(), line_type: "product", print_on_pdf: true, quantity: "1", discount: "0", tva_exempt: false, ...patch }])
     } else {
       updateLine(target, patch)
     }
+  }
+
+  // Comment line: text only, printed on the PDF by default
+  function addComment() {
+    setLines(ls => [...ls, {
+      id: uid(), line_type: "comment", print_on_pdf: true,
+      product_id: "", product_name: "", product_reference: null, product_type: null,
+      description: "", quantity: "0", unit_id: "", unit_price: "0", discount: "0", tva_exempt: false,
+    }])
   }
 
   function onUnitChanged(lineId: number, unitId: string) {
@@ -261,6 +273,7 @@ export default function NouveauDevisClient({
   }
 
   function lineTotal(l: Line) {
+    if (l.line_type === "comment") return 0
     return (parseFloat(l.quantity) || 0) * (parseFloat(l.unit_price) || 0) * (1 - (parseFloat(l.discount) || 0) / 100)
   }
 
@@ -295,11 +308,16 @@ export default function NouveauDevisClient({
   /* -- Enregistrement -- */
   async function handleSave() {
     if (!form.account_id) { setError(t("veuillezselectionnerclient")); return }
-    if (lines.length === 0) { setError(t("ajoutezAuMoinsUnProduit")); return }
-    // R1: a line without catalogue product cannot be submitted (the server and the database refuse it too)
-    const missing = lines.map((l, i) => (l.product_id ? null : i + 1)).filter((n): n is number => n !== null)
+    if (!lines.some(l => l.line_type !== "comment")) { setError(t("ajoutezAuMoinsUnProduit")); return }
+    // R1: a sales line without catalogue product cannot be submitted (the server and the database refuse it too)
+    const missing = lines.map((l, i) => (l.line_type === "comment" || l.product_id ? null : i + 1)).filter((n): n is number => n !== null)
     if (missing.length) {
       setError(`Ligne${missing.length > 1 ? "s" : ""} ${missing.join(", ")} sans produit du catalogue : chaque ligne doit être un produit ou un service du catalogue GEG. Choisissez-le avec « Changer » ou supprimez la ligne.`)
+      return
+    }
+    const emptyComments = lines.map((l, i) => (l.line_type === "comment" && !l.description.trim() ? i + 1 : null)).filter((n): n is number => n !== null)
+    if (emptyComments.length) {
+      setError(`Ligne${emptyComments.length > 1 ? "s" : ""} ${emptyComments.join(", ")} : le commentaire est vide. Saisissez un texte ou supprimez la ligne.`)
       return
     }
 
@@ -330,7 +348,18 @@ export default function NouveauDevisClient({
           conditions_generales: form.conditions_generales || null,
           terms_conditions: tc,
         },
-        lines: lines.map((l, i) => ({
+        lines: lines.map((l, i) => l.line_type === "comment" ? {
+          line_type: "comment",
+          product_id: null,
+          description: l.description.trim(),
+          quantity: 0,
+          unit_price: 0,
+          discount: 0,
+          position: i,
+          print_on_pdf: l.print_on_pdf,
+        } : {
+          line_type: "product",
+          print_on_pdf: true,
           product_id: l.product_id,
           description: l.description.trim() || l.product_name,
           quantity: parseFloat(l.quantity) || 1,
@@ -339,7 +368,7 @@ export default function NouveauDevisClient({
           position: i,
           tva_exempt: l.tva_exempt,
           unit_id: l.unit_id || null,
-        })),
+        }),
         user_id: user.id,
       }),
     })
@@ -585,7 +614,35 @@ export default function NouveauDevisClient({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {lines.map(l => (
+                  {lines.map(l => l.line_type === "comment" ? (
+                    <tr key={l.id} className="group bg-gray-50">
+                      <td colSpan={form.tva ? 7 : 6} className="px-8 py-2">
+                        <div className="flex items-start gap-3">
+                          <span className="mt-1 shrink-0 text-[11px] px-1.5 py-0.5 rounded font-medium bg-gray-200 text-gray-600">Commentaire</span>
+                          <textarea
+                            value={l.description}
+                            onChange={e => updateLine(l.id, { description: e.target.value })}
+                            rows={1}
+                            placeholder="Texte du commentaire…"
+                            className="flex-1 text-sm italic text-gray-600 outline-none bg-transparent border-b border-dashed border-gray-300 focus:border-blue-400 resize-y py-0.5"
+                          />
+                          <label className="mt-1 shrink-0 flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={l.print_on_pdf}
+                              onChange={e => updateLine(l.id, { print_on_pdf: e.target.checked })}
+                            />
+                            Imprimer sur le PDF
+                          </label>
+                        </div>
+                      </td>
+                      <td className="pr-2 py-2">
+                        <button onClick={() => removeLine(l.id)} title="Supprimer le commentaire" className="opacity-0 group-hover:opacity-100 text-gray-300 hover:text-red-400 transition">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ) : (
                     <tr key={l.id} className="group hover:bg-gray-50/50">
                       <td className="px-8 py-2">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -635,7 +692,7 @@ export default function NouveauDevisClient({
                       </td>
                       <td className="px-3 py-2">
                         <input
-                          type="number" min="0" step="any" value={l.unit_price}
+                          type="number" step="any" value={l.unit_price}
                           onChange={e => updateLine(l.id, { unit_price: e.target.value })}
                           className="w-full text-right text-sm outline-none bg-transparent border-b border-transparent hover:border-gray-200 focus:border-blue-400 py-0.5"
                         />
@@ -671,16 +728,19 @@ export default function NouveauDevisClient({
               </table>
             )}
 
-            {/* Liens Ajouter — style Odoo. Every line comes from the catalogue (R1: no free or note line) */}
+            {/* Liens Ajouter — style Odoo. Every sales line comes from the catalogue (R1); comments carry text only */}
             <div className="px-8 py-3 flex items-center gap-5 border-t border-gray-50">
               <button onClick={() => setPickerTarget("new")} className="text-sm text-blue-600 hover:text-blue-500 font-medium transition-colors">
                 {t("ajouterUnProduit")}
               </button>
-              <span className="text-xs text-gray-400">Chaque ligne doit être un produit ou un service du catalogue.</span>
+              <button onClick={addComment} className="text-sm text-blue-600 hover:text-blue-500 font-medium transition-colors">
+                Ajouter un commentaire
+              </button>
+              <span className="text-xs text-gray-400">Chaque ligne de vente doit être un produit ou un service du catalogue. Un commentaire contient seulement du texte.</span>
             </div>
 
-            {/* R3: non-blocking stock alerts (services never checked) */}
-            <StockAlert className="px-8 pb-3" lines={lines.map(l => ({ product_id: l.product_id, quantity: l.quantity }))} />
+            {/* R3: non-blocking stock alerts (services and comments never checked) */}
+            <StockAlert className="px-8 pb-3" lines={lines.filter(l => l.line_type !== "comment").map(l => ({ product_id: l.product_id, quantity: l.quantity }))} />
 
             {/* Zone conditions + totaux */}
             <div className="border-t border-gray-100 px-8 py-5 flex gap-8">

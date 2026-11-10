@@ -33,7 +33,13 @@ interface Line {
   discount: number
   tva_rate: number
   image_url?: string | null
+  // "comment": text only, printed full width when print_on_pdf is not false
+  line_type?: string | null
+  print_on_pdf?: boolean | null
 }
+
+const isComment = (l: Line) => l.line_type === "comment"
+const lineHT = (l: Line) => (isComment(l) ? 0 : l.quantity * l.unit_price * (1 - l.discount / 100))
 
 interface BankAccount {
   institution: string
@@ -83,10 +89,12 @@ export async function renderDevisPdf(props: Props): Promise<Buffer> {
   const cur = currency === "GNF" ? "FG" : currency
   const dec = ["GNF", "XOF"].includes(currency) ? 0 : 2
 
-  const hasTva = lines.some(l => l.tva_rate > 0)
-  const totalHT = lines.reduce((s, l) => s + l.quantity * l.unit_price * (1 - l.discount / 100), 0)
-  const tvaAmt = lines.reduce((s, l) => s + l.quantity * l.unit_price * (1 - l.discount / 100) * l.tva_rate / 100, 0)
+  const hasTva = lines.some(l => !isComment(l) && l.tva_rate > 0)
+  const totalHT = lines.reduce((s, l) => s + lineHT(l), 0)
+  const tvaAmt = lines.reduce((s, l) => s + lineHT(l) * (isComment(l) ? 0 : l.tva_rate) / 100, 0)
   const totalTTC = totalHT + tvaAmt
+  // Comment lines are printed only when print_on_pdf is not false; totals are unchanged
+  const printedLines = lines.filter(l => !isComment(l) || l.print_on_pdf !== false)
 
   const currencies = Array.from(new Set(bankAccounts.map(a => a.currency)))
 
@@ -224,8 +232,13 @@ export async function renderDevisPdf(props: Props): Promise<Buffer> {
             <Text style={[s.thText, { width: 80, textAlign: "right" }]}>Montant</Text>
           </View>
           {/* Rows */}
-          {lines.map((l, i) => {
-            const sub = l.quantity * l.unit_price * (1 - l.discount / 100)
+          {printedLines.map((l, i) => {
+            if (isComment(l)) return (
+              <View key={l.id} style={[s.tableRow, i % 2 === 1 ? s.tableRowEven : {}]} wrap={false}>
+                <Text style={{ flex: 1, fontSize: 8.5, fontFamily: "Helvetica-Oblique", color: "#444", lineHeight: 1.4 }}>{l.description}</Text>
+              </View>
+            )
+            const sub = lineHT(l)
             return (
               <View key={l.id} style={[s.tableRow, i % 2 === 1 ? s.tableRowEven : {}]} wrap={false}>
                 <View style={{ flex: 4, flexDirection: "row", alignItems: "flex-start", gap: 6 }}>

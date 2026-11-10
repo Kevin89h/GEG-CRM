@@ -23,6 +23,10 @@ export interface CatalogProduct {
   packagings: string[]
   sell_price: number | null
   currency: string | null
+  brand?: string | null
+  /** Active fiche with missing information: still selectable */
+  to_complete?: boolean | null
+  missing_info?: string | null
   score?: number
   reasons?: string[]
 }
@@ -169,6 +173,11 @@ function CandidateList({ locale, items, onSelect }: { locale: string; items: Cat
               <span className={`text-[11px] px-1.5 py-0.5 rounded font-medium ${p.product_type === "service" ? "bg-violet-100 text-violet-700" : "bg-gray-100 text-gray-600"}`}>
                 {productTypeLabel(p.product_type)}
               </span>
+              {p.to_complete && (
+                <span className="text-[11px] px-1.5 py-0.5 rounded font-medium bg-orange-100 text-orange-700 border border-orange-200" title={p.missing_info ? `À compléter : ${p.missing_info}` : "Fiche à compléter (utilisable)"}>
+                  À compléter
+                </span>
+              )}
               {!p.is_active && (
                 <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-gray-200 text-gray-600 font-medium">
                   <Ban className="w-3 h-3" /> désactivé — non sélectionnable
@@ -177,6 +186,7 @@ function CandidateList({ locale, items, onSelect }: { locale: string; items: Cat
             </div>
             <p className="text-xs text-gray-500 mt-0.5">
               {[
+                p.brand && `Marque : ${p.brand}`,
                 p.reference && `Réf. ${p.reference}`,
                 p.product_code && `Code ${p.product_code}`,
                 p.merchant_reference && `Réf. marchand ${p.merchant_reference}`,
@@ -272,6 +282,7 @@ function CreateProductForm({ locale, initialName, currency, onCancel, onCreated,
     product_type: "" as "" | "storable" | "service",
     name: initialName,
     reference: "",
+    brand: "",
     category_id: "",
     unit_id: "",
     sell_price: "",
@@ -329,6 +340,7 @@ function CreateProductForm({ locale, initialName, currency, onCancel, onCreated,
         body: JSON.stringify({
           name,
           reference: form.reference.trim() || null,
+          brand: form.brand.trim() || null,
           category_id: form.category_id || null,
           unit_id: form.unit_id || null,
           sell_price: form.sell_price ? parseFloat(form.sell_price) : null,
@@ -371,6 +383,8 @@ function CreateProductForm({ locale, initialName, currency, onCancel, onCreated,
         packagings: [],
         sell_price: json.sell_price ?? null,
         currency: json.currency ?? currency,
+        brand: json.brand ?? (form.brand.trim() || null),
+        to_complete: json.to_complete ?? false,
       })
     } catch {
       setError("Erreur réseau lors de la création")
@@ -406,6 +420,10 @@ function CreateProductForm({ locale, initialName, currency, onCancel, onCreated,
         <div>
           <label className={labelCls}>Référence</label>
           <input value={form.reference} onChange={e => setF("reference", e.target.value)} className={inputCls} placeholder="Ex : LUB-15W40-205" />
+        </div>
+        <div>
+          <label className={labelCls}>Marque</label>
+          <input value={form.brand} onChange={e => setF("brand", e.target.value)} className={inputCls} placeholder="Ex : Total (optionnel)" />
         </div>
         <div>
           <label className={labelCls}>Catégorie</label>

@@ -27,6 +27,9 @@ interface Line {
   unit_price: number
   discount: number
   product?: { name: string; reference?: string | null } | null
+  // Sales documents: a "comment" line is text only, printed only when print_on_pdf is not false
+  line_type?: string | null
+  print_on_pdf?: boolean | null
 }
 
 interface DocumentLayoutProps {
@@ -54,6 +57,7 @@ const TYPE_LABELS: Record<string, string> = {
 }
 
 function lineTotal(l: Line) {
+  if (l.line_type === "comment") return 0
   return l.quantity * l.unit_price * (1 - (l.discount ?? 0) / 100)
 }
 
@@ -156,7 +160,13 @@ export default function DocumentLayout({
           </tr>
         </thead>
         <tbody>
-          {lines.map((l, i) => (
+          {lines.filter(l => l.line_type !== "comment" || l.print_on_pdf !== false).map((l, i) => l.line_type === "comment" ? (
+            <tr key={i}>
+              <td colSpan={5} style={{ fontSize: 11, fontStyle: "italic", color: "#444", whiteSpace: "pre-line", borderBottom: "1px solid #e5e7eb" }}>
+                {l.description}
+              </td>
+            </tr>
+          ) : (
             <tr key={i} style={{ backgroundColor: i % 2 === 0 ? "#f9fafb" : "#ffffff" }}>
               <td style={{ fontSize: 11, borderBottom: "1px solid #e5e7eb" }}>
                 <span style={{ fontWeight: 500 }}>

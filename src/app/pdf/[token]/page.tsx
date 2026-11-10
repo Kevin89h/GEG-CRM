@@ -59,7 +59,7 @@ export default async function PublicPdfPage({ params }: { params: Promise<{ toke
       .from("invoices")
       .select(`id, number, status, currency, issue_date, due_date, notes, order_id,
         account:accounts(id, name, address, city, country, phone, nif),
-        lines:invoice_lines(id, description, quantity, unit_price, discount, position, tva_rate, product:products(id, name, reference))`)
+        lines:invoice_lines(id, description, quantity, unit_price, discount, position, tva_rate, line_type, print_on_pdf, product:products(id, name, reference))`)
       .eq("id", id)
       .single()
 
@@ -78,6 +78,8 @@ export default async function PublicPdfPage({ params }: { params: Promise<{ toke
       tva_rate: l.tva_rate != null ? Number(l.tva_rate) : null,
       image_url: null,
       product: Array.isArray(l.product) ? (l.product[0] ?? null) : l.product as { name: string; reference: string | null } | null,
+      line_type: (l.line_type as string | null) ?? "product",
+      print_on_pdf: l.print_on_pdf !== false,
     }))
 
     const paymentList = (payments ?? []).map((p: { amount: number; paid_at: string }) => ({ amount: Number(p.amount) || 0, paid_at: String(p.paid_at ?? "") }))
@@ -117,7 +119,7 @@ export default async function PublicPdfPage({ params }: { params: Promise<{ toke
 
     const [{ data: account }, { data: rawLines }] = await Promise.all([
       order.account_id ? db.from("accounts").select("id, name, country, nif").eq("id", order.account_id).single() : Promise.resolve({ data: null }),
-      db.from("sales_order_lines").select("id, description, quantity, unit_price, discount, position, tva_exempt").eq("order_id", id).order("position"),
+      db.from("sales_order_lines").select("id, description, quantity, unit_price, discount, position, tva_exempt, line_type, print_on_pdf").eq("order_id", id).order("position"),
     ])
 
     const orderTva = Boolean(order.tva)
@@ -130,6 +132,8 @@ export default async function PublicPdfPage({ params }: { params: Promise<{ toke
       tva_rate: orderTva && !l.tva_exempt ? 18 : 0,
       image_url: null,
       product: null,
+      line_type: (l.line_type as string | null) ?? "product",
+      print_on_pdf: l.print_on_pdf !== false,
     }))
 
     return (

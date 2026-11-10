@@ -48,8 +48,10 @@ begin
     if new.product_id is not null or new.quantity <> 0 or new.unit_price <> 0 or new.discount <> 0 then
       raise exception 'Ligne de commentaire : elle ne peut avoir ni produit, ni quantité, ni prix, ni remise';
     end if;
-    if tg_table_name = 'sales_order_lines' and new.qty_delivered <> 0 then
-      raise exception 'Ligne de commentaire : elle ne peut pas être livrée';
+    if tg_table_name = 'sales_order_lines' then   -- qty_delivered only exists on quote lines (no short-circuit in PL/pgSQL)
+      if (to_jsonb(new) ->> 'qty_delivered')::numeric <> 0 then
+        raise exception 'Ligne de commentaire : elle ne peut pas être livrée';
+      end if;
     end if;
     if btrim(coalesce(new.description, '')) = '' then raise exception 'Ligne de commentaire vide'; end if;
     return new;

@@ -33,7 +33,7 @@ export async function GET(
   const [{ data: account }, { data: salesperson }, { data: rawLines }, { data: bankAccounts }] = await Promise.all([
     order.account_id ? db.from("accounts").select("id, name, country").eq("id", order.account_id).single() : Promise.resolve({ data: null }),
     order.salesperson_id ? db.from("employees").select("full_name").eq("id", order.salesperson_id).single() : Promise.resolve({ data: null }),
-    db.from("sales_order_lines").select("id, description, quantity, unit_price, discount, position, product_id, tva_exempt").eq("order_id", id).order("position"),
+    db.from("sales_order_lines").select("id, description, quantity, unit_price, discount, position, product_id, tva_exempt, line_type, print_on_pdf").eq("order_id", id).order("position"),
     db.from("treasury_accounts").select("institution, account_number, swift, iban, currency").eq("type", "bank").eq("is_active", true).order("name"),
   ])
 
@@ -56,8 +56,10 @@ export async function GET(
     quantity: Number(l.quantity) || 0,
     unit_price: Number(l.unit_price) || 0,
     discount: Number(l.discount) || 0,
-    tva_rate: orderTva && !l.tva_exempt ? 18 : 0,
+    tva_rate: orderTva && !l.tva_exempt && l.line_type !== "comment" ? 18 : 0,
     image_url: showImages && l.product_id ? (productImageMap[l.product_id as string] ?? null) : null,
+    line_type: (l.line_type as string | null) ?? "product",
+    print_on_pdf: l.print_on_pdf !== false,
   }))
 
   const status = (order as Record<string, unknown>).status as string ?? "draft"

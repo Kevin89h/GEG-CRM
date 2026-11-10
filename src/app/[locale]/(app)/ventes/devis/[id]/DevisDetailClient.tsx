@@ -27,7 +27,12 @@ interface Line {
   product_id?: string | null
   product: { name: string; reference: string | null } | null
   unit?: { name: string } | null
+  // "comment": text only (no product, quantity, price nor amount); "product" (default): sales line
+  line_type?: string | null
+  print_on_pdf?: boolean | null
 }
+
+const isComment = (l: { line_type?: string | null }) => l.line_type === "comment"
 
 interface Order {
   id: string
@@ -79,6 +84,9 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
   const [addingLine, setAddingLine] = useState(false)
   // Catalogue picker: "new" adds a line, a line id attaches that free line to a product (R1)
   const [pickerTarget, setPickerTarget] = useState<"new" | string | null>(null)
+  // Comment being typed before it is added (null: no comment form open)
+  const [newComment, setNewComment] = useState<string | null>(null)
+  const [newCommentPrint, setNewCommentPrint] = useState(true)
   // Stock per product from /api/stock/disponibilite (used to recognise services, never stock-checked)
   const [availability, setAvailability] = useState<Record<string, Availability>>({})
   const [activeTab, setActiveTab] = useState<"lines" | "other" | "notes">("lines")
@@ -223,6 +231,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
 
 
   function lineTotal(l: Line) {
+    if (isComment(l)) return 0
     return l.quantity * l.unit_price * (1 - l.discount / 100)
   }
   const total = lines.reduce((s, l) => s + lineTotal(l), 0)
@@ -293,6 +302,46 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
     }
   }
 
+  // Comment line: text only, no impact on totals, VAT or stock
+  async function addComment() {
+    const text = (newComment ?? "").trim()
+    if (!text) { alert("Saisissez le texte du commentaire."); return }
+    if (addingLine) return
+    setAddingLine(true)
+    try {
+      const res = await fetch(`/api/devis/${order.id}/lines`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ line_type: "comment", description: text, print_on_pdf: newCommentPrint }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        alert(`Erreur: ${data.error ?? res.status}`)
+        return
+      }
+      setLines(prev => [...prev, { ...data, line_type: "comment", product: null, unit: null }])
+      setNewComment(null)
+      setNewCommentPrint(true)
+    } finally {
+      setAddingLine(false)
+    }
+  }
+
+  async function saveCommentText(lineId: string, value: string, previous: string) {
+    if (!value.trim()) { alert("Un commentaire ne peut pas être vide : supprimez la ligne si elle n'est plus utile."); return false }
+    if (value === previous) return true
+    setLines(prev => prev.map(l => l.id === lineId ? { ...l, description: value } : l))
+    const ok = await patchOrder({ description: value }, `/api/devis/${order.id}/lines/${lineId}`)
+    if (!ok) setLines(prev => prev.map(l => l.id === lineId ? { ...l, description: previous } : l))
+    return ok
+  }
+
+  async function togglePrintOnPdf(lineId: string, value: boolean) {
+    setLines(prev => prev.map(l => l.id === lineId ? { ...l, print_on_pdf: value } : l))
+    const ok = await patchOrder({ print_on_pdf: value }, `/api/devis/${order.id}/lines/${lineId}`)
+    if (!ok) setLines(prev => prev.map(l => l.id === lineId ? { ...l, print_on_pdf: !value } : l))
+  }
+
   // Attaches an old free line (no product) to a catalogue product; its description and price are kept
   async function attachProduct(lineId: string, p: CatalogProduct) {
     const ok = await patchOrder({ product_id: p.id }, `/api/devis/${order.id}/lines/${lineId}`)
@@ -301,7 +350,8 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
     setLines(prev => prev.map(l => l.id === lineId ? { ...l, product_id: p.id, product: { name: p.name, reference: p.reference }, unit } : l))
   }
 
-  const freeLines = lines.filter(l => !l.product_id)
+  // Old free lines (sales lines without product); comment lines are not free lines
+  const freeLines = lines.filter(l => !l.product_id && !isComment(l))
 
   // Sends only the changed field: for project_code the body is exactly { project_code }
   async function updateOrderField(field: string, value: string) {
@@ -376,7 +426,20 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
         currency: orderFields.currency,
         tva,
         payment_terms: order.payment_terms ?? null,
-        lines: lines.map(l => ({
+        // Comment lines are copied as comments (text only, print setting kept)
+        lines: lines.map(l => isComment(l) ? {
+          line_type: "comment",
+          description: l.description,
+          quantity: 0,
+          unit_price: 0,
+          discount: 0,
+          product_id: null,
+          tva_exempt: false,
+          unit_id: null,
+          print_on_pdf: l.print_on_pdf !== false,
+        } : {
+          line_type: "product",
+          print_on_pdf: l.print_on_pdf !== false,
           description: l.description,
           quantity: l.quantity,
           unit_price: l.unit_price,
@@ -384,7 +447,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
           product_id: (l as unknown as { product_id?: string }).product_id ?? null,
           tva_exempt: l.tva_exempt ?? false,
           unit_id: (l as unknown as { unit_id?: string }).unit_id ?? null,
-        })),
+        }),
         user_id: user.id,
       }),
     })
@@ -755,7 +818,49 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {lines.map(l => (
+                {lines.map(l => isComment(l) ? (
+                  <tr key={l.id} className="bg-gray-50">
+                    <td colSpan={tva ? 7 : 6} className="px-4 py-2">
+                      <div className="flex items-start gap-3">
+                        <span className="mt-0.5 shrink-0 text-[11px] px-1.5 py-0.5 rounded font-medium bg-gray-200 text-gray-600">Commentaire</span>
+                        {canEdit ? (
+                          <textarea
+                            rows={1}
+                            defaultValue={l.description}
+                            onBlur={async e => {
+                              const el = e.currentTarget
+                              const ok = await saveCommentText(l.id, el.value, l.description)
+                              if (!ok) el.value = l.description
+                            }}
+                            placeholder="Texte du commentaire…"
+                            className="flex-1 text-sm italic text-gray-600 bg-transparent border-b border-dashed border-gray-300 focus:border-blue-500 focus:outline-none resize-y py-0.5"
+                          />
+                        ) : (
+                          <p className="flex-1 text-sm italic text-gray-600 whitespace-pre-line">{l.description}</p>
+                        )}
+                        {canEdit ? (
+                          <label className="mt-0.5 shrink-0 flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
+                            <input type="checkbox" checked={l.print_on_pdf !== false} onChange={e => togglePrintOnPdf(l.id, e.target.checked)} />
+                            Imprimer sur le PDF
+                          </label>
+                        ) : l.print_on_pdf === false && (
+                          <span className="mt-0.5 shrink-0 text-xs text-gray-400">Non imprimé sur le PDF</span>
+                        )}
+                      </div>
+                    </td>
+                    {canEdit && (
+                      <td className="px-2 py-2">
+                        <button
+                          onClick={() => deleteLine(l.id)}
+                          title="Supprimer le commentaire"
+                          className="text-gray-300 hover:text-red-500 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                ) : (
                   <tr key={l.id} className={l.tva_exempt ? "bg-gray-50/50" : ""}>
                     <td className="px-4 py-2">
                       {canEdit ? (
@@ -826,7 +931,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                     <td className="px-4 py-2 text-right">
                       {canEdit ? (
                         <input
-                          type="number" min="0" step="any"
+                          type="number" step="any"
                           className="w-24 text-sm text-right text-gray-900 bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none py-0.5"
                           defaultValue={l.unit_price}
                           onBlur={e => updateLine(l.id, "unit_price", e.target.value)}
@@ -898,7 +1003,44 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                   <Plus className="w-4 h-4" />
                   {addingLine ? "Ajout..." : "Ajouter une ligne"}
                 </button>
-                <span className="text-xs text-gray-400">Chaque ligne doit être un produit ou un service du catalogue.</span>
+                <button
+                  onClick={() => setNewComment(c => c ?? "")}
+                  disabled={addingLine || newComment !== null}
+                  className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Plus className="w-4 h-4" />
+                  Ajouter un commentaire
+                </button>
+                <span className="text-xs text-gray-400">Chaque ligne de vente doit être un produit ou un service du catalogue. Un commentaire contient seulement du texte.</span>
+              </div>
+            )}
+            {canEdit && newComment !== null && (
+              <div className="mx-4 mb-3 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 space-y-2">
+                <div className="flex items-start gap-3">
+                  <span className="mt-0.5 shrink-0 text-[11px] px-1.5 py-0.5 rounded font-medium bg-gray-200 text-gray-600">Commentaire</span>
+                  <textarea
+                    autoFocus
+                    rows={2}
+                    value={newComment}
+                    onChange={e => setNewComment(e.target.value)}
+                    placeholder="Texte du commentaire…"
+                    className="flex-1 text-sm italic text-gray-700 bg-white border border-gray-200 rounded px-2 py-1 focus:border-blue-500 focus:outline-none resize-y"
+                  />
+                </div>
+                <div className="flex items-center gap-4 justify-end">
+                  <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none mr-auto">
+                    <input type="checkbox" checked={newCommentPrint} onChange={e => setNewCommentPrint(e.target.checked)} />
+                    Imprimer sur le PDF
+                  </label>
+                  <button onClick={() => { setNewComment(null); setNewCommentPrint(true) }} className="text-xs text-gray-500 hover:text-gray-700">Annuler</button>
+                  <button
+                    onClick={addComment}
+                    disabled={addingLine || !newComment.trim()}
+                    className="text-xs px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {addingLine ? "Ajout..." : "Ajouter le commentaire"}
+                  </button>
+                </div>
               </div>
             )}
 
@@ -912,11 +1054,11 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
               </div>
             )}
 
-            {/* R3: non-blocking stock alerts (services never checked) */}
+            {/* R3: non-blocking stock alerts (services and comments never checked) */}
             {!isCancelled && !isInvoiced && (
               <StockAlert
                 className="mx-4 mb-3"
-                lines={lines.map(l => ({ product_id: l.product_id, quantity: l.quantity }))}
+                lines={lines.filter(l => !isComment(l)).map(l => ({ product_id: l.product_id, quantity: l.quantity }))}
                 onAvailability={setAvailability}
               />
             )}

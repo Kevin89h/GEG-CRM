@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import { useTranslations } from "next-intl"
-import { Plus, Search, Package, Download, Trash2, AlertTriangle, ExternalLink } from "lucide-react"
+import { Plus, Search, Package, Download, Trash2, AlertTriangle, ExternalLink, Link2 } from "lucide-react"
 import { Button } from "@/components/ui/Button"
 import { Badge } from "@/components/ui/Badge"
 import { Modal } from "@/components/ui/Modal"
@@ -35,6 +35,10 @@ interface ProductRow {
   sell_price: number | null
   currency: "USD" | "GNF" | "EUR"
   is_active: boolean
+  brand?: string | null
+  /** Catalogue fiche with missing information, to complete progressively (still usable) */
+  to_complete?: boolean | null
+  missing_info?: string | null
   category: { id: string; name: string; color: string } | null
   unit: { id: string; name: string; type: string } | null
   unit_ids: string[] | null
@@ -72,6 +76,8 @@ interface SimilarItem {
   merchant_reference: string | null
   product_type: string | null
   is_active: boolean
+  brand?: string | null
+  to_complete?: boolean | null
   category: string | null
   unit: string | null
   packagings: string[]
@@ -98,6 +104,8 @@ export default function ProduitsClient({ products: initial, categories, units, c
   const [products, setProducts] = useState(initial)
   const [search, setSearch] = useState("")
   const [filterCat, setFilterCat] = useState("all")
+  // "À compléter" filter: catalogue fiches created with missing information
+  const [onlyToComplete, setOnlyToComplete] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState("")
@@ -108,7 +116,7 @@ export default function ProduitsClient({ products: initial, categories, units, c
   interface PkgFormRow { unit_id: string; sell_price: string; buy_price: string; sell_currency: Currency; buy_currency: Currency }
 
   const [form, setForm] = useState({
-    reference: "", name: "", description: "",
+    reference: "", name: "", brand: "", description: "",
     category_id: categories[0]?.id ?? "",
     product_type: "" as ProductType | "",
     sell_price: "", currency: "GNF" as Currency,
@@ -189,12 +197,15 @@ export default function ProduitsClient({ products: initial, categories, units, c
     setConfirmNoMatch(false)
   }
 
+  const toCompleteCount = products.filter(p => p.to_complete).length
   const filtered = products.filter(p => {
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
       (p.reference ?? "").toLowerCase().includes(search.toLowerCase()) ||
-      (p.product_code ?? "").toLowerCase().includes(search.toLowerCase())
+      (p.product_code ?? "").toLowerCase().includes(search.toLowerCase()) ||
+      (p.brand ?? "").toLowerCase().includes(search.toLowerCase())
     const matchCat = filterCat === "all" || p.category?.id === filterCat
-    return matchSearch && matchCat
+    const matchToComplete = !onlyToComplete || !!p.to_complete
+    return matchSearch && matchCat && matchToComplete
   })
 
   async function handleSave() {
@@ -232,6 +243,7 @@ export default function ProduitsClient({ products: initial, categories, units, c
       body: JSON.stringify({
         name: form.name,
         reference: form.reference || null,
+        brand: form.brand.trim() || null,
         description: form.description || null,
         category_id: form.category_id || null,
         product_type: form.product_type,
@@ -276,7 +288,7 @@ export default function ProduitsClient({ products: initial, categories, units, c
     setProducts(prev => [{ ...json, packaging: validPkg.length > 0 ? validPkg : null }, ...prev])
     resetModal()
     setPkgRows([])
-    setForm({ reference: "", name: "", description: "", category_id: categories[0]?.id ?? "", product_type: "", sell_price: "", currency: "GNF", buy_price: "", buy_price_currency: "GNF" })
+    setForm({ reference: "", name: "", brand: "", description: "", category_id: categories[0]?.id ?? "", product_type: "", sell_price: "", currency: "GNF", buy_price: "", buy_price_currency: "GNF" })
     setSaving(false)
   }
 
@@ -287,12 +299,21 @@ export default function ProduitsClient({ products: initial, categories, units, c
           <h1 className="text-2xl font-bold text-gray-900">{t("catalogueProduits")}</h1>
           <p className="text-gray-500 text-sm mt-0.5">{filtered.length} {t("produit")}{filtered.length !== 1 ? t("pluralSuffix") : ""}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap justify-end">
+          <Link
+            href={`/${locale}/stock/produits/rattachements`}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded border border-gray-200 text-gray-600 hover:bg-gray-50 transition"
+            title="Relier les anciennes lignes libres des devis et factures aux fiches du catalogue"
+          >
+            <Link2 className="w-4 h-4" /> Lignes historiques à rattacher
+          </Link>
           <button
             onClick={() => exportToXls(filtered.map(p => ({
               "Code": p.product_code ?? "",
               "Référence": p.reference ?? "",
               "Nom": p.name,
+              "Marque": p.brand ?? "",
+              "À compléter": p.to_complete ? "Oui" : "Non",
               "Catégorie": p.category?.name ?? "",
               "Unité": p.unit?.name ?? "",
               ...(seeBuyPrice ? { "Prix achat": p.buy_price ?? "", "Devise achat": p.buy_price_currency } : {}),
@@ -340,6 +361,13 @@ export default function ProduitsClient({ products: initial, categories, units, c
               {c.name}
             </button>
           ))}
+          <button
+            onClick={() => setOnlyToComplete(v => !v)}
+            title="Fiches créées avec des informations manquantes, à compléter"
+            className={`px-3 py-2 text-xs rounded-lg font-medium transition ${onlyToComplete ? "bg-orange-500 text-white" : "bg-white border border-orange-200 text-orange-700 hover:bg-orange-50"}`}
+          >
+            À compléter ({toCompleteCount})
+          </button>
         </div>
       </div>
 
@@ -355,6 +383,7 @@ export default function ProduitsClient({ products: initial, categories, units, c
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
                 <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colProduit")}</th>
+                <th className="text-left px-4 py-3 font-medium text-gray-600">Marque</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Code</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colReference")}</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colCategorie")}</th>
@@ -371,7 +400,11 @@ export default function ProduitsClient({ products: initial, categories, units, c
                     {!p.is_active && (
                       <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-gray-200 text-gray-700 align-middle" title="Non vendable ; reste dans l'historique et les écrans de stock">Désactivé</span>
                     )}
+                    {p.to_complete && (
+                      <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-orange-100 text-orange-700 border border-orange-200 align-middle" title={p.missing_info ? `À compléter : ${p.missing_info}` : "Des informations manquent sur cette fiche"}>À compléter</span>
+                    )}
                   </td>
+                  <td className="px-4 py-3 text-gray-700">{p.brand ?? "—"}</td>
                   <td className="px-4 py-3 text-blue-700 font-mono text-xs font-semibold">{p.product_code ?? "—"}</td>
                   <td className="px-4 py-3 text-gray-500 font-mono text-xs">{p.reference ?? "—"}</td>
                   <td className="px-4 py-3">
@@ -418,6 +451,10 @@ export default function ProduitsClient({ products: initial, categories, units, c
             </div>
             <Input label={`${t("reference")} (optionnel)`} value={form.reference} onChange={e => setForm(f => ({ ...f, reference: e.target.value }))} placeholder="ex: CIM-42.5-001" />
           </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Input label="Marque (optionnel)" value={form.brand} onChange={e => setForm(f => ({ ...f, brand: e.target.value }))} placeholder="ex: Total, Shell…" />
+            <p className="sm:col-span-2 text-xs text-gray-500 sm:pt-7">Une marque différente correspond à un article distinct.</p>
+          </div>
 
           {/* Articles similaires (contrôle anti-doublon) */}
           {form.name.trim().length >= 2 && (similarLoading || similar.length > 0) && (
@@ -431,7 +468,7 @@ export default function ProduitsClient({ products: initial, categories, units, c
               {similar.length > 0 && (
                 <>
                   <p className="text-xs text-gray-600 mb-2">
-                    Vérifiez que l&apos;article n&apos;existe pas déjà. Un conditionnement ou une viscosité différente correspond à un article distinct.
+                    Vérifiez que l&apos;article n&apos;existe pas déjà. Une marque, une gamme, un conditionnement ou une viscosité différente correspond à un article distinct.
                   </p>
                   <ul className="space-y-2 max-h-64 overflow-y-auto">
                     {similar.map(s => {
@@ -444,10 +481,12 @@ export default function ProduitsClient({ products: initial, categories, units, c
                                 {s.name}
                                 {!s.is_active && <span className="ml-2 inline-flex px-1.5 py-0.5 rounded bg-gray-200 text-gray-700 text-[10px] font-semibold align-middle">Désactivé</span>}
                                 {s.is_active && distinct && <span className="ml-2 inline-flex px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 text-[10px] font-semibold align-middle">Article distinct</span>}
+                                {s.to_complete && <span className="ml-2 inline-flex px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 text-[10px] font-semibold align-middle">À compléter</span>}
                               </p>
                               <p className="text-gray-600 mt-0.5">
                                 {[
                                   s.product_code,
+                                  s.brand ? `Marque : ${s.brand}` : null,
                                   s.reference ? `Réf. ${s.reference}` : null,
                                   s.merchant_reference,
                                   s.product_type ? (PRODUCT_TYPE_LABELS[s.product_type] ?? s.product_type) : null,

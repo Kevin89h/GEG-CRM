@@ -32,7 +32,12 @@ interface Line {
   discount: number
   tva_rate: number | null
   image_url?: string | null
+  // "comment": text only, printed full width when print_on_pdf is not false
+  line_type?: string | null
+  print_on_pdf?: boolean | null
 }
+
+const isComment = (l: Line) => l.line_type === "comment"
 
 interface BankAccount {
   institution: string
@@ -115,14 +120,19 @@ export async function renderFacturePdf(props: Props): Promise<Buffer> {
   const cur = currency === "GNF" ? "FG" : currency
   const dec = ["GNF", "XOF"].includes(currency) ? 0 : 2
 
-  const hasTva = lines.some(l => (l.tva_rate ?? 0) > 0)
+  // Comment lines carry no amount nor VAT: left out of every total
+  const salesLines = lines.filter(l => !isComment(l))
+  // Comment lines are printed only when print_on_pdf is not false
+  const printedLines = lines.filter(l => !isComment(l) || l.print_on_pdf !== false)
+
+  const hasTva = salesLines.some(l => (l.tva_rate ?? 0) > 0)
   const defaultTva = hasTva ? 18 : 0
 
-  const totalHT = lines.reduce((s, l) =>
+  const totalHT = salesLines.reduce((s, l) =>
     s + l.quantity * l.unit_price * (1 - (l.discount ?? 0) / 100), 0)
 
   const tvaByRate: Record<number, number> = {}
-  for (const l of lines) {
+  for (const l of salesLines) {
     const rate = l.tva_rate != null ? l.tva_rate : defaultTva
     if (rate > 0) {
       const sub = l.quantity * l.unit_price * (1 - (l.discount ?? 0) / 100)
@@ -293,7 +303,12 @@ export async function renderFacturePdf(props: Props): Promise<Buffer> {
             {hasTva && <Text style={[s.thText, { width: 40, textAlign: "right" }]}>Taxes</Text>}
             <Text style={[s.thText, { width: 80, textAlign: "right" }]}>Montant</Text>
           </View>
-          {lines.map((l, i) => {
+          {printedLines.map((l, i) => {
+            if (isComment(l)) return (
+              <View key={l.id} style={[s.tableRow, i % 2 === 1 ? s.tableRowEven : {}]} wrap={false}>
+                <Text style={{ flex: 1, fontSize: 8.5, fontFamily: "Helvetica-Oblique", color: "#444", lineHeight: 1.4 }}>{l.description}</Text>
+              </View>
+            )
             const disc = 1 - (l.discount ?? 0) / 100
             const sub = l.quantity * l.unit_price * disc
             const rate = l.tva_rate != null ? l.tva_rate : defaultTva

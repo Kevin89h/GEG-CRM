@@ -18,7 +18,12 @@ interface Line {
   tva_rate?: number | null
   image_url?: string | null
   product: { name: string; reference: string | null } | null
+  // "comment": text only, printed full width when print_on_pdf is not false
+  line_type?: string | null
+  print_on_pdf?: boolean | null
 }
+
+const isComment = (l: Line) => l.line_type === "comment"
 
 interface BankDetails {
   name?: string
@@ -80,9 +85,12 @@ interface Props {
 export default function FacturePrintPage({
   id, number, status, currency, issueDate, dueDate, notes, sourceRef,
   accountName, accountAddress, accountCity, accountCountry, accountPhone, accountNif,
-  lines, payments, locale, docSettings, bankAccounts = [],
+  lines: allLines, payments, locale, docSettings, bankAccounts = [],
 }: Props) {
   const [showImages, setShowImages] = useState(true)
+  // Sales lines carry the amounts; comment lines are printed (when print_on_pdf) but never counted
+  const lines = allLines.filter(l => !isComment(l))
+  const printedLines = allLines.filter(l => !isComment(l) || l.print_on_pdf !== false)
 
   useEffect(() => {
     document.title = `Facture ${number}`
@@ -404,7 +412,12 @@ export default function FacturePrintPage({
                 </tr>
               </thead>
               <tbody>
-                {lines.map(l => {
+                {printedLines.map(l => {
+                  if (isComment(l)) return (
+                    <tr key={l.id}>
+                      <td colSpan={hasTva ? 5 : 4} style={{ fontStyle: "italic", color: "#555", whiteSpace: "pre-line" }}>{l.description}</td>
+                    </tr>
+                  )
                   const disc = 1 - (l.discount ?? 0) / 100
                   const sub = l.quantity * l.unit_price * disc
                   const rate = l.tva_rate != null ? l.tva_rate : defaultTva
