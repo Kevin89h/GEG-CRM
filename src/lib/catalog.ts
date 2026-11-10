@@ -23,6 +23,11 @@ export type SalesLineInput = {
 /** True for a comment line (text only: no product, quantity, price nor amount) */
 export const isComment = (l: { line_type?: string | null }) => l.line_type === "comment"
 
+/** Explicit line kind for bulk inserts (a missing column would be stored as null when rows are mixed) */
+export function lineKind(l: SalesLineInput & { print_on_pdf?: boolean | null }) {
+  return commentFields(l) ?? { line_type: "product", print_on_pdf: l.print_on_pdf !== false }
+}
+
 /**
  * Normalises a comment line before saving: no product, zero quantity / price / discount.
  * Returns null for a sales line (left untouched).
