@@ -35,8 +35,9 @@ export async function POST(req: NextRequest)  {
     const ALLOWED_CURRENCIES = ["GNF", "USD", "EUR"]
     const normalizeCurrency = (c: string) => ALLOWED_CURRENCIES.includes(c) ? c : "GNF"
 
-    // Generate next PRD-XXXXX code
-    const { data: lastCode } = await db
+    // Generate next PRD-XXXXX code (GEG Guinée only: the Singapore catalogue has no product code nor unit list)
+    const guinee = schema === "geg_guinee"
+    const { data: lastCode } = !guinee ? { data: null } : await db
       .from("products")
       .select("product_code")
       .like("product_code", "PRD-%")
@@ -53,7 +54,7 @@ export async function POST(req: NextRequest)  {
       .from("products")
       .insert([{
         name: body.name,
-        product_code,
+        ...(guinee ? { product_code } : {}),
         product_type: body.product_type ?? "storable",
         reference: body.reference ?? null,
         brand: typeof body.brand === "string" && body.brand.trim() ? body.brand.trim() : null,
@@ -62,13 +63,13 @@ export async function POST(req: NextRequest)  {
         description: body.description ?? null,
         category_id: body.category_id ?? null,
         unit_id: (body.unit_ids as string[] | null)?.length ? body.unit_ids[0] : (body.unit_id ?? null),
-        unit_ids: (body.unit_ids as string[] | null)?.length ? body.unit_ids : null,
+        ...(guinee ? { unit_ids: (body.unit_ids as string[] | null)?.length ? body.unit_ids : null } : {}),
         buy_price: seeBuy ? body.buy_price ?? null : null,
         buy_price_currency: normalizeCurrency(body.buy_price_currency ?? "GNF"),
         sell_price: body.sell_price ?? null,
         currency: normalizeCurrency(body.currency ?? "GNF"),
       }])
-      .select("*, category:product_categories(id, name, color), unit:units(id, name, type), unit_ids")
+      .select("*, category:product_categories(id, name, color), unit:units(id, name, type)")
       .single()
 
     if (error) {

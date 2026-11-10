@@ -34,6 +34,7 @@ interface Line {
   id: number
   line_type: "product" | "comment"
   print_on_pdf: boolean
+  print_on_delivery: boolean
   product_id: string
   product_name: string
   product_reference: string | null
@@ -232,7 +233,7 @@ export default function NouveauDevisClient({
       }].sort((a, b) => a.name.localeCompare(b.name)))
     }
     const firstPkg = known?.packaging?.[0]
-    const patch: Omit<Line, "id" | "line_type" | "print_on_pdf" | "quantity" | "discount" | "tva_exempt"> = {
+    const patch: Omit<Line, "id" | "line_type" | "print_on_pdf" | "print_on_delivery" | "quantity" | "discount" | "tva_exempt"> = {
       product_id:        cp.id,
       product_name:      cp.name,
       product_reference: cp.reference,
@@ -242,16 +243,16 @@ export default function NouveauDevisClient({
       unit_id:           firstPkg?.unit_id ?? known?.unit?.id ?? unitByName?.id ?? "",
     }
     if (target === "new") {
-      setLines(ls => [...ls, { id: uid(), line_type: "product", print_on_pdf: true, quantity: "1", discount: "0", tva_exempt: false, ...patch }])
+      setLines(ls => [...ls, { id: uid(), line_type: "product", print_on_pdf: true, print_on_delivery: false, quantity: "1", discount: "0", tva_exempt: false, ...patch }])
     } else {
       updateLine(target, patch)
     }
   }
 
-  // Comment line: text only, printed on the PDF by default
+  // Comment line: text only, printed on the quote by default, not on the delivery note
   function addComment() {
     setLines(ls => [...ls, {
-      id: uid(), line_type: "comment", print_on_pdf: true,
+      id: uid(), line_type: "comment", print_on_pdf: true, print_on_delivery: false,
       product_id: "", product_name: "", product_reference: null, product_type: null,
       description: "", quantity: "0", unit_id: "", unit_price: "0", discount: "0", tva_exempt: false,
     }])
@@ -357,6 +358,7 @@ export default function NouveauDevisClient({
           discount: 0,
           position: i,
           print_on_pdf: l.print_on_pdf,
+          print_on_delivery: l.print_on_delivery,
         } : {
           line_type: "product",
           print_on_pdf: true,
@@ -626,14 +628,24 @@ export default function NouveauDevisClient({
                             placeholder="Texte du commentaire…"
                             className="flex-1 text-sm italic text-gray-600 outline-none bg-transparent border-b border-dashed border-gray-300 focus:border-blue-400 resize-y py-0.5"
                           />
-                          <label className="mt-1 shrink-0 flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
-                            <input
-                              type="checkbox"
-                              checked={l.print_on_pdf}
-                              onChange={e => updateLine(l.id, { print_on_pdf: e.target.checked })}
-                            />
-                            Imprimer sur le PDF
-                          </label>
+                          <div className="mt-1 shrink-0 flex flex-col gap-1">
+                            <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={l.print_on_pdf}
+                                onChange={e => updateLine(l.id, { print_on_pdf: e.target.checked })}
+                              />
+                              Imprimer sur le devis
+                            </label>
+                            <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
+                              <input
+                                type="checkbox"
+                                checked={l.print_on_delivery}
+                                onChange={e => updateLine(l.id, { print_on_delivery: e.target.checked })}
+                              />
+                              Imprimer sur le bon de livraison
+                            </label>
+                          </div>
                         </div>
                       </td>
                       <td className="pr-2 py-2">

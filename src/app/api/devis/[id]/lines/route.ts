@@ -35,7 +35,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     unit_price: body.unit_price ?? product?.sell_price ?? 0,
     discount: body.discount ?? 0,
     position: nextPosition,
-  }]).select("id, description, quantity, unit_price, discount, position, product_id, tva_exempt, line_type, print_on_pdf").single()
+  }]).select("id, description, quantity, unit_price, discount, position, product_id, tva_exempt, line_type, print_on_pdf, print_on_delivery").single()
 
   if (error) {
     console.error("devis line insert error:", error)

@@ -31,6 +31,7 @@ interface Line {
   id: number
   line_type: "product" | "comment"
   print_on_pdf: boolean
+  print_on_delivery: boolean
   product_id: string
   product_name: string
   product_reference: string | null
@@ -168,14 +169,14 @@ export default function NouvelleFactureClient({ locale, accounts: initialAccount
       description: p.name,
       unit_price: String(p.sell_price ?? 0),
     }
-    if (target === "new") setLines(ls => [...ls, { id: uid(), line_type: "product", print_on_pdf: true, quantity: "1", discount: "0", ...patch }])
+    if (target === "new") setLines(ls => [...ls, { id: uid(), line_type: "product", print_on_pdf: true, print_on_delivery: false, quantity: "1", discount: "0", ...patch }])
     else setLines(ls => ls.map(l => l.id === target ? { ...l, ...patch } : l))
   }
 
-  // Comment line: text only, printed on the PDF by default
+  // Comment line: text only, printed on the invoice by default, not on the delivery note
   function addComment() {
     setLines(ls => [...ls, {
-      id: uid(), line_type: "comment", print_on_pdf: true,
+      id: uid(), line_type: "comment", print_on_pdf: true, print_on_delivery: false,
       product_id: "", product_name: "", product_reference: null, product_type: null,
       description: "", quantity: "0", unit_price: "0", discount: "0",
     }])
@@ -183,6 +184,10 @@ export default function NouvelleFactureClient({ locale, accounts: initialAccount
 
   function setPrintOnPdf(id: number, value: boolean) {
     setLines(ls => ls.map(l => l.id === id ? { ...l, print_on_pdf: value } : l))
+  }
+
+  function setPrintOnDelivery(id: number, value: boolean) {
+    setLines(ls => ls.map(l => l.id === id ? { ...l, print_on_delivery: value } : l))
   }
 
   function removeLine(id: number) {
@@ -222,6 +227,7 @@ export default function NouvelleFactureClient({ locale, accounts: initialAccount
         position: i,
         tva_rate: 0,
         print_on_pdf: l.print_on_pdf,
+        print_on_delivery: l.print_on_delivery,
       } : {
         line_type: "product",
         print_on_pdf: true,
@@ -343,10 +349,16 @@ export default function NouvelleFactureClient({ locale, accounts: initialAccount
                           placeholder="Texte du commentaire…"
                           className="flex-1 text-sm italic text-gray-600 outline-none bg-transparent border-b border-dashed border-gray-300 focus:border-blue-400 resize-y py-0.5"
                         />
-                        <label className="mt-1 shrink-0 flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
-                          <input type="checkbox" checked={line.print_on_pdf} onChange={e => setPrintOnPdf(line.id, e.target.checked)} />
-                          Imprimer sur le PDF
-                        </label>
+                        <div className="mt-1 shrink-0 flex flex-col gap-1">
+                          <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
+                            <input type="checkbox" checked={line.print_on_pdf} onChange={e => setPrintOnPdf(line.id, e.target.checked)} />
+                            Imprimer sur la facture
+                          </label>
+                          <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
+                            <input type="checkbox" checked={line.print_on_delivery} onChange={e => setPrintOnDelivery(line.id, e.target.checked)} />
+                            Imprimer sur le bon de livraison
+                          </label>
+                        </div>
                       </div>
                     </td>
                     <td className="py-1.5 text-right">

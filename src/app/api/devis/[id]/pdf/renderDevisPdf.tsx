@@ -33,9 +33,11 @@ interface Line {
   discount: number
   tva_rate: number
   image_url?: string | null
-  // "comment": text only, printed full width when print_on_pdf is not false
+  // "comment": text only, printed full width when print_on_pdf is not false (quote)
+  // or when print_on_delivery is true (delivery note variant)
   line_type?: string | null
   print_on_pdf?: boolean | null
+  print_on_delivery?: boolean | null
 }
 
 const isComment = (l: Line) => l.line_type === "comment"
@@ -93,8 +95,9 @@ export async function renderDevisPdf(props: Props): Promise<Buffer> {
   const totalHT = lines.reduce((s, l) => s + lineHT(l), 0)
   const tvaAmt = lines.reduce((s, l) => s + lineHT(l) * (isComment(l) ? 0 : l.tva_rate) / 100, 0)
   const totalTTC = totalHT + tvaAmt
-  // Comment lines are printed only when print_on_pdf is not false; totals are unchanged
-  const printedLines = lines.filter(l => !isComment(l) || l.print_on_pdf !== false)
+  // Comment lines are printed only when chosen for this document (quote: print_on_pdf not false,
+  // delivery note: print_on_delivery true); totals are unchanged
+  const printedLines = lines.filter(l => !isComment(l) || (docType === "bon-livraison" ? l.print_on_delivery === true : l.print_on_pdf !== false))
 
   const currencies = Array.from(new Set(bankAccounts.map(a => a.currency)))
 

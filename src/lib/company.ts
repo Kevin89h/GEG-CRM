@@ -1,7 +1,7 @@
 import { cookies } from "next/headers"
 import type { NextRequest } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { createSchemaClient } from "@/lib/supabase/admin"
+import { createAdminClient, createSchemaClient } from "@/lib/supabase/admin"
 import { resolveCompanySchema } from "@/lib/access"
 
 /**
@@ -16,6 +16,12 @@ export async function getSchemaFromRequest(req: NextRequest): Promise<string> {
 export async function getCompanySchema(): Promise<string> {
   const cookieStore = await cookies()
   return resolveCompanySchema(cookieStore.get("geg_company")?.value)
+}
+
+/** Display name of a company schema (public.companies.name), e.g. "GEG Singapour". */
+export async function getCompanyName(schema: string): Promise<string> {
+  const { data } = await createAdminClient().from("companies").select("name").eq("schema_name", schema).maybeSingle()
+  return (data?.name as string | undefined) ?? (schema === "geg_singapore" ? "GEG Singapour" : "GEG Guinée")
 }
 
 /**

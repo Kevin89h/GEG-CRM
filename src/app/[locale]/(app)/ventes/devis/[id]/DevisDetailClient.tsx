@@ -30,6 +30,8 @@ interface Line {
   // "comment": text only (no product, quantity, price nor amount); "product" (default): sales line
   line_type?: string | null
   print_on_pdf?: boolean | null
+  // Comment only: printed on delivery notes made from this quote (default false)
+  print_on_delivery?: boolean | null
 }
 
 const isComment = (l: { line_type?: string | null }) => l.line_type === "comment"
@@ -87,6 +89,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
   // Comment being typed before it is added (null: no comment form open)
   const [newComment, setNewComment] = useState<string | null>(null)
   const [newCommentPrint, setNewCommentPrint] = useState(true)
+  const [newCommentPrintDelivery, setNewCommentPrintDelivery] = useState(false)
   // Stock per product from /api/stock/disponibilite (used to recognise services, never stock-checked)
   const [availability, setAvailability] = useState<Record<string, Availability>>({})
   const [activeTab, setActiveTab] = useState<"lines" | "other" | "notes">("lines")
@@ -312,7 +315,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
       const res = await fetch(`/api/devis/${order.id}/lines`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ line_type: "comment", description: text, print_on_pdf: newCommentPrint }),
+        body: JSON.stringify({ line_type: "comment", description: text, print_on_pdf: newCommentPrint, print_on_delivery: newCommentPrintDelivery }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -322,6 +325,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
       setLines(prev => [...prev, { ...data, line_type: "comment", product: null, unit: null }])
       setNewComment(null)
       setNewCommentPrint(true)
+      setNewCommentPrintDelivery(false)
     } finally {
       setAddingLine(false)
     }
@@ -340,6 +344,12 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
     setLines(prev => prev.map(l => l.id === lineId ? { ...l, print_on_pdf: value } : l))
     const ok = await patchOrder({ print_on_pdf: value }, `/api/devis/${order.id}/lines/${lineId}`)
     if (!ok) setLines(prev => prev.map(l => l.id === lineId ? { ...l, print_on_pdf: !value } : l))
+  }
+
+  async function togglePrintOnDelivery(lineId: string, value: boolean) {
+    setLines(prev => prev.map(l => l.id === lineId ? { ...l, print_on_delivery: value } : l))
+    const ok = await patchOrder({ print_on_delivery: value }, `/api/devis/${order.id}/lines/${lineId}`)
+    if (!ok) setLines(prev => prev.map(l => l.id === lineId ? { ...l, print_on_delivery: !value } : l))
   }
 
   // Attaches an old free line (no product) to a catalogue product; its description and price are kept
@@ -437,9 +447,11 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
           tva_exempt: false,
           unit_id: null,
           print_on_pdf: l.print_on_pdf !== false,
+          print_on_delivery: l.print_on_delivery === true,
         } : {
           line_type: "product",
           print_on_pdf: l.print_on_pdf !== false,
+          print_on_delivery: false,
           description: l.description,
           quantity: l.quantity,
           unit_price: l.unit_price,
@@ -839,12 +851,21 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                           <p className="flex-1 text-sm italic text-gray-600 whitespace-pre-line">{l.description}</p>
                         )}
                         {canEdit ? (
-                          <label className="mt-0.5 shrink-0 flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
-                            <input type="checkbox" checked={l.print_on_pdf !== false} onChange={e => togglePrintOnPdf(l.id, e.target.checked)} />
-                            Imprimer sur le PDF
-                          </label>
-                        ) : l.print_on_pdf === false && (
-                          <span className="mt-0.5 shrink-0 text-xs text-gray-400">Non imprimé sur le PDF</span>
+                          <div className="mt-0.5 shrink-0 flex flex-col gap-1">
+                            <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
+                              <input type="checkbox" checked={l.print_on_pdf !== false} onChange={e => togglePrintOnPdf(l.id, e.target.checked)} />
+                              Imprimer sur le devis
+                            </label>
+                            <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
+                              <input type="checkbox" checked={l.print_on_delivery === true} onChange={e => togglePrintOnDelivery(l.id, e.target.checked)} />
+                              Imprimer sur le bon de livraison
+                            </label>
+                          </div>
+                        ) : (
+                          <div className="mt-0.5 shrink-0 flex flex-col gap-0.5 text-xs text-gray-400">
+                            <span>{l.print_on_pdf !== false ? "Imprimé sur le devis" : "Non imprimé sur le devis"}</span>
+                            <span>{l.print_on_delivery === true ? "Imprimé sur le bon de livraison" : "Non imprimé sur le bon de livraison"}</span>
+                          </div>
                         )}
                       </div>
                     </td>
@@ -1028,11 +1049,17 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                   />
                 </div>
                 <div className="flex items-center gap-4 justify-end">
-                  <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none mr-auto">
-                    <input type="checkbox" checked={newCommentPrint} onChange={e => setNewCommentPrint(e.target.checked)} />
-                    Imprimer sur le PDF
-                  </label>
-                  <button onClick={() => { setNewComment(null); setNewCommentPrint(true) }} className="text-xs text-gray-500 hover:text-gray-700">Annuler</button>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mr-auto">
+                    <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
+                      <input type="checkbox" checked={newCommentPrint} onChange={e => setNewCommentPrint(e.target.checked)} />
+                      Imprimer sur le devis
+                    </label>
+                    <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
+                      <input type="checkbox" checked={newCommentPrintDelivery} onChange={e => setNewCommentPrintDelivery(e.target.checked)} />
+                      Imprimer sur le bon de livraison
+                    </label>
+                  </div>
+                  <button onClick={() => { setNewComment(null); setNewCommentPrint(true); setNewCommentPrintDelivery(false) }} className="text-xs text-gray-500 hover:text-gray-700">Annuler</button>
                   <button
                     onClick={addComment}
                     disabled={addingLine || !newComment.trim()}

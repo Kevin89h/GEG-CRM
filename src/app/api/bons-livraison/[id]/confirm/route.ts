@@ -43,8 +43,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     derogation = reason
   }
 
-  // Save updated quantities/warehouses on delivery note lines
+  // Save updated quantities/warehouses on delivery note lines (comment lines are text only: left as they are)
+  const { data: commentRows } = await db.from("delivery_note_lines").select("id").eq("delivery_note_id", id).eq("line_type", "comment")
+  const commentIds = new Set((commentRows ?? []).map((r: { id: string }) => r.id))
   for (const l of lines) {
+    if (commentIds.has(l.id)) continue
     const { error } = await db
       .from("delivery_note_lines")
       .update({ quantity: l.quantity, warehouse_id: l.warehouse_id })

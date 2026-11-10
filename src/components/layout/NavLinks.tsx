@@ -10,7 +10,7 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { allows } from "@/lib/permissions"
-import { NAV_ITEMS, accessDeniedPath, isNavLocked, type NavAccess } from "@/lib/navigation"
+import { NAV_ITEMS, accessDeniedPath, isNavLocked, navItemPath, type NavAccess } from "@/lib/navigation"
 
 const ICONS: Record<string, LucideIcon> = {
   dashboard: LayoutDashboard, accounts: Building2, contacts: Users, deals: TrendingUp,
@@ -48,7 +48,8 @@ export default function NavLinks({ locale, access, large = false, onNavigate }: 
       {NAV_ITEMS.map(item => {
         const Icon = ICONS[item.key]
         const locked = isNavLocked(item, access)
-        const href = locked ? accessDeniedPath(locale, item.key) : `/${locale}/${item.path}`
+        // Lock and link follow the page opened in the active company (GEG Singapour: Stock → products catalogue)
+        const href = locked ? accessDeniedPath(locale, item.key) : `/${locale}/${navItemPath(item, access)}`
         const active = !locked && pathname.startsWith(`/${locale}/${item.path.split("/")[0]}`)
         return (
           <Link key={item.key} href={href} onClick={onNavigate} className={itemClass(active, locked)}

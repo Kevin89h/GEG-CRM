@@ -1,5 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin"
 import { requireSchemaPage } from "@/lib/access"
+import { getCompanySchema } from "@/lib/company"
+import { redirect } from "next/navigation"
 import StockDashboard from "./StockDashboard"
 import type { Warehouse } from "@/types"
 
@@ -23,7 +25,13 @@ function normalizeJoin<T>(val: T | T[] | null | undefined): T | null {
   return val ?? null
 }
 
-export default async function StockPage() {
+export default async function StockPage({ params }: { params: Promise<{ locale: string }> }) {
+  // GEG Singapour has no stock in use: the Stock menu opens its products catalogue directly
+  // (the menu entry and the middleware already lead there with the "produits.voir" check, see lib/navigation)
+  if ((await getCompanySchema()) === "geg_singapore") {
+    const { locale } = await params
+    redirect(`/${locale}/stock/produits`)
+  }
   await requireSchemaPage("geg_guinee")
   const supabase = createAdminClient().schema("geg_guinee")
 

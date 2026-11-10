@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCompanySchema } from "@/lib/company"
+import { deliveryRowsWithComments } from "@/lib/catalog"
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -29,18 +30,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: dnError?.message ?? "Failed to create delivery note" }, { status: 400 })
   }
 
-  // Comment lines (text only, no quantity) are never delivered
-  const deliverable = (lines ?? []).filter((l: { line_type?: string | null; product_id?: string | null; quantity?: number }) =>
+  // Comment lines (text only, no quantity) are never delivered: the invoice's comments are copied as comments,
+  // in their place, with their "Imprimer sur le bon de livraison" choice
+  type Row = { product_id: string | null; description: string; quantity: number }
+  const deliverable: Row[] = (lines ?? []).filter((l: { line_type?: string | null; product_id?: string | null; quantity?: number }) =>
     l.line_type !== "comment" && !(!l.product_id && Number(l.quantity ?? 0) === 0))
-  if (deliverable.length > 0) {
+    .map((l: Row) => ({ product_id: l.product_id ?? null, description: l.description, quantity: l.quantity }))
+  const { data: source } = await db.from("invoice_lines").select("product_id, description, line_type, print_on_delivery, position").eq("invoice_id", id).order("position")
+  const queue = [...deliverable]
+  const rows = deliveryRowsWithComments((source ?? []) as { product_id: string | null; description: string; line_type: string | null; print_on_delivery: boolean | null }[], (l) => {
+    const i = queue.findIndex(q => q.product_id === l.product_id)
+    return i >= 0 ? queue.splice(i, 1)[0] : null
+  }, queue)
+  if (rows.some(r => !("line_type" in r))) {
     const { error: linesError } = await db.from("delivery_note_lines").insert(
-      deliverable.map((l: { product_id: string | null; description: string; quantity: number }, i: number) => ({
-        delivery_note_id: dn.id,
-        product_id: l.product_id ?? null,
-        description: l.description,
-        quantity: l.quantity,
-        position: i,
-      }))
+      rows.map(r => ({ line_type: "product", print_on_delivery: true, ...r, delivery_note_id: dn.id }))
     )
     if (linesError) {
       return NextResponse.json({ error: linesError.message }, { status: 400 })

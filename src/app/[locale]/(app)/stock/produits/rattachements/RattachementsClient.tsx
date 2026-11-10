@@ -92,7 +92,7 @@ function ToCompleteBadge() {
 /** Reason dialog for "Annuler" and "Corriger" */
 type ReasonMode = "cancel" | "correct"
 
-export default function RattachementsClient({ canManageInitial }: { canManageInitial: boolean }) {
+export default function RattachementsClient({ canManageInitial, companyName }: { canManageInitial: boolean; companyName: string }) {
   const params = useParams()
   const locale = params.locale as string
 
@@ -279,7 +279,11 @@ export default function RattachementsClient({ canManageInitial }: { canManageIni
         </Link>
         <div className="flex-1 min-w-0">
           <h1 className="text-2xl font-bold text-gray-900">Correspondance des lignes historiques</h1>
-          <p className="text-gray-500 text-sm mt-0.5">Anciennes lignes libres des devis et factures, à relier aux fiches du catalogue</p>
+          <p className="text-gray-500 text-sm mt-0.5">
+            Anciennes lignes libres des devis et factures, à relier aux fiches du catalogue
+            <span className="mx-1.5 text-gray-300">·</span>
+            <span className="text-gray-400">Catalogue — {companyName}</span>
+          </p>
         </div>
         <button
           onClick={() => { clearMessages(); load() }}

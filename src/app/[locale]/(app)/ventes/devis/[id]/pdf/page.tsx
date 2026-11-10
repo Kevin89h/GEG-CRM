@@ -37,7 +37,11 @@ export default async function DevisPdfPage({ params }: { params: Promise<{ local
   const [{ data: account }, { data: salesperson }, { data: rawLines }, { data: bankAccounts }] = await Promise.all([
     order.account_id ? db.from("accounts").select("id, name, country, nif").eq("id", order.account_id).single() : Promise.resolve({ data: null }),
     order.salesperson_id ? db.from("employees").select("full_name").eq("id", order.salesperson_id).single() : Promise.resolve({ data: null }),
-    db.from("sales_order_lines").select("id, description, quantity, unit_price, discount, position, product_id, tva_exempt, unit_id, line_type, print_on_pdf, unit:units(id, name)").eq("order_id", id).order("position"),
+    // GEG Singapour quote lines have no unit: retry without it so that the document still prints
+    db.from("sales_order_lines").select("id, description, quantity, unit_price, discount, position, product_id, tva_exempt, unit_id, line_type, print_on_pdf, print_on_delivery, unit:units(id, name)").eq("order_id", id).order("position")
+      .then((r: { data: unknown; error: unknown }) => r.error
+        ? db.from("sales_order_lines").select("id, description, quantity, unit_price, discount, position, product_id, tva_exempt, line_type, print_on_pdf, print_on_delivery").eq("order_id", id).order("position")
+        : r) as Promise<{ data: Record<string, unknown>[] | null }>,
     db.from("treasury_accounts").select("institution, account_number, swift, iban, currency").eq("type", "bank").eq("is_active", true).order("name"),
   ])
 
@@ -60,6 +64,7 @@ export default async function DevisPdfPage({ params }: { params: Promise<{ local
     unit_label: (l.unit as { name: string } | null)?.name ?? null,
     line_type: (l.line_type as string | null) ?? "product",
     print_on_pdf: l.print_on_pdf !== false,
+    print_on_delivery: l.print_on_delivery === true,
   }))
 
   return (

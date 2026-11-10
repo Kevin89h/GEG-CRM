@@ -26,7 +26,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       discount: discount ?? 0,
       tva_rate: tva_rate ?? 0,
       position: position ?? 0,
-    }]).select("id, product_id, description, quantity, unit_price, discount, tva_rate, line_type, print_on_pdf").single()
+    }]).select("id, product_id, description, quantity, unit_price, discount, tva_rate, line_type, print_on_pdf, print_on_delivery").single()
 
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })
     return NextResponse.json({ line: data })

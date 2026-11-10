@@ -114,7 +114,7 @@ export async function updateSession(request: NextRequest, baseResponse?: ReturnT
   // Pages the user can't open lead to the "access denied" page (the menu shows them with a lock)
   if (!isApi && !isAuthPage) {
     const path = pathname.split("/").slice(2).join("/")
-    const denial = deniedForPath(path, { role: profile?.role, schemas: allowedSchemas, perms })
+    const denial = deniedForPath(path, { role: profile?.role, schemas: allowedSchemas, perms, activeSchema: schema })
     if (denial) {
       await supabase.rpc("audit_refusal", { p_company: schema, p_module: "page", p_target: path, p_reason: denial.permission ? `Permission manquante : ${denial.permission}` : "Accès non autorisé" })
       const url = request.nextUrl.clone()

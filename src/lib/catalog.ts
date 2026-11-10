@@ -24,17 +24,39 @@ export type SalesLineInput = {
 export const isComment = (l: { line_type?: string | null }) => l.line_type === "comment"
 
 /** Explicit line kind for bulk inserts (a missing column would be stored as null when rows are mixed) */
-export function lineKind(l: SalesLineInput & { print_on_pdf?: boolean | null }) {
-  return commentFields(l) ?? { line_type: "product", print_on_pdf: l.print_on_pdf !== false }
+export function lineKind(l: SalesLineInput & { print_on_pdf?: boolean | null; print_on_delivery?: boolean | null }) {
+  return commentFields(l) ?? { line_type: "product", print_on_pdf: l.print_on_pdf !== false, print_on_delivery: false }
 }
 
 /**
  * Normalises a comment line before saving: no product, zero quantity / price / discount.
  * Returns null for a sales line (left untouched).
  */
-export function commentFields(l: SalesLineInput & { print_on_pdf?: boolean | null }) {
+export function commentFields(l: SalesLineInput & { print_on_pdf?: boolean | null; print_on_delivery?: boolean | null }) {
   if (!isComment(l)) return null
-  return { line_type: "comment", product_id: null, quantity: 0, unit_price: 0, discount: 0, print_on_pdf: l.print_on_pdf !== false, description: (l.description ?? "").trim() }
+  return {
+    line_type: "comment", product_id: null, quantity: 0, unit_price: 0, discount: 0, description: (l.description ?? "").trim(),
+    print_on_pdf: l.print_on_pdf !== false,          // "Imprimer sur le devis / la facture" (default yes)
+    print_on_delivery: l.print_on_delivery === true, // "Imprimer sur le bon de livraison" (default no)
+  }
+}
+
+/**
+ * Delivery-note rows in the order of the source document: its comment lines (with their "print on delivery note"
+ * choice, never a quantity) are placed between the delivered lines. `deliver(line)` returns the row of a sales line
+ * of the source, or null when that line is not delivered by this note; rows it never matched are appended.
+ */
+export function deliveryRowsWithComments<S extends { line_type?: string | null; description: string; print_on_delivery?: boolean | null }, R extends { product_id: string | null; description: string; quantity: number }>(
+  source: S[],
+  deliver: (line: S) => R | null,
+  leftovers: R[] = [],
+) {
+  const rows: (R | { line_type: "comment"; product_id: null; description: string; quantity: 0; print_on_delivery: boolean })[] = []
+  for (const l of source) {
+    if (l.line_type === "comment") rows.push({ line_type: "comment", product_id: null, description: l.description, quantity: 0, print_on_delivery: l.print_on_delivery === true })
+    else { const r = deliver(l); if (r) rows.push(r) }
+  }
+  return [...rows, ...leftovers].map((r, i) => ({ ...r, position: i }))
 }
 
 /**
@@ -104,7 +126,7 @@ export interface CatalogItem {
 
 // Brands and product ranges: a different brand, or a different range of the same brand, is a DISTINCT product
 // (catalogue rule of 10/11/2026), even with identical dimensions, viscosity or packaging.
-const BRANDS = ["geg", "total", "totalenergies", "shell", "fuchs", "petronas", "mobil", "castrol", "eurotec", "elf",
+const BRANDS = ["geg", "gpn", "total", "totalenergies", "shell", "fuchs", "petronas", "mobil", "castrol", "eurotec", "eurotect", "elf", "cim", "continental",
   "double road", "doubleroad", "triangle", "luxxan", "joyroad", "michelin", "bridgestone", "goodyear", "weichai", "toyota", "caterpillar"]
 const RANGES = ["carter ep", "carter xep", "carter", "rubia", "rimula", "helix", "tellus", "omala", "spirax", "renolin", "titan",
   "reductor", "compressor", "diesel extra", "diesel premium", "extra", "premium", "atf", "gear", "hydraulic", "hydraulique", "antifreeze", "sf12+", "sf12"]
@@ -115,7 +137,7 @@ export function brandOf(text: string | null | undefined, field?: string | null):
   if (b) return b.replace(/s+/g, " ")
   const n = ` ${normalize(text)} `
   const hit = BRANDS.find(x => n.includes(` ${x} `))
-  return hit ? hit.replace("doubleroad", "double road").replace("totalenergies", "total") : null
+  return hit ? hit.replace("doubleroad", "double road").replace("totalenergies", "total").replace("eurotect", "eurotec") : null
 }
 
 /** Product range (most specific first), e.g. "carter xep" vs "carter ep" */
@@ -160,12 +182,19 @@ export function similarItems(query: string, items: CatalogItem[], limit = 12): C
 
 /** Catalogue items with the fields useful to compare them (no purchase price nor internal data) */
 export async function loadCatalog(db: Db): Promise<CatalogItem[]> {
-  const { data } = await db.from("products")
+  // GEG Singapour has no product code nor packaging table: fall back to the columns common to both companies
+  let { data, error } = await db.from("products")
     .select("id, name, brand, to_complete, missing_info, reference, product_code, merchant_reference, product_type, is_active, sell_price, currency, category:product_categories(name), unit:units(name), packaging:product_packaging(unit:units(name))")
     .order("name")
+  if (error) {
+    ({ data, error } = await db.from("products")
+      .select("id, name, brand, to_complete, missing_info, reference, merchant_reference, product_type, is_active, sell_price, currency, category:product_categories(name), unit:units(name)")
+      .order("name"))
+  }
+  if (error) throw new Error(`Catalogue illisible : ${error.message}`)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return (data ?? []).map((p: any) => ({
-    id: p.id, name: p.name, brand: p.brand ?? null, to_complete: !!p.to_complete, missing_info: p.missing_info ?? null, reference: p.reference, product_code: p.product_code, merchant_reference: p.merchant_reference,
+    id: p.id, name: p.name, brand: p.brand ?? null, to_complete: !!p.to_complete, missing_info: p.missing_info ?? null, reference: p.reference, product_code: p.product_code ?? null, merchant_reference: p.merchant_reference,
     product_type: p.product_type, is_active: p.is_active, sell_price: p.sell_price, currency: p.currency,
     category: (Array.isArray(p.category) ? p.category[0] : p.category)?.name ?? null,
     unit: (Array.isArray(p.unit) ? p.unit[0] : p.unit)?.name ?? null,

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { hasPermission } from "@/lib/access"
-import { deliveryShortages, derogationReason } from "@/lib/catalog"
+import { deliveryRowsWithComments, deliveryShortages, derogationReason } from "@/lib/catalog"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCompanySchema } from "@/lib/company"
 
@@ -80,17 +80,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: dnError?.message ?? "Impossible de créer le bon de livraison" }, { status: 400 })
   }
 
-  // Create delivery note lines
+  // Create delivery note lines, with the quote's comments in their place ("Imprimer sur le bon de livraison" choice kept)
+  const { data: source } = await db.from("sales_order_lines").select("id, description, line_type, print_on_delivery, position").eq("order_id", id).order("position")
+  const byLine = new Map(lines.map(l => [l.order_line_id, l]))
+  const toRow = (l: DeliveryLine) => ({ order_line_id: l.order_line_id, product_id: l.product_id ?? null, description: l.description, quantity: l.qty_to_deliver, qty_delivered: l.qty_to_deliver })
+  const sourceIds = new Set((source ?? []).map((s: { id: string }) => s.id))
+  const rows = deliveryRowsWithComments((source ?? []) as { id: string; description: string; line_type: string | null; print_on_delivery: boolean | null }[],
+    s => { const l = byLine.get(s.id); return l ? toRow(l) : null },
+    lines.filter(l => !sourceIds.has(l.order_line_id)).map(toRow))
   const { error: linesError } = await db.from("delivery_note_lines").insert(
-    lines.map((l, i) => ({
-      delivery_note_id: dn.id,
-      order_line_id: l.order_line_id,
-      product_id: l.product_id ?? null,
-      description: l.description,
-      quantity: l.qty_to_deliver,
-      qty_delivered: l.qty_to_deliver,
-      position: i,
-    }))
+    rows.map(r => ({ line_type: "product", print_on_delivery: true, ...r, delivery_note_id: dn.id }))
   )
   if (linesError) {
     return NextResponse.json({ error: linesError.message }, { status: 400 })

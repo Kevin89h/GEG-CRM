@@ -51,6 +51,13 @@ interface Props {
   products: ProductRow[]
   categories: ProductCategory[]
   units: Unit[]
+  /** Active company shown in the header, e.g. "GEG Singapour" */
+  companyName: string
+  /**
+   * GEG Guinée only: stock, product code and packaging (GEG Singapour has no product code,
+   * no packaging table and no stock in use: those parts are hidden there)
+   */
+  stockEnabled: boolean
 }
 
 const colorMap: Record<string, "blue" | "yellow" | "gray" | "green" | "purple"> = {
@@ -92,7 +99,7 @@ function isDistinctItem(s: SimilarItem): boolean {
   return s.reasons.some(r => r.includes("article distinct") || r.startsWith("viscosité différente"))
 }
 
-export default function ProduitsClient({ products: initial, categories, units, canWrite }: Props) {
+export default function ProduitsClient({ products: initial, categories, units, canWrite, companyName, stockEnabled }: Props) {
   const t = useTranslations("produits")
   const params = useParams()
   const locale = params.locale as string
@@ -235,7 +242,7 @@ export default function ProduitsClient({ products: initial, categories, units, c
       return
     }
     // Derive unit_ids from packaging rows for backwards compat
-    const validPkg = pkgRows.filter(r => r.unit_id)
+    const validPkg = stockEnabled ? pkgRows.filter(r => r.unit_id) : []
     const unit_ids = validPkg.length > 0 ? validPkg.map(r => r.unit_id) : null
     const res = await fetch("/api/stock/produits", {
       method: "POST",
@@ -297,7 +304,11 @@ export default function ProduitsClient({ products: initial, categories, units, c
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{t("catalogueProduits")}</h1>
-          <p className="text-gray-500 text-sm mt-0.5">{filtered.length} {t("produit")}{filtered.length !== 1 ? t("pluralSuffix") : ""}</p>
+          <p className="text-gray-500 text-sm mt-0.5">
+            <span className="text-gray-400">Catalogue — {companyName}</span>
+            <span className="mx-1.5 text-gray-300">·</span>
+            {filtered.length} {t("produit")}{filtered.length !== 1 ? t("pluralSuffix") : ""}
+          </p>
         </div>
         <div className="flex gap-2 flex-wrap justify-end">
           <Link
@@ -309,7 +320,7 @@ export default function ProduitsClient({ products: initial, categories, units, c
           </Link>
           <button
             onClick={() => exportToXls(filtered.map(p => ({
-              "Code": p.product_code ?? "",
+              ...(stockEnabled ? { "Code": p.product_code ?? "" } : {}),
               "Référence": p.reference ?? "",
               "Nom": p.name,
               "Marque": p.brand ?? "",
@@ -384,7 +395,7 @@ export default function ProduitsClient({ products: initial, categories, units, c
               <tr className="bg-gray-50 border-b border-gray-100">
                 <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colProduit")}</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">Marque</th>
-                <th className="text-left px-4 py-3 font-medium text-gray-600">Code</th>
+                {stockEnabled && <th className="text-left px-4 py-3 font-medium text-gray-600">Code</th>}
                 <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colReference")}</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colCategorie")}</th>
                 <th className="text-left px-4 py-3 font-medium text-gray-600">{t("colFormat")}</th>
@@ -405,7 +416,7 @@ export default function ProduitsClient({ products: initial, categories, units, c
                     )}
                   </td>
                   <td className="px-4 py-3 text-gray-700">{p.brand ?? "—"}</td>
-                  <td className="px-4 py-3 text-blue-700 font-mono text-xs font-semibold">{p.product_code ?? "—"}</td>
+                  {stockEnabled && <td className="px-4 py-3 text-blue-700 font-mono text-xs font-semibold">{p.product_code ?? "—"}</td>}
                   <td className="px-4 py-3 text-gray-500 font-mono text-xs">{p.reference ?? "—"}</td>
                   <td className="px-4 py-3">
                     {p.category ? (
@@ -563,6 +574,8 @@ export default function ProduitsClient({ products: initial, categories, units, c
             />
           </div>
 
+          {/* Packaging formats: GEG Guinée only (no packaging table in GEG Singapour) */}
+          {stockEnabled && (
           <div>
             <div className="sm:col-span-2">
               <div className="flex items-center justify-between mb-1">
@@ -693,6 +706,7 @@ export default function ProduitsClient({ products: initial, categories, units, c
               )}
             </div>
           </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">{t("description")}</label>

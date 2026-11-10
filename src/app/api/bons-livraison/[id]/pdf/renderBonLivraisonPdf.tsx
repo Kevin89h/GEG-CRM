@@ -22,6 +22,8 @@ interface BLLine {
   description: string
   quantity: number
   warehouse: string | null
+  // Comment line: text only, printed in italics over the full width, no quantity nor warehouse
+  is_comment?: boolean
 }
 
 interface BonLivraisonPdfProps {
@@ -176,7 +178,11 @@ export async function renderBonLivraisonPdf(props: BonLivraisonPdfProps): Promis
               <Text style={[s.thText, { width: 50, textAlign: "right" }]}>Qté</Text>
               <Text style={[s.thText, { flex: 2, textAlign: "right" }]}>Entrepôt</Text>
             </View>
-            {lines.map((l, i) => (
+            {lines.map((l, i) => l.is_comment ? (
+              <View key={i} style={[s.tableRow, i % 2 === 1 ? s.tableRowEven : {}]} wrap={false}>
+                <Text style={{ flex: 1, fontSize: 8.5, fontFamily: "Helvetica-Oblique", color: "#444", lineHeight: 1.4 }}>{l.description}</Text>
+              </View>
+            ) : (
               <View key={i} style={[s.tableRow, i % 2 === 1 ? s.tableRowEven : {}]} wrap={false}>
                 <Text style={[s.tdDesc, { flex: 4 }]}>{l.description}</Text>
                 <Text style={[s.tdNorm, { width: 50 }, s.tdR]}>{l.quantity}</Text>

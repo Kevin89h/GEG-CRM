@@ -1,0 +1,123 @@
+-- PRODUCTION — À EXÉCUTER UNIQUEMENT APRÈS AUTORISATION EXPLICITE, APRÈS PROD_01.
+-- Pré-remplit la table de correspondance historique en statut « proposé » (jamais validé automatiquement).
+-- Les documents historiques ne sont pas modifiés : aucun montant, TVA, PDF, stock ni écriture comptable.
+-- Une ligne n'est proposée que si sa fiche cible est unique et active ; les lignes vides / « Nouvelle ligne » sont ignorées.
+-- Idempotent : une ligne qui a déjà une correspondance active n'est pas reprise.
+
+begin;
+
+with m(k, target, unit, ptype, note) as (values
+  ('burin', 'Burin', null, null, 'Rapprochement H4, catégorie 1'),
+  ('meule', 'Meule', null, null, 'Rapprochement H4, catégorie 1'),
+  ('marteaupiqueur2200w', 'Marteau piqueur - 2 200W', null, null, 'Rapprochement H4, catégorie 1'),
+  ('24570r17', '245/70R17', null, null, 'Rapprochement H4, catégorie 1'),
+  ('26565r17', '265/65R17', null, null, 'Rapprochement H4, catégorie 1'),
+  ('fraisdetransport', 'FRAIS DE TRANSPORT', null, 'service', 'Rapprochement H4, catégorie 1'),
+  ('transportmaritime', 'Transport Maritime', null, null, 'Rapprochement H4, catégorie 1'),
+  ('gegcompressorpao4620l', 'GEG COMPRESSOR PAO ISO VG46', null, null, 'Rapprochement H4, catégorie 1'),
+  ('gegreductorclp220200l', 'GEG REDUCTOR CLP 220 200 L', null, null, 'Rapprochement H4, catégorie 1'),
+  ('gegreductorclp320200l', 'GEG REDUCTOR CLP 320 200 L', null, null, 'Rapprochement H4, catégorie 1'),
+  ('gegdieselextra15w40200l61000070005weichai', 'GEG DIESEL EXTRA 15W40', '200 L', null, 'Rapprochement H4, catégorie 1'),
+  ('filtreaairchargeuse250501140057', 'Filtre à Air Chargeuse', null, null, 'Rapprochement H4, catégorie 1'),
+  ('filtreagasoilchargeuse100422384weichai', 'Filtre à Gasoil Chargeuse', null, null, 'Rapprochement H4, catégorie 1'),
+  ('filtreagasoilexcavateur100422382weichai', 'Filtre à Gasoil Excavateur', null, null, 'Rapprochement H4, catégorie 1'),
+  ('filtreahuilechargeuse61000070005weichai', 'Filtre à huile chargeuse', null, null, 'Rapprochement H4, catégorie 1'),
+  ('filtreahuileexcavateur100042655weichai', 'Filtre à Huile Excavateur', null, null, 'Rapprochement H4, catégorie 1'),
+  ('filtredecanteurchargeusepl420', 'Filtre décanteur Chargeuse', null, null, 'Rapprochement H4, catégorie 1'),
+  ('filtredecanteurexcavateurpl420weichai', 'Filtre décanteur Excavateur', null, null, 'Rapprochement H4, catégorie 1'),
+  ('fretaerien', 'Fret aérien', null, null, 'Rapprochement H4, catégorie 2'),
+  ('rabais', 'Remise commerciale', null, null, 'Rapprochement H4, catégorie 2'),
+  ('gegreductorclp460200l', 'GEG REDUCTOR CLP 460 200 L', null, null, 'Rapprochement H4, catégorie 2'),
+  ('fuchsrenolinclp320200l', 'FUCHS RENOLIN CLP 320 200 L', null, null, 'Rapprochement H4, catégorie 2'),
+  ('fuchsrenolinclp460200l', 'FUCHS RENOLIN CLP 460 200 L', null, null, 'Rapprochement H4, catégorie 2'),
+  ('petronasgearfl220200l', 'PETRONAS GEAR FL 220 200 L', null, null, 'Rapprochement H4, catégorie 2'),
+  ('petronasgearfl320200l', 'PETRONAS GEAR FL 320 200 L', null, null, 'Rapprochement H4, catégorie 2'),
+  ('shell20w50200l', 'SHELL 20W50 200 L', null, null, 'Rapprochement H4, catégorie 2'),
+  ('totalcarterxep320200l', 'TOTAL CARTER XEP 320', null, null, 'Rapprochement H4, catégorie 2'),
+  ('11r225doubleroad', 'Pneu 11R22.5 Double Road', null, null, 'Rapprochement H4, catégorie 2'),
+  ('12r225triangle', 'Pneu 12R22.5 Triangle', null, null, 'Rapprochement H4, catégorie 2'),
+  ('24570r16ltdoubleroad', 'Pneu 245/70R16 LT Double Road', null, null, 'Rapprochement H4, catégorie 2'),
+  ('groupeelectrogene10kva', 'Groupe électrogène 10 kVA', null, null, 'Rapprochement H4, catégorie 2'),
+  ('scieelectrique1600w', 'Scie électrique 1600 W', null, null, 'Rapprochement H4, catégorie 2'),
+  ('scieelectrique2200w', 'Scie électrique 2200 W', null, null, 'Rapprochement H4, catégorie 2'),
+  ('marteau1kg', 'Marteau 1 kg', null, null, 'Rapprochement H4, catégorie 2'),
+  ('marteau2kg', 'Marteau 2 kg', null, null, 'Rapprochement H4, catégorie 2'),
+  ('marteau5kg', 'Marteau 5 kg', null, null, 'Rapprochement H4, catégorie 2'),
+  ('decametre30m', 'Décamètre 30 m', null, null, 'Rapprochement H4, catégorie 2'),
+  ('centimetre5m', 'Mètre ruban 5 m', null, null, 'Rapprochement H4, catégorie 2'),
+  ('rallonge50m', 'Rallonge électrique 50 m', null, null, 'Rapprochement H4, catégorie 2'),
+  ('sonneriemarchearriere', 'Sonnerie de marche arrière', null, null, 'Rapprochement H4, catégorie 2'),
+  ('cordemacons', 'Corde de maçon', null, null, 'Rapprochement H4, catégorie 2'),
+  ('sceauxmacons', 'Seau de maçon', null, null, 'Rapprochement H4, catégorie 2'),
+  ('filaplomb', 'Fil à plomb', null, null, 'Rapprochement H4, catégorie 2'),
+  ('niveaudeau', 'Niveau à bulle', null, null, 'Rapprochement H4, catégorie 2'),
+  ('ambulance4', 'Ambulance 4', null, null, 'Rapprochement H4, catégorie 3'),
+  ('ambulance5', 'Ambulance 5', null, null, 'Rapprochement H4, catégorie 3'),
+  ('filapointe', 'Fil à pointe', null, null, 'Rapprochement H4, catégorie 3'),
+  ('filtreaairexcavateurprimaireetsecondaire', 'Filtre à air excavateur primaire et secondaire', null, null, 'Rapprochement H4, catégorie 3'),
+  ('filtreagasoil', 'Filtre à gasoil', null, null, 'Rapprochement H4, catégorie 3'),
+  ('gegantifreezesf12200l', 'GEG ANTIFREEZE SF12+ 200 L', null, null, 'Rapprochement H4, catégorie 3'),
+  ('gegatfvi200l', 'GEG ATF VI 200 L', null, null, 'Rapprochement H4, catégorie 3'),
+  ('marteaupiqueur', 'Marteau piqueur', null, null, 'Rapprochement H4, catégorie 3'),
+  ('pneujoyroad26565r17', 'Pneu JOYROAD 265/65R17', null, null, 'Rapprochement H4, catégorie 3'),
+  ('pneuluxxan24570r17', 'Pneu LUXXAN 245/70R17', null, null, 'Rapprochement H4, catégorie 3'),
+  ('totalcarterxep220200l', 'TOTAL CARTER XEP 220 200 L', null, null, 'Rapprochement H4, catégorie 3'),
+  ('totalcarterxep460200l', 'TOTAL CARTER XEP 460 200 L', null, null, 'Rapprochement H4, catégorie 3'),
+  ('4x4neuf', '4x4 neuf', null, null, 'Rapprochement H4, catégorie 4'),
+  ('4x4usage', '4x4 usagé', null, null, 'Rapprochement H4, catégorie 4'),
+  ('disqueacouper', 'Disque à couper', null, null, 'Rapprochement H4, catégorie 4'),
+  ('disqueameuler', 'Disque à meuler', null, null, 'Rapprochement H4, catégorie 4'),
+  ('lamepoursciegrand', 'Lame pour scie (grand modèle)', null, null, 'Rapprochement H4, catégorie 4'),
+  ('lamepoursciepetit', 'Lame pour scie (petit modèle)', null, null, 'Rapprochement H4, catégorie 4'),
+  ('meuleuse', 'Meuleuse', null, null, 'Rapprochement H4, catégorie 4'),
+  ('perceuse', 'Perceuse', null, null, 'Rapprochement H4, catégorie 4'),
+  ('vibrateuramoteur', 'Vibrateur à moteur', null, null, 'Rapprochement H4, catégorie 4'),
+  ('vibrateurelectrique', 'Vibrateur électrique', null, null, 'Rapprochement H4, catégorie 4'),
+  ('fut', 'Fût', null, null, 'Rapprochement H4, catégorie 4')
+), target as (
+  -- exactly one active fiche per target (name, and unit / type when several fiches share the name)
+  select m.k, m.note, min(p.id::text)::uuid as product_id, count(*) n
+  from m join geg_guinee.products p on p.name = m.target and p.is_active
+    and (m.unit is null or exists (select 1 from geg_guinee.units u where u.id = p.unit_id and u.name = m.unit))
+    and (m.ptype is null or p.product_type = m.ptype)
+  group by m.k, m.note
+), free as (
+  select 'invoice_lines' t, id, regexp_replace(translate(lower(description), 'àâäáãéèêëíìîïóòôöõúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn'), '[^a-z0-9]', '', 'g') k from geg_guinee.invoice_lines where product_id is null and line_type = 'product'
+  union all
+  select 'sales_order_lines', id, regexp_replace(translate(lower(description), 'àâäáãéèêëíìîïóòôöõúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn'), '[^a-z0-9]', '', 'g') from geg_guinee.sales_order_lines where product_id is null and line_type = 'product'
+)
+insert into geg_guinee.historical_line_links (line_table, line_id, product_id, status, source, note)
+select f.t, f.id, t.product_id, 'proposed', 'auto_h4', t.note
+from free f join target t on t.k = f.k and t.n = 1
+where not exists (select 1 from geg_guinee.historical_line_links l where l.line_id = f.id and l.status <> 'cancelled');
+
+with m(k, target, unit, ptype, note) as (values
+  ('rationdecomabet4000kcal18kg', 'Ration de Combat 24H - 4000Kcal -1,8Kg', null, null, 'Rapprochement H4 Singapour, catégorie 1'),
+  ('transportaerienpour10000rations', 'Fret aérien', null, 'service', 'Rapprochement H4 Singapour, catégorie 2')
+), target as (
+  -- exactly one active fiche per target (name, and unit / type when several fiches share the name)
+  select m.k, m.note, min(p.id::text)::uuid as product_id, count(*) n
+  from m join geg_singapore.products p on p.name = m.target and p.is_active
+    and (m.unit is null or exists (select 1 from geg_singapore.units u where u.id = p.unit_id and u.name = m.unit))
+    and (m.ptype is null or p.product_type = m.ptype)
+  group by m.k, m.note
+), free as (
+  select 'invoice_lines' t, id, regexp_replace(translate(lower(description), 'àâäáãéèêëíìîïóòôöõúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn'), '[^a-z0-9]', '', 'g') k from geg_singapore.invoice_lines where product_id is null and line_type = 'product'
+  union all
+  select 'sales_order_lines', id, regexp_replace(translate(lower(description), 'àâäáãéèêëíìîïóòôöõúùûüçñ', 'aaaaaeeeeiiiiooooouuuucn'), '[^a-z0-9]', '', 'g') from geg_singapore.sales_order_lines where product_id is null and line_type = 'product'
+)
+insert into geg_singapore.historical_line_links (line_table, line_id, product_id, status, source, note)
+select f.t, f.id, t.product_id, 'proposed', 'auto_h4', t.note
+from free f join target t on t.k = f.k and t.n = 1
+where not exists (select 1 from geg_singapore.historical_line_links l where l.line_id = f.id and l.status <> 'cancelled');
+
+-- Contrôle : correspondances proposées par société, et lignes libres restant sans correspondance
+select 'geg_guinee' societe, (select count(*) from geg_guinee.historical_line_links where status = 'proposed') proposees,
+  (select count(*) from (select id from geg_guinee.invoice_lines where product_id is null and line_type = 'product' union all select id from geg_guinee.sales_order_lines where product_id is null and line_type = 'product') f
+   where not exists (select 1 from geg_guinee.historical_line_links l where l.line_id = f.id and l.status <> 'cancelled')) sans_correspondance
+union all
+select 'geg_singapore', (select count(*) from geg_singapore.historical_line_links where status = 'proposed'),
+  (select count(*) from (select id from geg_singapore.invoice_lines where product_id is null and line_type = 'product' union all select id from geg_singapore.sales_order_lines where product_id is null and line_type = 'product') f
+   where not exists (select 1 from geg_singapore.historical_line_links l where l.line_id = f.id and l.status <> 'cancelled'));
+
+commit;

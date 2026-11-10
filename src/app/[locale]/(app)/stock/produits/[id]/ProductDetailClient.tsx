@@ -84,6 +84,13 @@ interface Props {
   warehouses: { id: string; name: string }[]
   locale: string
   isAdmin: boolean
+  /** Active company shown in the top bar, e.g. "GEG Singapour" */
+  companyName: string
+  /**
+   * GEG Guinée only: stock figures, inventory and movements tabs, stock adjustment and document upload
+   * (GEG Singapour has no stock in use and the document routes write to GEG Guinée)
+   */
+  stockEnabled: boolean
 }
 
 type Tab = "general" | "interne" | "prix" | "inventaire" | "documents" | "mouvements"
@@ -103,7 +110,7 @@ function splitMissing(text: string | null | undefined): string[] {
 export default function ProductDetailClient({
   product: initial, stockLevels, moves, documents: initialDocs,
   totalStock, incoming, outgoing,
-  categories, units, warehouses, locale, isAdmin,
+  categories, units, warehouses, locale, isAdmin, companyName, stockEnabled,
 }: Props) {
   const t = useTranslations("produits")
   const router = useRouter()
@@ -403,7 +410,12 @@ export default function ProductDetailClient({
   ]
 
   // Internal references tab: "produits.prix_achat" (read-only unless the user can also edit the product)
-  const visibleTabs = TABS.filter(t => !t.adminOnly || seeBuyPrice)
+  // Inventory and movements tabs: GEG Guinée only (no stock in use in GEG Singapour)
+  const visibleTabs = TABS
+    .filter(t => !t.adminOnly || seeBuyPrice)
+    .filter(t => stockEnabled || (t.key !== "inventaire" && t.key !== "mouvements"))
+  // Document upload / deletion routes only write to GEG Guinée: read-only elsewhere
+  const canEditDocs = isAdmin && stockEnabled
 
   const inputCls = "w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
 
@@ -415,7 +427,7 @@ export default function ProductDetailClient({
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <div className="flex items-center gap-2 text-sm text-gray-500 min-w-0">
-          <span className="hidden sm:inline">{t("breadcrumbProduits")}</span>
+          <span className="hidden sm:inline" title={`Catalogue — ${companyName}`}>{t("breadcrumbProduits")} <span className="text-gray-400">({companyName})</span></span>
           <ChevronRight className="w-3 h-3 hidden sm:inline" />
           <span className="text-gray-800 font-medium truncate">{product.name}</span>
         </div>
@@ -577,7 +589,7 @@ export default function ProductDetailClient({
                         À compléter
                       </span>
                     )}
-                    {totalStock < 0 && (
+                    {stockEnabled && totalStock < 0 && (
                       <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-red-100 text-red-700">Stock négatif</span>
                     )}
                   </div>
@@ -634,7 +646,8 @@ export default function ProductDetailClient({
             </div>
           </div>
 
-          {/* Smart buttons */}
+          {/* Smart buttons (stock figures): GEG Guinée only */}
+          {stockEnabled && (
           <div className="flex divide-x divide-gray-100 overflow-x-auto">
             {[
               { label: t("statEnStock"), value: formatNumber(totalStock), color: totalStock < 0 ? "text-red-600" : totalStock === 0 ? "text-gray-400" : "text-blue-600", onClick: () => setTab("mouvements") },
@@ -652,6 +665,7 @@ export default function ProductDetailClient({
               </div>
             ))}
           </div>
+          )}
         </div>
 
         {/* Tabs */}
@@ -771,7 +785,20 @@ export default function ProductDetailClient({
                   )}
                 </div>
 
-                {stockLevels.length > 0 && (
+                {/* No inventory tab outside GEG Guinée: the barcode is shown here */}
+                {!stockEnabled && (
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t("labelCodeBarres")}</label>
+                    {editing ? (
+                      <input value={form.barcode} onChange={e => setF("barcode", e.target.value)}
+                        className={inputCls} placeholder="5901234123457" />
+                    ) : (
+                      <p className="text-sm font-mono text-gray-800">{product.barcode ?? "—"}</p>
+                    )}
+                  </div>
+                )}
+
+                {stockEnabled && stockLevels.length > 0 && (
                   <div className="sm:col-span-2">
                     <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">{t("labelStockParEntrepot")}</label>
                     <div className="flex gap-3 flex-wrap">
@@ -911,7 +938,7 @@ export default function ProductDetailClient({
             )}
 
             {/* INVENTAIRE */}
-            {tab === "inventaire" && (
+            {tab === "inventaire" && stockEnabled && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-5">
                 <div>
                   <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t("labelCodeBarres")}</label>
@@ -997,7 +1024,7 @@ export default function ProductDetailClient({
             {tab === "documents" && (
               <div className="space-y-6">
                 {/* Upload zone */}
-                {isAdmin && (
+                {canEditDocs && (
                   <div className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center">
                     <Upload className="w-8 h-8 text-gray-300 mx-auto mb-3" />
                     <p className="text-sm font-medium text-gray-600 mb-3">{t("ajouterDocument")}</p>
@@ -1032,7 +1059,7 @@ export default function ProductDetailClient({
                 {/* Documents by type */}
                 {DOC_TYPES.map(dt => {
                   const docs = documents.filter(d => d.type === dt.value)
-                  if (docs.length === 0 && !isAdmin) return null
+                  if (docs.length === 0 && !canEditDocs) return null
                   return (
                     <div key={dt.value}>
                       <div className="flex items-center gap-2 mb-3">
@@ -1059,7 +1086,7 @@ export default function ProductDetailClient({
                                 className="text-gray-400 hover:text-blue-600 transition p-1">
                                 <Download className="w-4 h-4" />
                               </a>
-                              {isAdmin && (
+                              {canEditDocs && (
                                 <button onClick={() => deleteDocument(doc.id)}
                                   className="text-gray-300 hover:text-red-500 transition p-1 opacity-0 group-hover:opacity-100">
                                   <Trash2 className="w-4 h-4" />
@@ -1073,7 +1100,7 @@ export default function ProductDetailClient({
                   )
                 })}
 
-                {documents.length === 0 && !isAdmin && (
+                {documents.length === 0 && !canEditDocs && (
                   <div className="text-center py-12 text-gray-400">
                     <FileText className="w-8 h-8 mx-auto mb-2 opacity-30" />
                     <p>{t("aucunDocumentDisponible")}</p>
@@ -1083,7 +1110,7 @@ export default function ProductDetailClient({
             )}
 
             {/* MOUVEMENTS */}
-            {tab === "mouvements" && (
+            {tab === "mouvements" && stockEnabled && (
               <div>
                 <div className="flex items-center justify-between mb-4">
                   <p className="text-sm text-gray-500">{moves.length} {t("mouvementCount", { count: moves.length })}</p>

@@ -22,7 +22,7 @@ export default async function BonLivraisonPage({ params }: { params: Promise<{ l
       .single(),
     supabase
       .from("delivery_note_lines")
-      .select("id, product_id, description, quantity, warehouse_id, position")
+      .select("id, product_id, description, quantity, warehouse_id, position, line_type, print_on_delivery")
       .eq("delivery_note_id", id)
       .order("position"),
     supabase
@@ -70,6 +70,8 @@ export default async function BonLivraisonPage({ params }: { params: Promise<{ l
         quantity: Number(l.quantity),
         warehouse_id: l.warehouse_id,
         position: l.position,
+        line_type: l.line_type ?? "product",
+        print_on_delivery: l.print_on_delivery ?? false,
       }))}
       warehouses={(warehouses ?? []) as { id: string; name: string; city: string | null }[]}
       locale={locale}

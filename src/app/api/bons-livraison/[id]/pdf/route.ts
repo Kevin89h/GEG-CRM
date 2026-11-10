@@ -35,7 +35,7 @@ export async function GET(
 
   const { data: lines } = await db
     .from("delivery_note_lines")
-    .select("id, description, quantity, warehouse_id, position")
+    .select("id, description, quantity, warehouse_id, position, line_type, print_on_delivery")
     .eq("delivery_note_id", id)
     .order("position")
 
@@ -68,11 +68,19 @@ export async function GET(
     }
   }
 
-  const pdfLines = rawLines.map(l => ({
-    description: String(l.description ?? ""),
-    quantity: Number(l.quantity) || 0,
-    warehouse: l.warehouse_id ? (warehouseMap[l.warehouse_id as string] ?? null) : null,
-  }))
+  // Comment lines are printed only when chosen for the delivery note (print_on_delivery)
+  const pdfLines = rawLines
+    .filter(l => l.line_type !== "comment" || l.print_on_delivery === true)
+    .map(l => l.line_type === "comment" ? {
+      description: String(l.description ?? ""),
+      quantity: 0,
+      warehouse: null,
+      is_comment: true,
+    } : {
+      description: String(l.description ?? ""),
+      quantity: Number(l.quantity) || 0,
+      warehouse: l.warehouse_id ? (warehouseMap[l.warehouse_id as string] ?? null) : null,
+    })
 
   const filename = `BL ${dn.number}.pdf`
 

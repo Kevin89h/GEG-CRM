@@ -26,9 +26,11 @@ interface Line {
   image_url?: string | null
   unit_label?: string | null
   product: { name: string; reference: string | null } | null
-  // "comment": text only, printed full width when print_on_pdf is not false
+  // "comment": text only, printed full width when print_on_pdf is not false (quote)
+  // or when print_on_delivery is true (delivery note variant)
   line_type?: string | null
   print_on_pdf?: boolean | null
+  print_on_delivery?: boolean | null
 }
 
 const isComment = (l: Line) => l.line_type === "comment"
@@ -100,9 +102,10 @@ export default function PrintPage({
   lines: allLines, locale, docType, docSettings, bankAccounts = [],
 }: Props) {
   const [showImages, setShowImages] = useState(true)
-  // Sales lines carry the amounts; comment lines are printed (when print_on_pdf) but never counted
+  // Sales lines carry the amounts; comment lines are printed but never counted:
+  // on the quote when print_on_pdf, on the delivery note when print_on_delivery
   const lines = allLines.filter(l => !isComment(l))
-  const printedLines = allLines.filter(l => !isComment(l) || l.print_on_pdf !== false)
+  const printedLines = allLines.filter(l => !isComment(l) || (docType === "bon-livraison" ? l.print_on_delivery === true : l.print_on_pdf !== false))
 
   useEffect(() => {
     document.title = `${docType === "bon-livraison" ? "BL" : status === "confirmed" ? "BC" : "DEVIS"} - ${number}`

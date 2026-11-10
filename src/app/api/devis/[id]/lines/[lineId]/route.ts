@@ -13,7 +13,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     .from("sales_order_lines")
     .update(body)
     .eq("id", lineId)
-    .select("id, description, quantity, unit_price, discount, position, product_id, tva_exempt, line_type, print_on_pdf")
+    .select("id, description, quantity, unit_price, discount, position, product_id, tva_exempt, line_type, print_on_pdf, print_on_delivery")
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })

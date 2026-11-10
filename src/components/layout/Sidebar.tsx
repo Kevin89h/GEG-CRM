@@ -65,7 +65,7 @@ export default function Sidebar({ locale, profile, companies, currentSchema, per
       <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
         <NavLinks
           locale={locale}
-          access={{ role: profile?.role, schemas: companies.map(c => c.schema_name), perms }}
+          access={{ role: profile?.role, schemas: companies.map(c => c.schema_name), perms, activeSchema: currentSchema }}
         />
       </nav>
 

@@ -19,7 +19,12 @@ interface DNLine {
   quantity: number
   warehouse_id: string | null
   position: number
+  // "comment": text only copied from the source document (no quantity, warehouse nor stock move)
+  line_type?: string | null
+  print_on_delivery?: boolean | null
 }
+
+const isComment = (l: { line_type?: string | null }) => l.line_type === "comment"
 
 interface DN {
   id: string
@@ -48,7 +53,7 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
   const { can } = usePerms()
   const firstWarehouseId = warehouses[0]?.id ?? ""
   const [lines, setLines] = useState(() =>
-    initialLines.map(l => ({ ...l, warehouse_id: l.warehouse_id || firstWarehouseId || null }))
+    initialLines.map(l => ({ ...l, warehouse_id: isComment(l) ? null : (l.warehouse_id || firstWarehouseId || null) }))
   )
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -84,11 +89,11 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
   // Appliquer l'entrepôt par défaut à toutes les lignes sans entrepôt
   function applyDefaultWarehouse(wid: string) {
     setDefaultWarehouse(wid)
-    setLines(prev => prev.map(l => ({ ...l, warehouse_id: l.warehouse_id || wid })))
+    setLines(prev => prev.map(l => isComment(l) ? l : ({ ...l, warehouse_id: l.warehouse_id || wid })))
   }
 
   async function confirmDelivery(derogation?: { reason: string; confirmed: true }) {
-    const stockLines = lines.filter(l => l.product_id)
+    const stockLines = lines.filter(l => !isComment(l) && l.product_id)
     if (stockLines.some(l => !l.warehouse_id)) {
       setError("Assigne un entrepôt à chaque produit avant de confirmer.")
       return
@@ -104,7 +109,8 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
     const res = await fetch(`/api/bons-livraison/${dn.id}/confirm`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lines, userId: user.id, ...(derogation ? { derogation } : {}) }),
+      // Comment lines never move stock: they are not sent
+      body: JSON.stringify({ lines: lines.filter(l => !isComment(l)), userId: user.id, ...(derogation ? { derogation } : {}) }),
     })
     const json = await res.json().catch(() => ({}))
     if (!res.ok) {
@@ -287,7 +293,19 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
-            {lines.map(l => (
+            {lines.map(l => isComment(l) ? (
+              <tr key={l.id} className="bg-gray-50">
+                <td colSpan={3} className="px-4 py-2.5">
+                  <div className="flex items-start gap-3">
+                    <span className="mt-0.5 shrink-0 text-[11px] px-1.5 py-0.5 rounded font-medium bg-gray-200 text-gray-600">Commentaire</span>
+                    <p className="flex-1 text-sm italic text-gray-600 whitespace-pre-line">{l.description}</p>
+                    {l.print_on_delivery !== true && (
+                      <span className="mt-0.5 shrink-0 text-xs text-gray-400">Non imprimé sur le bon de livraison</span>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ) : (
               <tr key={l.id} className={!l.product_id ? "opacity-60" : ""}>
                 <td className="px-4 py-3 font-medium text-gray-900">
                   {l.description}
@@ -353,16 +371,16 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
             <div>
               <p className="font-semibold mb-1">Sortie de stock définitive</p>
               <p>
-                {lines.filter(l => l.product_id).length} produit(s) seront retirés du stock.
+                {lines.filter(l => !isComment(l) && l.product_id).length} produit(s) seront retirés du stock.
                 Cette action est irréversible.
               </p>
             </div>
           </div>
 
           {/* Récap par entrepôt */}
-          {lines.filter(l => l.product_id && l.warehouse_id).length > 0 && (
+          {lines.filter(l => !isComment(l) && l.product_id && l.warehouse_id).length > 0 && (
             <div className="space-y-1 text-sm">
-              {lines.filter(l => l.product_id).map(l => (
+              {lines.filter(l => !isComment(l) && l.product_id).map(l => (
                 <div key={l.id} className="flex justify-between py-1 border-b border-gray-50 last:border-0">
                   <span className="text-gray-700">{l.description}</span>
                   <span className="text-gray-500 text-xs">{l.quantity} × {warehouseLabel(l.warehouse_id)}</span>
@@ -527,7 +545,12 @@ function BonLivraisonPrint({ dn, lines, warehouseLabel, docSettings, locale }: {
           </tr>
         </thead>
         <tbody>
-          {lines.map((l, i) => (
+          {/* Comments: printed only when chosen for the delivery note, italic over the full width, no quantity */}
+          {lines.filter(l => !isComment(l) || l.print_on_delivery === true).map((l, i) => isComment(l) ? (
+            <tr key={l.id}>
+              <td colSpan={2} style={{ padding: "8px 12px", fontSize: 12, fontStyle: "italic", color: "#4b5563", borderBottom: "1px solid #f3f4f6", whiteSpace: "pre-line" }}>{l.description}</td>
+            </tr>
+          ) : (
             <tr key={l.id} style={{ background: i % 2 === 0 ? "#fff" : "#f9fafb" }}>
               <td style={{ padding: "10px 12px", fontSize: 12, borderBottom: "1px solid #f3f4f6" }}>{l.description}</td>
               <td style={{ padding: "10px 12px", fontSize: 12, textAlign: "right", borderBottom: "1px solid #f3f4f6", fontWeight: 600 }}>

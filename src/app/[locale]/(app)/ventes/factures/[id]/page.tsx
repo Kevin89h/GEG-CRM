@@ -36,7 +36,7 @@ export default async function FactureDetailPage({ params }: { params: Promise<{ 
 
   const [{ data: lines }, { data: payments }, { data: treasuryAccounts }] = await Promise.all([
     db.from("invoice_lines")
-      .select("id, product_id, description, quantity, unit_price, discount, position, tva_rate, line_type, print_on_pdf")
+      .select("id, product_id, description, quantity, unit_price, discount, position, tva_rate, line_type, print_on_pdf, print_on_delivery")
       .eq("invoice_id", id)
       .order("position"),
     db.from("payments")

@@ -23,7 +23,7 @@ export default async function BonLivraisonPage({ params }: { params: Promise<{ l
     .eq("is_active", true)
     .order("name")
 
-  // Comment lines (text only) are never delivered
+  // Comment lines (text only) are never delivered: the server copies them into the delivery note itself
   const lines = ((order.lines ?? []) as Record<string, unknown>[])
     .filter(l => l.line_type !== "comment")
     .sort((a, b) => (a.position as number) - (b.position as number))

@@ -29,6 +29,8 @@ interface Line {
   // "comment": text only (no product, quantity, price, VAT nor amount); "product" (default): sales line
   line_type?: string | null
   print_on_pdf?: boolean | null
+  // Comment only: printed on delivery notes made from this invoice (default false)
+  print_on_delivery?: boolean | null
 }
 
 const isComment = (l: { line_type?: string | null }) => l.line_type === "comment"
@@ -120,6 +122,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
   // Comment being typed before it is added (null: no comment form open)
   const [newComment, setNewComment] = useState<string | null>(null)
   const [newCommentPrint, setNewCommentPrint] = useState(true)
+  const [newCommentPrintDelivery, setNewCommentPrintDelivery] = useState(false)
   const [addingComment, setAddingComment] = useState(false)
 
   // Fetch exchange rate whenever payment currency differs from invoice currency
@@ -373,13 +376,14 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
       const res = await fetch(`/api/invoices/${invoice.id}/lines`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ line_type: "comment", description: text, print_on_pdf: newCommentPrint, position: invoice.lines.length }),
+        body: JSON.stringify({ line_type: "comment", description: text, print_on_pdf: newCommentPrint, print_on_delivery: newCommentPrintDelivery, position: invoice.lines.length }),
       })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) { setLineError(json.error ?? `Erreur lors de l'ajout du commentaire (${res.status})`); return }
       if (json.line) setInvoice(prev => ({ ...prev, lines: [...prev.lines, { ...json.line, line_type: "comment" } as Line] }))
       setNewComment(null)
       setNewCommentPrint(true)
+      setNewCommentPrintDelivery(false)
     } finally {
       setAddingComment(false)
     }
@@ -415,6 +419,21 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
       const json = await res.json().catch(() => ({}))
       setLineError(json.error ?? `Erreur lors de l'enregistrement (${res.status})`)
       setInvoice(prev => ({ ...prev, lines: prev.lines.map(l => l.id === lineId ? { ...l, print_on_pdf: !value } : l) }))
+    }
+  }
+
+  async function togglePrintOnDelivery(lineId: string, value: boolean) {
+    setLineError(null)
+    setInvoice(prev => ({ ...prev, lines: prev.lines.map(l => l.id === lineId ? { ...l, print_on_delivery: value } : l) }))
+    const res = await fetch(`/api/invoices/${invoice.id}/lines/${lineId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ print_on_delivery: value }),
+    })
+    if (!res.ok) {
+      const json = await res.json().catch(() => ({}))
+      setLineError(json.error ?? `Erreur lors de l'enregistrement (${res.status})`)
+      setInvoice(prev => ({ ...prev, lines: prev.lines.map(l => l.id === lineId ? { ...l, print_on_delivery: !value } : l) }))
     }
   }
 
@@ -980,12 +999,21 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
                       <p className="flex-1 text-sm italic text-gray-600 whitespace-pre-line">{l.description}</p>
                     )}
                     {canEdit ? (
-                      <label className="mt-0.5 shrink-0 flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
-                        <input type="checkbox" checked={l.print_on_pdf !== false} onChange={e => togglePrintOnPdf(l.id, e.target.checked)} />
-                        Imprimer sur le PDF
-                      </label>
-                    ) : l.print_on_pdf === false && (
-                      <span className="mt-0.5 shrink-0 text-xs text-gray-400">Non imprimé sur le PDF</span>
+                      <div className="mt-0.5 shrink-0 flex flex-col gap-1">
+                        <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
+                          <input type="checkbox" checked={l.print_on_pdf !== false} onChange={e => togglePrintOnPdf(l.id, e.target.checked)} />
+                          Imprimer sur la facture
+                        </label>
+                        <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
+                          <input type="checkbox" checked={l.print_on_delivery === true} onChange={e => togglePrintOnDelivery(l.id, e.target.checked)} />
+                          Imprimer sur le bon de livraison
+                        </label>
+                      </div>
+                    ) : (
+                      <div className="mt-0.5 shrink-0 flex flex-col gap-0.5 text-xs text-gray-400">
+                        <span>{l.print_on_pdf !== false ? "Imprimé sur la facture" : "Non imprimé sur la facture"}</span>
+                        <span>{l.print_on_delivery === true ? "Imprimé sur le bon de livraison" : "Non imprimé sur le bon de livraison"}</span>
+                      </div>
                     )}
                   </div>
                 </td>
@@ -1127,11 +1155,17 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
               />
             </div>
             <div className="flex items-center gap-4 justify-end">
-              <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none mr-auto">
-                <input type="checkbox" checked={newCommentPrint} onChange={e => setNewCommentPrint(e.target.checked)} />
-                Imprimer sur le PDF
-              </label>
-              <button onClick={() => { setNewComment(null); setNewCommentPrint(true) }} className="text-xs text-gray-500 hover:text-gray-700">Annuler</button>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mr-auto">
+                <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
+                  <input type="checkbox" checked={newCommentPrint} onChange={e => setNewCommentPrint(e.target.checked)} />
+                  Imprimer sur la facture
+                </label>
+                <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer select-none">
+                  <input type="checkbox" checked={newCommentPrintDelivery} onChange={e => setNewCommentPrintDelivery(e.target.checked)} />
+                  Imprimer sur le bon de livraison
+                </label>
+              </div>
+              <button onClick={() => { setNewComment(null); setNewCommentPrint(true); setNewCommentPrintDelivery(false) }} className="text-xs text-gray-500 hover:text-gray-700">Annuler</button>
               <button
                 onClick={addComment}
                 disabled={addingComment || !newComment.trim()}

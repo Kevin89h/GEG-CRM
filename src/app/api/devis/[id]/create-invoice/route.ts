@@ -9,6 +9,7 @@ interface OrderLine {
   product_id?: string | null
   line_type?: string | null
   print_on_pdf?: boolean | null
+  print_on_delivery?: boolean | null
   tva_exempt?: boolean | null
 }
 
@@ -77,6 +78,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       tva_rate: l.line_type === "comment" ? 0 : tva && !l.tva_exempt ? 18 : 0,
       line_type: l.line_type === "comment" ? "comment" : "product",
       print_on_pdf: l.print_on_pdf !== false,
+      print_on_delivery: l.line_type === "comment" && l.print_on_delivery === true,
     }))
     const { error: lineErr } = await db.from("invoice_lines").insert(lineRows)
     if (lineErr) return NextResponse.json({ error: lineErr.message }, { status: 400 })
