@@ -12,8 +12,8 @@ with m(k, target, unit, ptype, note) as (values
   ('marteaupiqueur2200w', 'Marteau piqueur - 2 200W', null, null, 'Rapprochement H4, catégorie 1'),
   ('24570r17', '245/70R17', null, null, 'Rapprochement H4, catégorie 1'),
   ('26565r17', '265/65R17', null, null, 'Rapprochement H4, catégorie 1'),
-  ('fraisdetransport', 'FRAIS DE TRANSPORT', null, 'service', 'Rapprochement H4, catégorie 1'),
-  ('transportmaritime', 'Transport Maritime', null, null, 'Rapprochement H4, catégorie 1'),
+  ('fraisdetransport', 'FRAIS DE TRANSPORT', null, 'service', 'Service générique de transport ; libellé d''origine : Frais de transport'),
+  ('transportmaritime', 'FRAIS DE TRANSPORT', null, 'service', 'Service générique de transport ; libellé d''origine : Transport Maritime'),
   ('gegcompressorpao4620l', 'GEG COMPRESSOR PAO ISO VG46', null, null, 'Rapprochement H4, catégorie 1'),
   ('gegreductorclp220200l', 'GEG REDUCTOR CLP 220 200 L', null, null, 'Rapprochement H4, catégorie 1'),
   ('gegreductorclp320200l', 'GEG REDUCTOR CLP 320 200 L', null, null, 'Rapprochement H4, catégorie 1'),
@@ -25,7 +25,7 @@ with m(k, target, unit, ptype, note) as (values
   ('filtreahuileexcavateur100042655weichai', 'Filtre à Huile Excavateur', null, null, 'Rapprochement H4, catégorie 1'),
   ('filtredecanteurchargeusepl420', 'Filtre décanteur Chargeuse', null, null, 'Rapprochement H4, catégorie 1'),
   ('filtredecanteurexcavateurpl420weichai', 'Filtre décanteur Excavateur', null, null, 'Rapprochement H4, catégorie 1'),
-  ('fretaerien', 'Fret aérien', null, null, 'Rapprochement H4, catégorie 2'),
+  ('fretaerien', 'FRAIS DE TRANSPORT', null, 'service', 'Service générique de transport ; libellé d''origine : Frêt aérien'),
   ('rabais', 'Remise commerciale', null, null, 'Rapprochement H4, catégorie 2'),
   ('gegreductorclp460200l', 'GEG REDUCTOR CLP 460 200 L', null, null, 'Rapprochement H4, catégorie 2'),
   ('fuchsrenolinclp320200l', 'FUCHS RENOLIN CLP 320 200 L', null, null, 'Rapprochement H4, catégorie 2'),
@@ -33,7 +33,7 @@ with m(k, target, unit, ptype, note) as (values
   ('petronasgearfl220200l', 'PETRONAS GEAR FL 220 200 L', null, null, 'Rapprochement H4, catégorie 2'),
   ('petronasgearfl320200l', 'PETRONAS GEAR FL 320 200 L', null, null, 'Rapprochement H4, catégorie 2'),
   ('shell20w50200l', 'SHELL 20W50 200 L', null, null, 'Rapprochement H4, catégorie 2'),
-  ('totalcarterxep320200l', 'TOTAL CARTER XEP 320', null, null, 'Rapprochement H4, catégorie 2'),
+  ('totalcarterxep320200l', 'TOTAL CARTER XEP 320', null, null, 'Rapprochement H4, catégorie 2 ; Conditionnement à confirmer : 200 L ou 205 L'),
   ('11r225doubleroad', 'Pneu 11R22.5 Double Road', null, null, 'Rapprochement H4, catégorie 2'),
   ('12r225triangle', 'Pneu 12R22.5 Triangle', null, null, 'Rapprochement H4, catégorie 2'),
   ('24570r16ltdoubleroad', 'Pneu 245/70R16 LT Double Road', null, null, 'Rapprochement H4, catégorie 2'),
@@ -110,8 +110,8 @@ with m(k, target, unit, ptype, note) as (values
   ('gpnpremium5w405l', 'GPN PREMIUM 5W40 5 L', null, null, 'Lignes antérieures — fiche distincte (caractéristique différente ou manquante)'),
   ('multiscomplexmhd220orequ180kg', 'Multis  Complex MHD 220 OR Equ 180KG', '1 L', null, 'Lignes antérieures — même article, libellé différent'),
   ('filtreseparateurelectrique', 'Filtre séparateur électrique', null, null, 'Lignes antérieures — article absent, fiche créée'),
-  ('fraisdedeboursdeplacementsbordeauxparisstrasbourgforbach', 'Frais de débours', null, 'service', 'Lignes antérieures — service générique ; détail d''origine : Déplacements Bordeaux/Paris/Strasbourg/Forbach'),
-  ('fretdakar40ft', 'Fret maritime conteneur 40 pieds', null, 'service', 'Lignes antérieures — service générique ; détail d''origine : Dakar, conteneur 40 pieds'),
+  ('fraisdedeboursdeplacementsbordeauxparisstrasbourgforbach', 'Frais de débours', null, 'service', 'Lignes antérieures — service générique ; libellé d''origine : Déplacements Bordeaux/Paris/Strasbourg/Forbach'),
+  ('fretdakar40ft', 'FRAIS DE TRANSPORT', null, 'service', 'Lignes antérieures — service générique ; libellé d''origine : FRET DAKAR 40FT'),
   ('gpngreaseep25l', 'GPN GREASE EP 2 5 L', null, null, 'Lignes antérieures — article absent, fiche créée'),
   ('kitchalumeausansbouteilles', 'Kit chalumeau sans bouteilles', null, null, 'Lignes antérieures — article absent, fiche créée'),
   ('ardeca80w90', 'Ardeca 80W-90', null, null, 'Lignes antérieures — fiche distincte'),
@@ -125,8 +125,8 @@ with m(k, target, unit, ptype, note) as (values
   ('eurotechydraulicoilhlp6820l', 'EUROTEC Hydraulic Oil HLP 68 20 L', null, null, 'Lignes antérieures — fiche distincte'),
   ('eurotecmonotechdsae50cf4sg4l', 'EUROTEC Monotec HD SAE 50 CF-4/SG 4 L', null, null, 'Lignes antérieures — fiche distincte'),
   ('eurotecmotoprime4t20w501l', 'EUROTEC MotoPrime 4T 20W-50 1 L', null, null, 'Lignes antérieures — fiche distincte'),
-  ('fraisdetransportlivraisonboffabalandougou', 'FRAIS DE TRANSPORT', null, 'service', 'Lignes antérieures — service générique ; détail d''origine : Livraison Boffa/Balandougou'),
-  ('fraisdetransportlivraisonmandiana', 'FRAIS DE TRANSPORT', null, 'service', 'Lignes antérieures — service générique ; détail d''origine : Livraison Mandiana'),
+  ('fraisdetransportlivraisonboffabalandougou', 'FRAIS DE TRANSPORT', null, 'service', 'Lignes antérieures — service générique ; libellé d''origine : Frais de transport - Livraison Boffa/Balandougou'),
+  ('fraisdetransportlivraisonmandiana', 'FRAIS DE TRANSPORT', null, 'service', 'Lignes antérieures — service générique ; libellé d''origine : Frais de transport - Livraison Mandiana'),
   ('gegcoolantsf12premix', 'GEG Coolant SF12 Premix', null, null, 'Lignes antérieures — fiche distincte'),
   ('gpndieselextra15w4020l', 'GPN DIESEL EXTRA 15W40 20 L', null, null, 'Lignes antérieures — fiche distincte'),
   ('gpndieselextra15w405l', 'GPN DIESEL EXTRA 15W40 5 L', null, null, 'Lignes antérieures — fiche distincte'),
@@ -136,7 +136,7 @@ with m(k, target, unit, ptype, note) as (values
   ('hlp68cuve', 'HLP 68 (cuve)', null, null, 'Lignes antérieures — fiche distincte'),
   ('pneu205r16ctypecontinentaletbridgestone', 'Pneu 205R16C', null, null, 'Lignes antérieures — fiche distincte'),
   ('prestationdeservices', 'Prestation de services', null, 'service', 'Lignes antérieures — service générique'),
-  ('transportconteneurenbateaufraisdetransport', 'Transport Maritime', null, null, 'Lignes antérieures — service générique ; détail d''origine : Transport conteneur en bateau')
+  ('transportconteneurenbateaufraisdetransport', 'FRAIS DE TRANSPORT', null, 'service', 'Lignes antérieures — service générique ; libellé d''origine : TRANSPORT CONTENEUR EN BATEAU - FRAIS DE TRANSPORT')
 ), target as (
   -- exactly one active fiche per target (name, and unit / type when several fiches share the name)
   select m.k, m.note, min(p.id::text)::uuid as product_id, count(*) n
@@ -156,7 +156,7 @@ where not exists (select 1 from geg_guinee.historical_line_links l where l.line_
 
 with m(k, target, unit, ptype, note) as (values
   ('rationdecomabet4000kcal18kg', 'Ration de Combat 24H - 4000Kcal -1,8Kg', null, null, 'Rapprochement H4 Singapour, catégorie 1'),
-  ('transportaerienpour10000rations', 'Fret aérien', null, 'service', 'Rapprochement H4 Singapour, catégorie 2')
+  ('transportaerienpour10000rations', 'FRAIS DE TRANSPORT', null, 'service', 'Service générique de transport ; libellé d''origine : Transport aerien pour 10 000rations')
 ), target as (
   -- exactly one active fiche per target (name, and unit / type when several fiches share the name)
   select m.k, m.note, min(p.id::text)::uuid as product_id, count(*) n

@@ -1,8 +1,9 @@
 -- PRODUCTION — À EXÉCUTER UNIQUEMENT APRÈS AUTORISATION EXPLICITE (décision 1 du 10/11/2026, option A).
 -- Prérequis : migrations 20261110120000_catalogue_stock, 20261111120000_catalogue_complements,
 --             20261112120000_commentaires_impression_bl appliquées ; code des commits correspondants déployé.
--- Crée les 80 fiches GEG Guinée préparées sur Dev (79 « À compléter » + Remise commerciale)
--- et le service « Fret aérien » de GEG Singapour. Actives, utilisables dans les devis et factures.
+-- Crée les 78 fiches GEG Guinée préparées sur Dev (77 « À compléter » + Remise commerciale)
+-- Aucune fiche pour GEG Singapour. Actives, utilisables dans les devis et factures.
+-- Transport : service unique « FRAIS DE TRANSPORT » existant (réutilisé, non modifié), aucun service de fret séparé.
 -- Aucune information inventée : seules celles des libellés d'origine ; le reste est listé dans missing_info.
 -- Idempotent : une fiche dont le nom existe déjà n'est pas recréée (le contrôle final le signale).
 -- Généré le 2026-11-11 depuis la base Dev.
@@ -39,8 +40,6 @@ with p(name, ptype, cat, unit, brand, to_complete, missing, currency, can_sell, 
   ('Filtre à gasoil', 'storable', 'Autre', 'Unité', null, true, 'engin concerné ; marque ; référence pièce ; prix de vente', 'GNF', true, true),
   ('Filtre séparateur électrique', 'storable', 'Autre', 'Unité', null, true, 'engin concerné ; marque ; référence pièce ; prix de vente', 'GNF', true, true),
   ('Frais de débours', 'service', 'Autre', 'Unité', null, true, 'désignation exacte ; mode de facturation', 'GNF', true, false),
-  ('Fret aérien', 'service', 'Autre', 'Unité', null, true, 'désignation exacte', 'GNF', true, false),
-  ('Fret maritime conteneur 40 pieds', 'service', 'Autre', 'Unité', null, true, 'désignation exacte ; prix de vente', 'GNF', true, false),
   ('FUCHS RENOLIN CLP 320 200 L', 'storable', 'Lubrifiants', '200 L', 'FUCHS', true, 'référence ; conditionnement exact (200 L d''après les documents) ; prix de vente', 'GNF', true, true),
   ('FUCHS RENOLIN CLP 460 200 L', 'storable', 'Lubrifiants', '200 L', 'FUCHS', true, 'référence ; conditionnement exact (200 L d''après les documents) ; prix de vente', 'GNF', true, true),
   ('Fût', 'storable', 'Autre', 'Unité', null, true, 'contenance ; matière ; neuf ou vide de récupération ; prix de vente', 'GNF', true, true),
@@ -104,19 +103,9 @@ select t.name, t.ptype,
   'PRD-' || lpad((base.n + t.rn)::text, 5, '0')
 from todo t, base;
 
--- GEG Singapour (pas de code produit dans ce catalogue)
-with p(name, ptype, cat, unit, brand, to_complete, missing, currency, can_sell, can_buy) as (values
-  ('Fret aérien', 'service', null, 'Unité', null, true, 'désignation exacte ; prix de vente', 'EUR', true, false)
-)
-insert into geg_singapore.products (name, product_type, category_id, unit_id, brand, is_active, to_complete, missing_info, currency, can_be_sold, can_be_purchased)
-select p.name, p.ptype,
-  (select id from geg_singapore.product_categories c where c.name = p.cat order by c.name limit 1),
-  (select id from geg_singapore.units u where u.name = p.unit order by u.name limit 1),
-  p.brand, true, p.to_complete, p.missing, p.currency, p.can_sell, p.can_buy
-from p where not exists (select 1 from geg_singapore.products x where x.name = p.name);
+-- GEG Singapour : aucune fiche à créer (service unique « FRAIS DE TRANSPORT » déjà présent et correct)
 
--- Contrôle : doit renvoyer 80 et 1
-select (select count(*) from geg_guinee.products where to_complete or name = 'Remise commerciale') as guinee,
-       (select count(*) from geg_singapore.products where name = 'Fret aérien') as singapour;
+-- Contrôle : doit renvoyer 78
+select (select count(*) from geg_guinee.products where to_complete or name = 'Remise commerciale') as guinee;
 
 commit;

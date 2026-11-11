@@ -29,6 +29,7 @@ interface LinkItem {
   cancelled_by_name: string | null
   cancelled_at: string | null
   cancel_reason: string | null
+  blocked_reason?: string | null
 }
 
 interface Row {
@@ -442,6 +443,11 @@ export default function RattachementsClient({ canManageInitial, companyName }: {
                                 : <>Par {l.created_by_name ?? "—"} le {fmtDateTime(l.created_at, locale)}</>}
                             </div>
                             {l.note && <div className="text-xs text-gray-500 italic mt-0.5">{l.note}</div>}
+                            {l.blocked_reason && (
+                              <div className="mt-1 inline-flex items-start gap-1 px-2 py-1 rounded-md text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200">
+                                ⚠ {l.blocked_reason} — validation impossible tant que ce point n'est pas confirmé
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <span className="inline-flex px-2 py-0.5 rounded-md text-xs font-medium bg-orange-50 text-orange-700 border border-orange-200">À rattacher</span>
@@ -464,7 +470,7 @@ export default function RattachementsClient({ canManageInitial, companyName }: {
                               </button>
                             )}
                             {l?.status === "proposed" && (
-                              <button disabled={busy} onClick={() => validate(r)}
+                              <button disabled={busy || !!l.blocked_reason} onClick={() => validate(r)} title={l.blocked_reason ?? undefined}
                                 className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50">
                                 <Check className="w-3.5 h-3.5" /> Valider
                               </button>

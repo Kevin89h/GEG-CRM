@@ -146,6 +146,22 @@ export function rangeOf(text: string | null | undefined): string | null {
   return RANGES.find(x => n.includes(` ${x} `)) ?? null
 }
 
+/**
+ * Packaging rule for historical correspondences (GEG: different packagings / volumes / weights = different articles).
+ * Returns the reason why a free line cannot be validated against this fiche, or null when the packagings agree
+ * (or when neither side has one).
+ */
+export function packagingBlock(lineLabel: string | null | undefined, target: { name: string; unit?: string | null } | null | undefined, note?: string | null): string | null {
+  if (note && /Conditionnement à confirmer/i.test(note)) return note.slice(note.search(/Conditionnement à confirmer/i)).replace(/^W+/, "")
+  if (!target) return null
+  const n = (p: string | null) => (p ? p.replace(/^(d+(?:.d+)?)(l|kg|ml)$/, (_, v, u) => `${Number(v)} ${u === "l" ? "L" : u}`) : null)
+  const lp = n(packaging(lineLabel)), tp = n(packaging(target.name) ?? packaging(target.unit))
+  if (!lp) return null
+  if (!tp) return `Conditionnement à confirmer : ${lp} sur la ligne d'origine, non renseigné sur la fiche`
+  if (lp !== tp) return `Conditionnement différent : ${lp} sur la ligne d'origine, ${tp} sur la fiche (articles distincts)`
+  return null
+}
+
 export interface Candidate extends CatalogItem { score: number; reasons: string[] }
 
 /** Similar catalogue items for a search text, best first, with the reasons that make them close or different */

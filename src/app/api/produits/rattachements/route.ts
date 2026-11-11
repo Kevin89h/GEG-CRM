@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createCompanyClient } from "@/lib/company"
 import { errorResponse, hasPermission, requirePermission } from "@/lib/access"
 import { createAdminClient } from "@/lib/supabase/admin"
+import { packagingBlock } from "@/lib/catalog"
 
 // Historical correspondence (decision 6 of 10/11/2026): an old FREE line of a quote or an invoice is linked to a
 // catalogue product in a separate table. The documents themselves are never modified: no change of amount, VAT,
@@ -58,7 +59,7 @@ export async function GET(req: NextRequest) {
     }
 
     const { data: links, error: linkErr } = await db.from("historical_line_links")
-      .select("id, line_table, line_id, product_id, status, source, note, created_by, created_at, validated_by, validated_at, cancelled_by, cancelled_at, cancel_reason, product:products(id, name, product_type, is_active, to_complete)")
+      .select("id, line_table, line_id, product_id, status, source, note, created_by, created_at, validated_by, validated_at, cancelled_by, cancelled_at, cancel_reason, product:products(id, name, product_type, is_active, to_complete, unit:units(name))")
       .order("created_at", { ascending: true })
     if (linkErr) return NextResponse.json({ error: linkErr.message }, { status: 400 })
 
@@ -83,7 +84,10 @@ export async function GET(req: NextRequest) {
 
     const rows = lines.map(l => {
       const history = byLine.get(`${l.line_table}:${l.line_id}`) ?? []
-      const current = history.find(h => h.status !== "cancelled") ?? null
+      const found = history.find(h => h.status !== "cancelled") ?? null
+      // packaging rule: a proposal whose packaging is unknown or different cannot be validated
+      const unit = found?.product ? (Array.isArray(found.product.unit) ? found.product.unit[0] : found.product.unit)?.name ?? null : null
+      const current = found ? { ...found, blocked_reason: found.status === "proposed" ? packagingBlock(l.description, found.product ? { name: found.product.name, unit } : null, found.note) : null } : null
       return { ...l, link: current, history }
     }).filter(r =>
       filter === "all" ? true :
@@ -117,8 +121,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Votre rôle ou vos permissions ne permettent pas cette action" }, { status: 403 })
     }
     const { db } = await createCompanyClient()
-    const { data: product } = await db.from("products").select("id").eq("id", body.product_id).maybeSingle()
+    const { data: product } = await db.from("products").select("id, name, unit:units(name)").eq("id", body.product_id).maybeSingle()
     if (!product) return NextResponse.json({ error: "Produit introuvable dans le catalogue de cette société" }, { status: 400 })
+    const { data: line } = await db.from(line_table).select("description").eq("id", body.line_id).maybeSingle()
+    const unitName = (Array.isArray(product.unit) ? product.unit[0] : product.unit)?.name ?? null
+    const block = packagingBlock(line?.description, { name: product.name, unit: unitName })
+    if (block) return NextResponse.json({ error: `${block}. Choisissez la fiche du bon conditionnement (ou faites compléter la fiche) avant de rattacher.` }, { status: 409 })
     const now = new Date().toISOString()
     const { data, error } = await db.from("historical_line_links").insert([{
       line_table, line_id: body.line_id, product_id: body.product_id, status: "validated", source: "manual",
