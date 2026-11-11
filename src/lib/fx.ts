@@ -8,7 +8,8 @@
 import { createAdminClient } from "@/lib/supabase/admin"
 
 export const FX_SOURCE = "open.er-api.com (ExchangeRate-API, taux du marché)"
-const API_URL = "https://open.er-api.com/v6/latest/EUR"
+// FX_API_URL only lets the tests simulate an unavailable API; production uses the public endpoint
+const API_URL = process.env.FX_API_URL || "https://open.er-api.com/v6/latest/EUR"
 const REFRESH_AFTER_MS = 24 * 3600 * 1000   // try a refresh when the stored rates are older than this
 const STALE_AFTER_MS = 48 * 3600 * 1000     // beyond this, the consolidated total is flagged as based on older rates
 
