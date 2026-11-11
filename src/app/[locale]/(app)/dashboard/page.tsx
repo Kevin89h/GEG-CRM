@@ -6,17 +6,15 @@ import { Badge } from "@/components/ui/Badge"
 import { formatCurrency, formatDate } from "@/lib/utils"
 import type { DealStage } from "@/types"
 import DashboardCharts from "./DashboardChartsWrapper"
+import type { ReactNode } from "react"
+import { fxCaption, getMarketRates, sumByCurrency, toEur } from "@/lib/fx"
+import CurrencyAmounts, { FxNote } from "@/components/finance/CurrencyAmounts"
 
 const stageColors: Record<DealStage, "gray" | "blue" | "yellow" | "purple" | "green" | "red"> = {
   lead: "gray", qualified: "blue", proposal: "yellow",
   negotiation: "purple", won: "green", lost: "red",
 }
 
-function formatByCurrency(byCurrency: Record<string, number>): string {
-  const entries = Object.entries(byCurrency).filter(([, v]) => v !== 0)
-  if (entries.length === 0) return "0"
-  return entries.map(([cur, val]) => formatCurrency(val, cur as "USD" | "GNF" | "EUR")).join(" · ")
-}
 
 export default async function DashboardPage() {
   const { db: supabase } = await createCompanyClient()
@@ -30,6 +28,7 @@ export default async function DashboardPage() {
   const weekStart = new Date(now)
   weekStart.setDate(now.getDate() - now.getDay())
 
+  const fxPromise = getMarketRates()
   const twelveMonthsAgo = new Date(now)
   twelveMonthsAgo.setMonth(now.getMonth() - 12)
   const eightWeeksAgo = new Date(now)
@@ -46,6 +45,7 @@ export default async function DashboardPage() {
     { data: allInvoices },
     { data: recentInvoices },
     { data: recentPayments },
+    { data: pipelineDeals },
   ] = await Promise.all([
     supabase.from("accounts").select("*", { count: "exact", head: true }),
     supabase.from("deals")
@@ -61,18 +61,24 @@ export default async function DashboardPage() {
       .limit(5),
     supabase.from("invoice_totals").select("balance, currency").in("status", ["sent", "partial"]),
     showFinance ? supabase.from("treasury_balances").select("balance, currency").eq("is_active", true) : none,
-    showFinance ? supabase.from("stock_levels").select("quantity, product:products(buy_price, currency)") : none,
+    // stock value at cost price, in the PURCHASE currency of each product
+    showFinance ? supabase.from("stock_levels").select("quantity, product:products(buy_price, buy_price_currency)") : none,
     supabase.from("invoice_totals").select("status"),
     supabase.from("invoice_totals")
       .select("total_ht, currency, issue_date")
       .neq("status", "cancelled")
       .gte("issue_date", twelveMonthsAgo.toISOString().split("T")[0]),
+    // payments over 12 months: the monthly chart covers 12 months (the weekly one keeps its 8 weeks)
     supabase.from("payments")
       .select("amount, currency, paid_at")
-      .gte("paid_at", eightWeeksAgo.toISOString()),
+      .gte("paid_at", twelveMonthsAgo.toISOString()),
+    // every deal for the pipeline chart and the open-deals count (not only the 6 most recent)
+    supabase.from("deals").select("stage, value, currency").neq("stage", "lost"),
   ])
+  const fx = await fxPromise
+  void eightWeeksAgo
 
-  const openDeals = (deals ?? []).filter((d: Record<string, unknown>) => !["won", "lost"].includes(d.stage as string))
+  const openDeals = (pipelineDeals ?? []).filter((d: Record<string, unknown>) => !["won", "lost"].includes(d.stage as string))
 
   const openInvoicesByCurrency = (invoiceStats ?? []).reduce<Record<string, number>>((acc, i: Record<string, unknown>) => {
     const cur = i.currency as string
@@ -86,31 +92,34 @@ export default async function DashboardPage() {
     return acc
   }, {})
 
-  const stockValueGNF = (stockStats ?? []).reduce((sum, s: Record<string, unknown>) => {
-    const product = (Array.isArray(s.product) ? s.product[0] : s.product) as { buy_price: number | null } | null
-    if (!product?.buy_price) return sum
-    return sum + Number(s.quantity) * product.buy_price
-  }, 0)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const prodOf = (s: any) => (Array.isArray(s.product) ? s.product[0] : s.product) as { buy_price: number | null; buy_price_currency: string | null } | null
+  const stockValueByCurrency = sumByCurrency((stockStats ?? []) as Array<Record<string, unknown>>, s => Number(s.quantity) * Number(prodOf(s)?.buy_price ?? 0), s => prodOf(s)?.buy_price_currency ?? "GNF")
 
   // ── Facturation / Paiements par mois (12 derniers mois) ──────────────────
   const MONTHS_FR = ["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"]
 
   const monthlyBuckets = Array.from({ length: 12 }, (_, i) => {
     const d = new Date(now.getFullYear(), now.getMonth() - (11 - i), 1)
-    return { key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, label: `${MONTHS_FR[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`, invoiced: 0, paid: 0 }
+    return { key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, label: `${MONTHS_FR[d.getMonth()]} ${String(d.getFullYear()).slice(2)}`, invoiced: 0, paid: 0, invoicedBy: {} as Record<string, number>, paidBy: {} as Record<string, number> }
   })
+  const missingFx = new Set<string>()
+  const addTo = (by: Record<string, number>, amount: number, currency: string | null | undefined) => {
+    const c = (currency || "GNF").toUpperCase(); by[c] = (by[c] ?? 0) + amount
+    const e = toEur(amount, c, fx); if (e === null) { missingFx.add(c); return 0 } return e
+  }
   const monthMap: Record<string, (typeof monthlyBuckets)[0]> = {}
   for (const b of monthlyBuckets) monthMap[b.key] = b
 
   for (const inv of (recentInvoices ?? []) as Array<{ total_ht: number; currency: string; issue_date: string }>) {
     if (!inv.issue_date) continue
     const key = inv.issue_date.slice(0, 7)
-    if (monthMap[key]) monthMap[key].invoiced += inv.total_ht ?? 0
+    if (monthMap[key]) monthMap[key].invoiced += addTo(monthMap[key].invoicedBy, Number(inv.total_ht ?? 0), inv.currency)
   }
   for (const p of (recentPayments ?? []) as Array<{ amount: number; currency: string; paid_at: string }>) {
     if (!p.paid_at) continue
     const key = p.paid_at.slice(0, 7)
-    if (monthMap[key]) monthMap[key].paid += p.amount ?? 0
+    if (monthMap[key]) monthMap[key].paid += addTo(monthMap[key].paidBy, Number(p.amount ?? 0), p.currency)
   }
 
   // ── Facturation / Paiements par semaine (8 dernières semaines) ───────────
@@ -122,37 +131,40 @@ export default async function DashboardPage() {
     d.setHours(0, 0, 0, 0)
     const dd = String(d.getDate()).padStart(2, "0")
     const mm = MONTHS_FR[d.getMonth()]
-    return { mondayMs: d.getTime(), label: `${dd} ${mm}`, invoiced: 0, paid: 0 }
+    return { mondayMs: d.getTime(), label: `${dd} ${mm}`, invoiced: 0, paid: 0, invoicedBy: {} as Record<string, number>, paidBy: {} as Record<string, number> }
   })
 
-  for (const inv of (recentInvoices ?? []) as Array<{ total_ht: number; issue_date: string }>) {
+  const weekStartMs = weeklyBuckets[0]?.mondayMs ?? 0
+  for (const inv of (recentInvoices ?? []) as Array<{ total_ht: number; currency: string; issue_date: string }>) {
     if (!inv.issue_date) continue
     const d = new Date(inv.issue_date)
+    if (d.getTime() < weekStartMs) continue
     for (let i = weeklyBuckets.length - 1; i >= 0; i--) {
       const bucket = weeklyBuckets[i]
       const nextMs = i < weeklyBuckets.length - 1 ? weeklyBuckets[i + 1].mondayMs : Infinity
       if (d.getTime() >= bucket.mondayMs && d.getTime() < nextMs) {
-        bucket.invoiced += inv.total_ht ?? 0
+        bucket.invoiced += addTo(bucket.invoicedBy, Number(inv.total_ht ?? 0), inv.currency)
         break
       }
     }
   }
-  for (const p of (recentPayments ?? []) as Array<{ amount: number; paid_at: string }>) {
+  for (const p of (recentPayments ?? []) as Array<{ amount: number; currency: string; paid_at: string }>) {
     if (!p.paid_at) continue
     const d = new Date(p.paid_at)
+    if (d.getTime() < weekStartMs) continue
     for (let i = weeklyBuckets.length - 1; i >= 0; i--) {
       const bucket = weeklyBuckets[i]
       const nextMs = i < weeklyBuckets.length - 1 ? weeklyBuckets[i + 1].mondayMs : Infinity
       if (d.getTime() >= bucket.mondayMs && d.getTime() < nextMs) {
-        bucket.paid += p.amount ?? 0
+        bucket.paid += addTo(bucket.paidBy, Number(p.amount ?? 0), p.currency)
         break
       }
     }
   }
 
   const billingData = {
-    monthly: monthlyBuckets.map(({ label, invoiced, paid }) => ({ label, invoiced, paid })),
-    weekly: weeklyBuckets.map(({ label, invoiced, paid }) => ({ label, invoiced, paid })),
+    monthly: monthlyBuckets.map(({ label, invoiced, paid, invoicedBy, paidBy }) => ({ label, invoiced, paid, invoicedBy, paidBy })),
+    weekly: weeklyBuckets.map(({ label, invoiced, paid, invoicedBy, paidBy }) => ({ label, invoiced, paid, invoicedBy, paidBy })),
   }
 
   // Pipeline chart data
@@ -163,11 +175,11 @@ export default async function DashboardPage() {
     negotiation: { label: "Négociation",  color: "#a78bfa", order: 3 },
     won:         { label: "Gagné",        color: "#34d399", order: 4 },
   }
-  const pipelineByStage: Record<string, { value: number; count: number }> = {}
-  for (const d of (deals ?? []) as Array<{ stage: string; value: number | null; currency: string }>) {
+  const pipelineByStage: Record<string, { value: number; count: number; by: Record<string, number> }> = {}
+  for (const d of (pipelineDeals ?? []) as Array<{ stage: string; value: number | null; currency: string }>) {
     if (d.stage === "lost") continue
-    if (!pipelineByStage[d.stage]) pipelineByStage[d.stage] = { value: 0, count: 0 }
-    pipelineByStage[d.stage].value += d.value ?? 0
+    if (!pipelineByStage[d.stage]) pipelineByStage[d.stage] = { value: 0, count: 0, by: {} }
+    pipelineByStage[d.stage].value += addTo(pipelineByStage[d.stage].by, Number(d.value ?? 0), d.currency || "USD")
     pipelineByStage[d.stage].count += 1
   }
   const pipeline = Object.entries(STAGE_META)
@@ -178,6 +190,7 @@ export default async function DashboardPage() {
       color: meta.color,
       value: pipelineByStage[stage]?.value ?? 0,
       count: pipelineByStage[stage]?.count ?? 0,
+      by: pipelineByStage[stage]?.by ?? {},
     }))
 
   // Invoice status chart data
@@ -199,7 +212,7 @@ export default async function DashboardPage() {
   }))
 
   // Sales indicators shown instead of the financial ones
-  type Stat = { label: string; value: string; sub: string; Icon: typeof Receipt; color: string; bg: string }
+  type Stat = { label: string; value: ReactNode; sub: string; Icon: typeof Receipt; color: string; bg: string }
   let salesStats: Stat[] = []
   if (!showFinance) {
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]
@@ -218,36 +231,36 @@ export default async function DashboardPage() {
     salesStats = [
       {
         label: "Commandes à facturer",
-        value: formatByCurrency(sum(confirmedOrders)),
+        value: <CurrencyAmounts byCurrency={sum(confirmedOrders)} fx={fx} />,
         sub: `${confirmedOrders.length} commande${confirmedOrders.length !== 1 ? "s" : ""} · ${orders.length - confirmedOrders.length} devis en cours`,
         Icon: FileText, color: "text-blue-600", bg: "bg-blue-50",
       },
       {
         label: "Facturé ce mois",
-        value: formatByCurrency(sum(monthInvoices as Array<Record<string, unknown>> | null)),
+        value: <CurrencyAmounts byCurrency={sum(monthInvoices as Array<Record<string, unknown>> | null)} fx={fx} />,
         sub: `${nInv} facture${nInv !== 1 ? "s" : ""} émise${nInv !== 1 ? "s" : ""}`,
         Icon: BadgeCheck, color: "text-emerald-600", bg: "bg-emerald-50",
       },
     ]
   }
 
-  const financeStats = [
+  const financeStats: Stat[] = [
     {
       label: "Factures ouvertes",
-      value: formatByCurrency(openInvoicesByCurrency),
+      value: <CurrencyAmounts byCurrency={openInvoicesByCurrency} fx={fx} />,
       sub: `${invoiceStats?.length ?? 0} en attente d'encaissement`,
       Icon: Receipt, color: "text-amber-600", bg: "bg-amber-50",
     },
     {
       label: "Trésorerie totale",
-      value: formatByCurrency(treasuryByCurrency),
+      value: <CurrencyAmounts byCurrency={treasuryByCurrency} fx={fx} />,
       sub: `${treasuryStats?.length ?? 0} compte${(treasuryStats?.length ?? 0) !== 1 ? "s" : ""}`,
       Icon: Landmark, color: "text-emerald-600", bg: "bg-emerald-50",
     },
     {
       label: "Valeur stock",
-      value: formatCurrency(stockValueGNF, "GNF"),
-      sub: "Au prix de revient",
+      value: <CurrencyAmounts byCurrency={stockValueByCurrency} fx={fx} />,
+      sub: "Au prix de revient, dans la devise d'achat",
       Icon: Package, color: "text-blue-600", bg: "bg-blue-50",
     },
   ]
@@ -273,11 +286,13 @@ export default async function DashboardPage() {
                 <Icon className={`w-4 h-4 md:w-5 md:h-5 ${color}`} />
               </div>
             </div>
-            <p className="text-base md:text-lg font-bold text-gray-900 leading-tight">{value}</p>
+            <div className="text-base md:text-lg font-bold text-gray-900 leading-tight">{value}</div>
             <p className="text-xs text-gray-400 mt-1">{sub}</p>
           </div>
         ))}
       </div>
+
+      <FxNote fx={fx} className="-mt-1 mb-3 md:mb-4" />
 
       {/* KPI CRM */}
       <div className="grid grid-cols-3 gap-3 md:gap-4 mb-6 md:mb-8">
@@ -294,7 +309,7 @@ export default async function DashboardPage() {
         ))}
       </div>
 
-      <DashboardCharts pipeline={pipeline} invoiceStatus={invoiceStatus} billingData={billingData} />
+      <DashboardCharts pipeline={pipeline} invoiceStatus={invoiceStatus} billingData={billingData} fxLabel={fxCaption(fx)} missingFx={[...missingFx]} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm">

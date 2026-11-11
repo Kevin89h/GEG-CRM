@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/daily-report",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/market-rates",
+      "schedule": "0 5 * * *"
     }
   ]
 }

@@ -2,6 +2,8 @@ import { createCompanyClient } from "@/lib/company"
 import Link from "next/link"
 import { Plus, FileText, Receipt, TrendingUp, Clock } from "lucide-react"
 import { formatNumber } from "@/lib/utils"
+import { getMarketRates, sumByCurrency } from "@/lib/fx"
+import CurrencyAmounts, { FxNote } from "@/components/finance/CurrencyAmounts"
 
 export default async function VentesPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params
@@ -24,9 +26,10 @@ export default async function VentesPage({ params }: { params: Promise<{ locale:
 
   const draftCount = stats?.filter(s => s.status === "draft").length ?? 0
   const confirmedCount = stats?.filter(s => s.status === "confirmed").length ?? 0
-  const totalPipeline = stats
-    ?.filter(s => s.status !== "cancelled")
-    .reduce((sum, s) => sum + Number(s.total_ht), 0) ?? 0
+  // G1: amounts kept in their original currency (never added across currencies) + EUR total at market rates
+  const fx = await getMarketRates()
+  const pipelineByCurrency = sumByCurrency((stats ?? []).filter(s => s.status !== "cancelled"), s => Number(s.total_ht), s => s.currency)
+  void formatNumber
 
   const { data: invStats } = await supabase.from("invoice_totals").select("status, balance, currency")
   const unpaidByCurrency: Record<string, number> = {}
@@ -36,9 +39,6 @@ export default async function VentesPage({ params }: { params: Promise<{ locale:
       unpaidByCurrency[c] = (unpaidByCurrency[c] ?? 0) + Number(s.balance)
     }
   }
-  const unpaidLabel = Object.entries(unpaidByCurrency)
-    .map(([c, v]) => `${formatNumber(v)} ${c}`)
-    .join(" · ") || "0"
 
   const statusLabel: Record<string, string> = {
     draft: "Brouillon", confirmed: "Confirmé", invoiced: "Facturé", cancelled: "Annulé",
@@ -74,18 +74,20 @@ export default async function VentesPage({ params }: { params: Promise<{ locale:
         {[
           { label: "Devis en cours", value: draftCount, icon: FileText, color: "text-gray-600 bg-gray-50" },
           { label: "Commandes confirmées", value: confirmedCount, icon: TrendingUp, color: "text-blue-600 bg-blue-50" },
-          { label: "Pipeline total", value: `${formatNumber(totalPipeline)} GNF`, icon: TrendingUp, color: "text-purple-600 bg-purple-50" },
-          { label: "Factures impayées", value: unpaidLabel, icon: Clock, color: "text-amber-600 bg-amber-50" },
+          { label: "Pipeline total", value: <CurrencyAmounts byCurrency={pipelineByCurrency} fx={fx} />, icon: TrendingUp, color: "text-purple-600 bg-purple-50" },
+          { label: "Factures impayées", value: <CurrencyAmounts byCurrency={unpaidByCurrency} fx={fx} />, icon: Clock, color: "text-amber-600 bg-amber-50" },
         ].map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
             <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${color}`}>
               <Icon className="w-5 h-5" />
             </div>
-            <p className="text-2xl font-bold text-gray-900">{value}</p>
+            <div className="text-lg font-bold text-gray-900 leading-tight">{value}</div>
             <p className="text-sm text-gray-500 mt-0.5">{label}</p>
           </div>
         ))}
       </div>
+
+      <FxNote fx={fx} className="-mt-6 mb-6" />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
         {/* Derniers devis */}

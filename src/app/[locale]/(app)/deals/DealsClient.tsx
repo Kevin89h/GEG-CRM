@@ -4,6 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Plus, TrendingUp, LayoutGrid, List, MessageSquare, Mail, Phone, Users, Globe, HelpCircle, AlertCircle } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
+import CurrencyAmounts, { type FxInfo } from "@/components/finance/CurrencyAmounts"
 import type { DealStage } from "@/types"
 import { usePerms } from "@/components/PermissionsProvider"
 
@@ -42,6 +43,8 @@ interface Props {
   accounts: { id: string; name: string }[]
   profiles: UserProfile[]
   currentUserId: string
+  /** market rates for the steering total in EUR (G1) */
+  fx: FxInfo
 }
 
 const STAGES: DealStage[] = ["lead", "qualified", "proposal", "negotiation", "won", "lost"]
@@ -134,7 +137,7 @@ const INITIAL_FORM = {
   preferred_channel: "",
 }
 
-export default function DealsClient({ deals: initial, accounts, profiles, currentUserId }: Props) {
+export default function DealsClient({ deals: initial, accounts, profiles, currentUserId, fx }: Props) {
   const router = useRouter()
   // Display only (D2): the API checks "opportunites.creer" again
   const { can } = usePerms()
@@ -202,9 +205,10 @@ export default function DealsClient({ deals: initial, accounts, profiles, curren
     setSaving(false)
   }
 
+  // G1: never add currencies together; EUR total computed with market rates (steering only)
   const totalPipeline = deals
     .filter(d => !["won", "lost"].includes(d.stage))
-    .reduce((s, d) => s + (d.value ?? 0), 0)
+    .reduce<Record<string, number>>((acc, d) => { const c = (d.currency || "USD").toUpperCase(); if (d.value) acc[c] = (acc[c] ?? 0) + Number(d.value); return acc }, {})
 
   const urgentCount = deals.filter(d => d.priority === "urgent" && !["won", "lost"].includes(d.stage)).length
 
@@ -215,7 +219,7 @@ export default function DealsClient({ deals: initial, accounts, profiles, curren
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-gray-900">Pipeline commercial</h1>
           <div className="flex items-center gap-3 mt-0.5">
-            <p className="text-gray-500 text-sm">Pipeline actif : {formatCurrency(totalPipeline, "USD")}</p>
+            <div className="text-gray-500 text-sm flex items-start gap-1">Pipeline actif : <CurrencyAmounts byCurrency={totalPipeline} fx={fx} compact /></div>
             {urgentCount > 0 && (
               <span className="flex items-center gap-1 text-xs font-medium text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">
                 <AlertCircle className="w-3 h-3" /> {urgentCount} urgent{urgentCount > 1 ? "s" : ""}

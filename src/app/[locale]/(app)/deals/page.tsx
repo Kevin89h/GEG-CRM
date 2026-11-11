@@ -3,6 +3,7 @@ import { createCompanyClient } from "@/lib/company"
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import DealsClient from "./DealsClient"
+import { getMarketRates } from "@/lib/fx"
 
 export default async function DealsPage() {
   const { supabase, db, schema } = await createCompanyClient()
@@ -46,6 +47,7 @@ export default async function DealsPage() {
       accounts={accounts}
       profiles={(profiles ?? []) as { id: string; full_name: string | null; email: string }[]}
       currentUserId={user?.id ?? ""}
+      fx={await getMarketRates()}
     />
   )
 }

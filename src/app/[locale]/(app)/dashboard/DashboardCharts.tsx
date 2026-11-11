@@ -6,14 +6,24 @@ import {
   PieChart, Pie, Legend, CartesianGrid,
 } from "recharts"
 
-interface PipelineItem { stage: string; label: string; value: number; count: number; color: string }
+interface PipelineItem { stage: string; label: string; value: number; count: number; color: string; by?: Record<string, number> }
 interface InvoiceItem { label: string; value: number; color: string }
-interface BillingPeriod { label: string; invoiced: number; paid: number }
+// invoiced / paid: totals converted to EUR (market rates, steering only); invoicedBy / paidBy: amounts in original currencies
+interface BillingPeriod { label: string; invoiced: number; paid: number; invoicedBy?: Record<string, number>; paidBy?: Record<string, number> }
 
 interface Props {
   pipeline: PipelineItem[]
   invoiceStatus: InvoiceItem[]
   billingData: { monthly: BillingPeriod[]; weekly: BillingPeriod[] }
+  /** "Taux du marché du … — source …" */
+  fxLabel?: string
+  /** currencies without a market rate (left out of the EUR bars, listed in a warning) */
+  missingFx?: string[]
+}
+
+function byCurrencyText(by?: Record<string, number>) {
+  const e = Object.entries(by ?? {}).filter(([, v]) => v !== 0)
+  return e.length ? e.map(([c, v]) => `${new Intl.NumberFormat("fr-FR", { maximumFractionDigits: c === "GNF" || c === "XOF" ? 0 : 2 }).format(v)} ${c}`).join(" · ") : "—"
 }
 
 function formatAmount(v: number) {
@@ -40,25 +50,29 @@ function CustomLabel({ cx, cy, midAngle, innerRadius, outerRadius, percent }: Re
   )
 }
 
-function BillingTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function BillingTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string; dataKey?: string; payload?: any }>; label?: string }) {
   if (!active || !payload?.length) return null
   return (
     <div className="bg-white border border-gray-200 rounded-lg shadow-lg p-3 text-xs min-w-[160px]">
       <p className="font-semibold text-gray-700 mb-2">{label}</p>
       {payload.map(p => (
-        <div key={p.name} className="flex items-center justify-between gap-4 mb-1">
+        <div key={p.name}>
+        <div className="flex items-center justify-between gap-4 mb-0.5">
           <span className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full inline-block" style={{ background: p.color }} />
             <span className="text-gray-600">{p.name}</span>
           </span>
-          <span className="font-semibold text-gray-900">{formatFull(p.value)}</span>
+          <span className="font-semibold text-gray-900">≈ {formatFull(p.value)} EUR</span>
+          </div>
+          <div className="text-[11px] text-gray-500 mb-1.5 pl-3.5">{byCurrencyText(p.dataKey === "paid" ? p.payload?.paidBy : p.payload?.invoicedBy)}</div>
         </div>
       ))}
     </div>
   )
 }
 
-export default function DashboardCharts({ pipeline, invoiceStatus, billingData }: Props) {
+export default function DashboardCharts({ pipeline, invoiceStatus, billingData, fxLabel, missingFx = [] }: Props) {
   const [billingView, setBillingView] = useState<"monthly" | "weekly">("monthly")
 
   const activePipeline = pipeline.filter(p => p.value > 0 || p.count > 0)
@@ -74,7 +88,9 @@ export default function DashboardCharts({ pipeline, invoiceStatus, billingData }
         <div className="flex items-center justify-between mb-1">
           <div>
             <h2 className="font-semibold text-gray-900">Facturation &amp; Encaissements</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Toutes devises confondues</p>
+            <p className="text-xs text-gray-400 mt-0.5">Montants convertis en EUR (indicatif) — détail par devise au survol</p>
+            {fxLabel && <p className="text-[11px] text-gray-400">{fxLabel}</p>}
+            {missingFx.length > 0 && <p className="text-[11px] text-amber-700">⚠ Sans taux du marché, non inclus dans les barres : {missingFx.join(", ")}</p>}
           </div>
           <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs">
             <button
@@ -123,7 +139,7 @@ export default function DashboardCharts({ pipeline, invoiceStatus, billingData }
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
           <h2 className="font-semibold text-gray-900 mb-1">Pipeline commercial</h2>
-          <p className="text-xs text-gray-400 mb-4">Valeur des opportunités par étape</p>
+          <p className="text-xs text-gray-400 mb-4">Valeur des opportunités par étape, convertie en EUR (indicatif) — détail par devise au survol</p>
           {activePipeline.length === 0 ? (
             <div className="flex items-center justify-center h-40 text-gray-300 text-sm">Aucune opportunité</div>
           ) : (
@@ -133,7 +149,7 @@ export default function DashboardCharts({ pipeline, invoiceStatus, billingData }
                 <YAxis tickFormatter={formatAmount} tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} width={52} />
                 <Tooltip
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  formatter={(v: any) => [formatFull(Number(v)), "Valeur"]}
+                  formatter={(v: any, _n: any, item: any) => [`≈ ${formatFull(Number(v))} EUR (${byCurrencyText(item?.payload?.by)})`, "Valeur"]}
                   contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #f3f4f6" }}
                 />
                 <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={48}>
