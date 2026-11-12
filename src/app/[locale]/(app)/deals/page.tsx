@@ -15,17 +15,22 @@ export default async function DealsPage() {
 
   if (schema === "geg_singapore") {
     const admin = createAdminClient()
-    const [{ data: sgDeals }, { data: sgAccounts }] = await Promise.all([
+    const [{ data: sgDeals }, { data: sgAccounts }, { data: sgAmounts }] = await Promise.all([
       admin.rpc("get_singapore_deals"),
       (admin as any).schema("geg_singapore").from("accounts").select("id, name").order("name"),
+      // the Singapour deal amount is stored in "amount" (not returned by get_singapore_deals)
+      (admin as any).schema("geg_singapore").from("deals").select("id, amount, currency"),
     ])
+    const amountOf = new Map<string, { amount: number | null; currency: string | null }>(
+      (sgAmounts ?? []).map((a: any) => [a.id, { amount: a.amount, currency: a.currency }]),
+    )
     // Normalize Singapore deals to match the shape DealsClient expects
     deals = (sgDeals ?? []).map((d: any) => ({
       ...d,
       stage: d.stage ?? "lead",
       priority: "normal",
-      value: null,
-      currency: "USD",
+      value: amountOf.get(d.id)?.amount ?? null,
+      currency: amountOf.get(d.id)?.currency ?? "USD",
       assigned_to: [],
       account: { id: null, name: d.account_name, type: null },
     }))

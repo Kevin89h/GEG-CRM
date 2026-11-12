@@ -17,7 +17,9 @@ const stageColors: Record<DealStage, "gray" | "blue" | "yellow" | "purple" | "gr
 
 
 export default async function DashboardPage() {
-  const { db: supabase } = await createCompanyClient()
+  const { db: supabase, schema } = await createCompanyClient()
+  // The deal amount column differs between companies: "value" (Guinée) / "amount" (Singapour)
+  const dealValue = schema === "geg_singapore" ? "value:amount" : "value"
   // Commercial dashboard (D3): no treasury, bank accounts nor stock value unless "tableau_de_bord.financier"
   const showFinance = await hasPermission("tableau_de_bord.financier")
   const none = Promise.resolve({ data: null, count: null })
@@ -49,7 +51,7 @@ export default async function DashboardPage() {
   ] = await Promise.all([
     supabase.from("accounts").select("*", { count: "exact", head: true }),
     supabase.from("deals")
-      .select("id, title, stage, value, currency, account:accounts(name)")
+      .select(`id, title, stage, ${dealValue}, currency, account:accounts(name)`)
       .order("created_at", { ascending: false })
       .limit(6),
     supabase.from("activities").select("*", { count: "exact", head: true }).gte("date", weekStart.toISOString()),
@@ -64,21 +66,26 @@ export default async function DashboardPage() {
     // stock value at cost price, in the PURCHASE currency of each product
     showFinance ? supabase.from("stock_levels").select("quantity, product:products(buy_price, buy_price_currency)") : none,
     supabase.from("invoice_totals").select("status"),
+    // "Facturé": issued invoices only (drafts and cancelled excluded, as for "Facturé ce mois" and the daily report)
     supabase.from("invoice_totals")
       .select("total_ht, currency, issue_date")
-      .neq("status", "cancelled")
+      .not("status", "in", "(draft,cancelled)")
       .gte("issue_date", twelveMonthsAgo.toISOString().split("T")[0]),
     // payments over 12 months: the monthly chart covers 12 months (the weekly one keeps its 8 weeks)
     supabase.from("payments")
       .select("amount, currency, paid_at")
       .gte("paid_at", twelveMonthsAgo.toISOString()),
     // every deal for the pipeline chart and the open-deals count (not only the 6 most recent)
-    supabase.from("deals").select("stage, value, currency").neq("stage", "lost"),
+    supabase.from("deals").select(`stage, ${dealValue}, currency`),
   ])
   const fx = await fxPromise
   void eightWeeksAgo
 
-  const openDeals = (pipelineDeals ?? []).filter((d: Record<string, unknown>) => !["won", "lost"].includes(d.stage as string))
+  // a deal without stage counts as "lead" (Singapour); lost deals are left out of the pipeline
+  const activeDeals = ((pipelineDeals ?? []) as Array<{ stage: string | null; value: number | null; currency: string | null }>)
+    .map(d => ({ ...d, stage: d.stage ?? "lead" }))
+    .filter(d => d.stage !== "lost")
+  const openDeals = activeDeals.filter(d => d.stage !== "won")
 
   const openInvoicesByCurrency = (invoiceStats ?? []).reduce<Record<string, number>>((acc, i: Record<string, unknown>) => {
     const cur = i.currency as string
@@ -176,8 +183,7 @@ export default async function DashboardPage() {
     won:         { label: "Gagné",        color: "#34d399", order: 4 },
   }
   const pipelineByStage: Record<string, { value: number; count: number; by: Record<string, number> }> = {}
-  for (const d of (pipelineDeals ?? []) as Array<{ stage: string; value: number | null; currency: string }>) {
-    if (d.stage === "lost") continue
+  for (const d of activeDeals) {
     if (!pipelineByStage[d.stage]) pipelineByStage[d.stage] = { value: 0, count: 0, by: {} }
     pipelineByStage[d.stage].value += addTo(pipelineByStage[d.stage].by, Number(d.value ?? 0), d.currency || "USD")
     pipelineByStage[d.stage].count += 1
