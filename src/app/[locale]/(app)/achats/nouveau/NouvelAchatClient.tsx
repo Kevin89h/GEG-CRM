@@ -503,11 +503,13 @@ export default function NouvelAchatClient({ products: initialProducts, suppliers
 
         {/* Notes */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-          <h2 className="font-semibold text-gray-800 mb-4">{t("sectionNotes")}</h2>
+          {/* G3: "notes" is printed on the purchase order; internal comments go to the order's side panel */}
+          <h2 className="font-semibold text-gray-800 mb-4">Commentaires destinés au fournisseur (imprimés)</h2>
           <textarea rows={3} value={form.notes}
             onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
             placeholder={t("placeholderNotes")}
             className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+          <p className="text-xs text-gray-400 mt-2">Les commentaires internes (non imprimés) s&apos;ajoutent dans la fiche de la commande, après sa création.</p>
         </div>
 
         {/* Informations complémentaires */}

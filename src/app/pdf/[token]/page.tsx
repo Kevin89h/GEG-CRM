@@ -111,7 +111,7 @@ export default async function PublicPdfPage({ params }: { params: Promise<{ toke
   if (tokenRow.document_type === "devis") {
     const { data: order } = await db
       .from("sales_orders")
-      .select("id, number, status, currency, valid_until, notes, created_at, account_id, tva, payment_terms")
+      .select("id, number, status, currency, valid_until, additional_info, created_at, account_id, tva, payment_terms") // G3: never the internal "notes"
       .eq("id", id)
       .single()
 
@@ -141,7 +141,7 @@ export default async function PublicPdfPage({ params }: { params: Promise<{ toke
         id={id} number={String(order.number)} status={String(order.status ?? "draft")}
         currency={String(order.currency)} createdAt={String(order.created_at ?? "")}
         validUntil={order.valid_until ? String(order.valid_until) : null}
-        notes={order.notes ? String(order.notes) : null}
+        notes={order.additional_info ? String(order.additional_info) : null}
         deliveryAddress={null} paymentTerms={order.payment_terms ? String(order.payment_terms) : null}
         accountName={(account as Record<string, string> | null)?.name ?? "—"}
         accountCountry={(account as Record<string, string> | null)?.country ?? null}

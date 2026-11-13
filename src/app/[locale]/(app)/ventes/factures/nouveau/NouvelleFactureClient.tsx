@@ -149,6 +149,7 @@ export default function NouvelleFactureClient({ locale, accounts: initialAccount
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split("T")[0])
   const [dueDate, setDueDate] = useState("")
   const [notes, setNotes] = useState("")
+  const [internalNotes, setInternalNotes] = useState("")
   const [lines, setLines] = useState<Line[]>([])
 
   const totals = lines.reduce((acc, l) => {
@@ -251,6 +252,7 @@ export default function NouvelleFactureClient({ locale, accounts: initialAccount
           issue_date: issueDate,
           due_date: dueDate || null,
           notes: notes || null,
+          internal_notes: internalNotes || null,
         },
         lines: lineRows,
         user_id: user.id,
@@ -440,12 +442,18 @@ export default function NouvelleFactureClient({ locale, accounts: initialAccount
           </div>
         </div>
 
-        {/* Notes */}
+        {/* G3: "notes" is printed on the invoice; "internal_notes" never is */}
         <div>
-          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">{t("internalNotes")}</label>
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Commentaires destinés au client (imprimés)</label>
           <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={2}
             className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-900 placeholder-gray-300 focus:outline-none focus:border-blue-400 resize-none"
-            placeholder={t("notesPlaceholder")} />
+            placeholder="Texte imprimé sur la facture…" />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">Commentaires internes (non imprimés)</label>
+          <textarea value={internalNotes} onChange={e => setInternalNotes(e.target.value)} rows={2}
+            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 text-gray-900 placeholder-gray-300 focus:outline-none focus:border-blue-400 resize-none"
+            placeholder="Visible uniquement par l'équipe…" />
         </div>
       </div>
 

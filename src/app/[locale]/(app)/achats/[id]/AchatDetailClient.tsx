@@ -981,7 +981,7 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
                 {/* Notes + Totals */}
                 <div className="flex border-t border-gray-100">
                   <div className="flex-1 p-4">
-                    <p className="text-[11px] font-medium text-gray-500 mb-1">Conditions / notes imprimées sur la commande</p>
+                    <p className="text-[11px] font-medium text-gray-500 mb-1">Commentaires destinés au fournisseur (imprimés)</p>
                     {canEditPrintedTerms ? (
                       <>
                         <textarea
@@ -1251,7 +1251,7 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
           <div className="p-4 border-b border-gray-100">
             {canModify ? (
               <>
-                <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Note interne</p>
+                <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Commentaires internes (non imprimés)</p>
                 <textarea
                   ref={noteInputRef}
                   value={chatMsg}

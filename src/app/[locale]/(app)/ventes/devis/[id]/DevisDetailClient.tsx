@@ -1134,7 +1134,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
         {activeTab === "other" && (
           <div className="p-6">
             <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-              Informations supplémentaires
+              Commentaires destinés au client (imprimés)
             </label>
             <textarea
               value={additionalInfo}
@@ -1142,17 +1142,20 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
               onBlur={e => { if (canEditUnlessInvoiced) saveAdditionalInfo(e.target.value) }}
               readOnly={!canEditUnlessInvoiced}
               rows={6}
-              placeholder="Conditions générales, termes de livraison, remarques..."
+              placeholder="Texte imprimé sur le devis (conditions, termes de livraison, remarques…)"
               className="w-full text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
             />
             <p className="text-xs text-gray-400 mt-1">
-              {additionalInfoSaving ? "Sauvegarde..." : "Ce texte apparaîtra dans le PDF du devis."}
+              {additionalInfoSaving ? "Sauvegarde..." : "Imprimé sur le devis : PDF, page d'impression et lien de partage."}
             </p>
           </div>
         )}
 
         {activeTab === "notes" && (
           <div className="p-6">
+            <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+              Commentaires internes (non imprimés)
+            </label>
             <textarea
               value={notes}
               onChange={e => setNotes(e.target.value)}
@@ -1163,7 +1166,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
               className="w-full text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
             />
             <p className="text-xs text-gray-400 mt-1">
-              {notesSaving ? "Sauvegarde..." : "Les notes sont sauvegardées automatiquement à la perte du focus."}
+              {notesSaving ? "Sauvegarde..." : "Jamais imprimés ni accessibles au client. Sauvegarde automatique à la perte du focus."}
             </p>
           </div>
         )}

@@ -1303,14 +1303,14 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
 
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
         {/* E2: "notes" is printed on the invoice PDF, editable only while the invoice is a draft */}
-        <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">Mentions imprimées sur la facture</p>
+        <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">Commentaires destinés au client (imprimés)</p>
         <textarea
           value={notes}
           onChange={e => setNotes(e.target.value)}
           onBlur={e => { if (canEditPrintedNotes) saveNotes(e.target.value) }}
           readOnly={!canEditPrintedNotes}
           rows={4}
-          placeholder={canEditPrintedNotes ? "Mentions à imprimer sur la facture..." : ""}
+          placeholder={canEditPrintedNotes ? "Texte imprimé sur la facture..." : ""}
           className={`w-full text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none ${!canEditPrintedNotes ? "bg-gray-50" : ""}`}
         />
         <p className={`text-xs mt-1 ${notesMessage && !notesMessage.ok ? "text-red-600" : "text-gray-400"}`}>
@@ -1324,14 +1324,14 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
         </p>
 
         {/* E2: internal notes are never printed, editable at any status */}
-        <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2 mt-6">Notes internes (jamais imprimées)</p>
+        <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2 mt-6">Commentaires internes (non imprimés)</p>
         <textarea
           value={internalNotes}
           onChange={e => setInternalNotes(e.target.value)}
           onBlur={e => { if (canEditInternalNotes) saveInternalNotes(e.target.value) }}
           readOnly={!canEditInternalNotes}
           rows={4}
-          placeholder={canEditInternalNotes ? "Notes internes..." : ""}
+          placeholder={canEditInternalNotes ? "Visible uniquement par l'équipe..." : ""}
           className={`w-full text-sm text-gray-700 border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none ${!canEditInternalNotes ? "bg-gray-50" : ""}`}
         />
         <p className={`text-xs mt-1 ${internalNotesMessage && !internalNotesMessage.ok ? "text-red-600" : "text-gray-400"}`}>

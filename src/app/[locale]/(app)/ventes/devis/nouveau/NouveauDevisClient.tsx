@@ -175,7 +175,7 @@ export default function NouveauDevisClient({
     account_id: "", contact_id: "", salesperson_id: "",
     commission_rate: "0", currency: "GNF" as Currency,
     date_order: today, valid_until: "", payment_terms: "",
-    client_order_ref: "", notes: "",
+    client_order_ref: "", notes: "", additional_info: "",
     title: "", project_code: "", commission_client: "",
     conditions_generales: "",
     tva: false,
@@ -339,6 +339,7 @@ export default function NouveauDevisClient({
           currency: form.currency,
           valid_until: form.valid_until || null,
           notes: form.notes || null,
+          additional_info: form.additional_info || null,
           payment_terms: form.payment_terms || null,
           client_order_ref: form.client_order_ref || null,
           date_order: form.date_order || null,
@@ -789,13 +790,24 @@ export default function NouveauDevisClient({
                     ))}
                   </div>
                 </div>
+                {/* G3: "additional_info" is printed on the quote (PDF, print page, share link); "notes" never is */}
                 <div>
-                  <label className="block text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Notes internes</label>
+                  <label className="block text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Commentaires destinés au client (imprimés)</label>
+                  <textarea
+                    value={form.additional_info}
+                    onChange={e => setF("additional_info", e.target.value)}
+                    rows={2}
+                    placeholder="Texte imprimé sur le devis…"
+                    className="w-full text-sm text-gray-600 outline-none bg-transparent border border-gray-100 rounded-lg resize-none p-2 focus:border-gray-300 placeholder-gray-300"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-400 uppercase tracking-wide mb-1">Commentaires internes (non imprimés)</label>
                   <textarea
                     value={form.notes}
                     onChange={e => setF("notes", e.target.value)}
                     rows={2}
-                    placeholder="Notes internes (non imprimées)…"
+                    placeholder="Visible uniquement par l'équipe…"
                     className="w-full text-sm text-gray-500 outline-none bg-transparent border border-gray-100 rounded-lg resize-none p-2 focus:border-gray-300 placeholder-gray-300"
                   />
                 </div>
