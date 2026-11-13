@@ -11,7 +11,10 @@ declare s text;
 begin
   foreach s in array array['geg_guinee', 'geg_singapore'] loop
     execute format('drop trigger if exists document_rules on %I.sales_order_lines', s);
-    execute format('drop trigger if exists audit_row on %I.purchase_order_events', s);
+    -- the table only exists where purchases are journalised (Guinée): skip it elsewhere (fix B4, 13/11/2026)
+    if to_regclass(format('%I.purchase_order_events', s)) is not null then
+      execute format('drop trigger if exists audit_row on %I.purchase_order_events', s);
+    end if;
     execute format('grant select on %I.employees to authenticated', s);
     execute format('grant select on %I.deals to authenticated', s);
     execute format('grant select on %I.products to authenticated', s);

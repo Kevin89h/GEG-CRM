@@ -9,8 +9,12 @@ do $$
 declare s text; t text;
 begin
   foreach s in array array['geg_guinee', 'geg_singapore'] loop
-    execute format('drop trigger if exists historical_link_rules on %I.historical_line_links', s);
-    execute format('drop trigger if exists audit_row on %I.historical_line_links', s);
+    -- the table and its data are kept; its read rule depends on the permission functions of the later rollbacks (fix B4)
+    if to_regclass(format('%I.historical_line_links', s)) is not null then
+      execute format('drop trigger if exists historical_link_rules on %I.historical_line_links', s);
+      execute format('drop trigger if exists audit_row on %I.historical_line_links', s);
+      execute format('drop policy if exists links_read on %I.historical_line_links', s);
+    end if;
     foreach t in array array['sales_order_lines', 'invoice_lines'] loop
       execute format('drop trigger if exists catalog_line_rules on %I.%I', s, t);
       execute format('create trigger catalog_line_rules before insert or update of product_id on %I.%I for each row execute function public.catalog_line_rules()', s, t);

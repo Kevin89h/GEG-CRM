@@ -7,7 +7,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const { data: source, error: srcErr } = await db
     .from("sales_orders")
-    .select("account_id, contact_id, currency, payment_terms, notes, tva, user_id")
+    .select("account_id, contact_id, currency, payment_terms, notes, additional_info, tva, user_id")
     .eq("id", id)
     .single()
 
@@ -33,6 +33,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       currency: source.currency,
       payment_terms: source.payment_terms,
       notes: source.notes,
+      additional_info: source.additional_info, // G3: customer comments are kept too
       tva: source.tva,
       user_id: source.user_id,
       status: "draft",
