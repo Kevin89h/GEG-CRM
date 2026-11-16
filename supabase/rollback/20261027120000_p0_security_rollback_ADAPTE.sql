@@ -814,11 +814,22 @@ do $$ declare v record; begin
     execute format('revoke select on public.%I from anon', v.relname);
   end loop;
 end $$;
+-- 5b. no automatic anonymous execution right on future functions; trigger functions never callable directly
+alter default privileges for role postgres revoke execute on functions from public;
+alter default privileges for role postgres in schema public revoke execute on functions from anon;
+do $do$ declare f record; begin
+  for f in select p.oid::regprocedure as sig from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+           where n.nspname in ('public', 'geg_guinee', 'geg_singapore') and p.prorettype = 'trigger'::regtype loop
+    execute format('revoke execute on function %s from public, anon, authenticated', f.sig);
+  end loop;
+end $do$;
 -- 6. final check: abort the whole rollback if a hole would remain
 do $$ declare bad text := ''; begin
   if has_schema_privilege('anon','geg_guinee','usage') or has_schema_privilege('anon','geg_singapore','usage') then bad := bad || 'schemas '; end if;
   if exists (select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname like '%singapore%'
              and p.prosecdef and (has_function_privilege('anon',p.oid,'execute') or has_function_privilege('authenticated',p.oid,'execute'))) then bad := bad || 'fonctions_singapour '; end if;
+  if exists (select 1 from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname in ('public','geg_guinee','geg_singapore')
+             and p.prosecdef and has_function_privilege('anon',p.oid,'execute')) then bad := bad || 'fonctions_definer_anon '; end if;
   if exists (select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace where c.relkind in ('r','p') and n.nspname in ('public','geg_guinee','geg_singapore') and not c.relrowsecurity) then bad := bad || 'tables_sans_RLS '; end if;
   if exists (select 1 from pg_class c join pg_namespace n on n.oid=c.relnamespace where c.relkind='v' and n.nspname in ('public','geg_guinee','geg_singapore')
              and has_schema_privilege('anon', n.nspname, 'usage') and has_table_privilege('anon', c.oid, 'select')) then bad := bad || 'vues_lisibles_anon '; end if;
