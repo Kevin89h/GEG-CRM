@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { nextQuoteNumber } from "@/lib/numbering"
 import { createCompanyClient } from "@/lib/company"
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -22,8 +23,8 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   const now = new Date()
   const year = now.getFullYear()
   const month = String(now.getMonth() + 1).padStart(2, "0")
-  const { count } = await db.from("sales_orders").select("*", { count: "exact", head: true })
-  const number = `DEV-${year}-${month}-${String((count ?? 0) + 1).padStart(4, "0")}`
+  const number = await nextQuoteNumber(db)
+  void year; void month
 
   const { data: newOrder, error: orderErr } = await db
     .from("sales_orders")

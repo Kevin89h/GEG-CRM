@@ -1,4 +1,5 @@
 import { invalidSalesLines } from "@/lib/catalog"
+import { nextQuoteNumber } from "@/lib/numbering"
 import { NextRequest, NextResponse } from "next/server"
 import Anthropic from "@anthropic-ai/sdk"
 import { createCompanyClient } from "@/lib/company"
@@ -138,8 +139,7 @@ async function executeTool(name: string, input: Record<string, unknown>, perms: 
     const total = lines.reduce((s, l) => s + l.quantity * l.unit_price, 0)
 
     // Generate order number
-    const { count } = await db.from("sales_orders").select("id", { count: "exact", head: true })
-    const num = `DEV-${String((count ?? 0) + 1).padStart(4, "0")}`
+    const num = await nextQuoteNumber(db)
 
     const { data: order, error } = await db
       .from("sales_orders")

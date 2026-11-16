@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createCompanyClient } from "@/lib/company"
 import { errorResponse, requirePermission } from "@/lib/access"
+import { nextSupplierInvoiceNumber } from "@/lib/numbering"
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -22,12 +23,8 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     .eq("invoice_id", id)
     .order("position")
 
-  const { count } = await db.from("supplier_invoices").select("id", { count: "exact", head: true })
   const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, "0")
-  const seq = String((count ?? 0) + 1).padStart(4, "0")
-  const number = `FF-${year}-${month}-${seq}`
+  const number = await nextSupplierInvoiceNumber(db)
 
   const { data: duplicate, error } = await db
     .from("supplier_invoices")

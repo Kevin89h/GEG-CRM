@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { nextReceptionNumber } from "@/lib/numbering"
 import { createAdminClient as createAdminSupabase } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
 import { getCompanySchema } from "@/lib/company"
@@ -44,8 +45,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   // 1. Créer le bon de réception (admin pour bypasser RLS)
   const { data: order } = await adminDb.from("purchase_orders").select("number").eq("id", id).single()
-  const { count } = await adminDb.from("purchase_receptions").select("id", { count: "exact", head: true })
-  const receptionNumber = `BR/${new Date().getFullYear()}/${String((count ?? 0) + 1).padStart(5, "0")}`
+  const receptionNumber = await nextReceptionNumber(adminDb)
 
   const { data: reception, error: recErr } = await adminDb.from("purchase_receptions").insert([{
     order_id: id,

@@ -1,4 +1,5 @@
 import { createCompanyClient } from "@/lib/company"
+import { nextInvoiceNumber } from "@/lib/numbering"
 import { NextResponse } from "next/server"
 
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -18,9 +19,8 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   const now = new Date()
   const year = now.getFullYear()
   const month = String(now.getMonth() + 1).padStart(2, "0")
-  const { count } = await db.from("invoices").select("*", { count: "exact", head: true })
-  const seq = String((count ?? 0) + 1).padStart(4, "0")
-  const number = `FAC-${year}-${month}-${seq}`
+  const number = await nextInvoiceNumber(db, now)
+  void year; void month
 
   // Create new draft invoice
   const { data: newInvoice, error: insertErr } = await db

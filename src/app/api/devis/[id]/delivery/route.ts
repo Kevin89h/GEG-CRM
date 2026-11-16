@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { nextPartialDeliveryNoteNumber } from "@/lib/numbering"
 import { hasPermission } from "@/lib/access"
 import { deliveryRowsWithComments, deliveryShortages, derogationReason } from "@/lib/catalog"
 import { createAdminClient } from "@/lib/supabase/admin"
@@ -56,12 +57,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const stockProductIds = new Set(stockLines.map(l => l.product_id))
 
   // Generate BL number
-  const { count } = await db.from("delivery_notes").select("id", { count: "exact", head: true })
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, "0")
-  const seq = String((count ?? 0) + 1).padStart(5, "0")
-  const blNumber = `BL-${year}-${month}-${seq}`
+  const blNumber = await nextPartialDeliveryNoteNumber(db)
 
   // Create delivery note
   const { data: dn, error: dnError } = await db

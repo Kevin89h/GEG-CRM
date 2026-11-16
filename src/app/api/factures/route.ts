@@ -1,4 +1,5 @@
 import { invalidSalesLines, lineKind } from "@/lib/catalog"
+import { nextInvoiceNumber } from "@/lib/numbering"
 import { NextRequest, NextResponse } from "next/server"
 import { createCompanyClient } from "@/lib/company"
 import { logActivity } from "@/lib/activity-logger"
@@ -31,11 +32,7 @@ export async function POST(req: NextRequest)  {
     if (invalid) return NextResponse.json({ error: invalid }, { status: 400 })
 
     const issueDate = invoiceData.issue_date ? new Date(invoiceData.issue_date as string) : new Date()
-    const year = issueDate.getFullYear()
-    const month = String(issueDate.getMonth() + 1).padStart(2, "0")
-    const { count } = await db.from("invoices").select("*", { count: "exact", head: true })
-    const seq = String((count ?? 0) + 1).padStart(4, "0")
-    const number = `FAC-${year}-${month}-${seq}`
+    const number = await nextInvoiceNumber(db, issueDate)
 
     // Lines can only be written on a draft: create as draft, emit afterwards if asked
     const requestedStatus = (invoiceData.status as string | undefined) ?? "draft"

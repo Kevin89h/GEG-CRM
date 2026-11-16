@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { nextCreditNoteNumber } from "@/lib/numbering"
 import { createCompanyClient } from "@/lib/company"
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -24,11 +25,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     .eq("invoice_id", id)
     .order("position")
 
-  const year = new Date().getFullYear()
-  const month = String(new Date().getMonth() + 1).padStart(2, "0")
-  const { count } = await db.from("invoices").select("*", { count: "exact", head: true }).ilike("number", "AVR-%")
-  const seq = String((count ?? 0) + 1).padStart(4, "0")
-  const number = `AVR-${year}-${month}-${seq}`
+  const number = await nextCreditNoteNumber(db)
 
   const noteText = [
     `Avoir sur facture ${orig.number}`,

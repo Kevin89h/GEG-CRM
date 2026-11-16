@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { nextDeliveryNoteNumber } from "@/lib/numbering"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCompanySchema } from "@/lib/company"
 import { deliveryRowsWithComments } from "@/lib/catalog"
@@ -10,9 +11,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = (createAdminClient() as any).schema(schema)
 
-  const { count } = await db.from("delivery_notes").select("id", { count: "exact", head: true })
-  const year = new Date().getFullYear()
-  const blNumber = `BL/${year}/${String((count ?? 0) + 1).padStart(5, "0")}`
+  const blNumber = await nextDeliveryNoteNumber(db)
 
   const { data: dn, error: dnError } = await db
     .from("delivery_notes")

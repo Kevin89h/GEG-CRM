@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { nextSupplierCreditNoteNumber } from "@/lib/numbering"
 import { createCompanyClient } from "@/lib/company"
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -19,12 +20,8 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     .eq("invoice_id", id)
     .order("position")
 
-  const { count } = await db.from("supplier_invoices").select("id", { count: "exact", head: true })
   const now = new Date()
-  const year = now.getFullYear()
-  const month = String(now.getMonth() + 1).padStart(2, "0")
-  const seq = String((count ?? 0) + 1).padStart(4, "0")
-  const number = `AFF-${year}-${month}-${seq}`
+  const number = await nextSupplierCreditNoteNumber(db)
 
   const { data: creditNote, error } = await db
     .from("supplier_invoices")

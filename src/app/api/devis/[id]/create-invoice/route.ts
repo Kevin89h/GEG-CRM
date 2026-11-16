@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { nextInvoiceNumber } from "@/lib/numbering"
 import { createCompanyClient } from "@/lib/company"
 
 interface OrderLine {
@@ -30,9 +31,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const now = new Date()
   const year = now.getFullYear()
   const month = String(now.getMonth() + 1).padStart(2, "0")
-  const { count } = await db.from("invoices").select("*", { count: "exact", head: true })
-  const seq = String((count ?? 0) + 1).padStart(4, "0")
-  const number = `FAC-${year}-${month}-${seq}`
+  const number = await nextInvoiceNumber(db, now)
+  void year; void month
 
   const today = now.toISOString().split("T")[0]
 

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { firstSupplierInvoiceSequence } from "@/lib/numbering"
 import { createCompanyClient } from "@/lib/company"
 import { errorResponse } from "@/lib/access"
 
@@ -12,19 +13,19 @@ export async function POST(req: NextRequest)  {
     if (!rows?.length) return NextResponse.json({ error: "Aucune ligne à importer" }, { status: 400 })
 
     const { db } = await createCompanyClient()
-    const { count: baseCount } = await db.from("supplier_invoices").select("id", { count: "exact", head: true })
+    const { prefix: ffPrefix, first: ffFirst } = await firstSupplierInvoiceSequence(db)
 
     const now = new Date()
     const year = now.getFullYear()
     const month = String(now.getMonth() + 1).padStart(2, "0")
 
     const toInsert = rows.map((r, i) => {
-      const seq = String((baseCount ?? 0) + i + 1).padStart(4, "0")
+      const seq = String(ffFirst + i).padStart(4, "0")
       const total_ht = parseFloat(r.total_ht ?? r["Total HT"] ?? "0") || 0
       const tax_amount = parseFloat(r.tax_amount ?? r["TVA"] ?? "0") || 0
       const total_ttc = parseFloat(r.total_ttc ?? r["Total TTC"] ?? String(total_ht + tax_amount)) || 0
       return {
-        number: r.number ?? r["Numéro"] ?? `FF-${year}-${month}-${seq}`,
+        number: r.number ?? r["Numéro"] ?? `${ffPrefix}${seq}`,
         supplier_name: (r.supplier_name ?? r["Fournisseur"] ?? "").trim(),
         currency: r.currency ?? r["Devise"] ?? "GNF",
         invoice_date: r.invoice_date ?? r["Date"] ?? now.toISOString().split("T")[0],
