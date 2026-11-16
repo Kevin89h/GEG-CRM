@@ -13,6 +13,11 @@ const API_URL = process.env.FX_API_URL || "https://open.er-api.com/v6/latest/EUR
 const REFRESH_AFTER_MS = 24 * 3600 * 1000   // try a refresh when the stored rates are older than this
 const STALE_AFTER_MS = 48 * 3600 * 1000     // beyond this, the consolidated total is flagged as based on older rates
 
+// D-06 (GEG, 16/11/2026): currencies with a FIXED parity to the euro. They never depend on the rate provider and are
+// available even when no market rate was ever fetched (first start, API down). Only the XOF for now (no XAF: decision D-06).
+export const FIXED_PER_EUR: Readonly<Record<string, number>> = Object.freeze({ XOF: 655.957 })
+export const FIXED_SOURCE = "parité fixe officielle (1 EUR = 655,957 XOF)"
+
 export interface MarketRates {
   /** units of each currency for 1 EUR (EUR = 1) */
   perEur: Record<string, number>
@@ -20,8 +25,10 @@ export interface MarketRates {
   date: string | null
   fetchedAt: string | null
   source: string
-  /** true when the rates are older than 48 h (API unavailable): shown with a clear warning */
+  /** true when the MARKET rates are older than 48 h (API unavailable): shown with a clear warning */
   stale: boolean
+  /** fixed parities applied whatever the provider returns (D-06) */
+  fixed: Record<string, number>
 }
 
 type Db = { from: (t: string) => any } // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -66,8 +73,10 @@ export async function getMarketRates(): Promise<MarketRates> {
   if (!rates || Date.now() - new Date(rates.fetchedAt ?? 0).getTime() > REFRESH_AFTER_MS) {
     try { await refreshMarketRates(db); rates = await read() } catch { /* keep the older rates, flagged below */ }
   }
-  if (!rates) return { perEur: { EUR: 1 }, date: null, fetchedAt: null, source: FX_SOURCE, stale: true }
-  return { ...rates, stale: Date.now() - new Date(rates.fetchedAt ?? 0).getTime() > STALE_AFTER_MS }
+  // fixed parities always win over the provider (D-06), and exist even without any stored market rate
+  const fixed = { ...FIXED_PER_EUR }
+  if (!rates) return { perEur: { EUR: 1, ...fixed }, date: null, fetchedAt: null, source: FX_SOURCE, stale: true, fixed }
+  return { ...rates, perEur: { ...rates.perEur, ...fixed }, stale: Date.now() - new Date(rates.fetchedAt ?? 0).getTime() > STALE_AFTER_MS, fixed }
 }
 
 export interface Consolidated {
@@ -104,11 +113,3 @@ export function toEur(amount: number, currency: string | null | undefined, fx: M
   return r ? amount / r : null
 }
 
-/** Plain description of the rates used, for the screens and the daily report */
-export function fxCaption(fx: MarketRates): string {
-  if (!fx.date) return "Total en EUR indisponible : aucun taux du marché n'a encore pu être récupéré."
-  const d = new Date(fx.date + "T00:00:00Z").toLocaleDateString("fr-FR", { timeZone: "UTC" })
-  return fx.stale
-    ? `Taux du marché du ${d} (antérieurs : actualisation impossible) — source ${fx.source}`
-    : `Taux du marché du ${d} — source ${fx.source}`
-}

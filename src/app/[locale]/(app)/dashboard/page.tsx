@@ -7,8 +7,8 @@ import { formatCurrency, formatDate } from "@/lib/utils"
 import type { DealStage } from "@/types"
 import DashboardCharts from "./DashboardChartsWrapper"
 import type { ReactNode } from "react"
-import { fxCaption, getMarketRates, sumByCurrency, toEur } from "@/lib/fx"
-import CurrencyAmounts, { FxNote } from "@/components/finance/CurrencyAmounts"
+import { getMarketRates, sumByCurrency, toEur } from "@/lib/fx"
+import CurrencyAmounts from "@/components/finance/CurrencyAmounts"
 
 const stageColors: Record<DealStage, "gray" | "blue" | "yellow" | "purple" | "green" | "red"> = {
   lead: "gray", qualified: "blue", proposal: "yellow",
@@ -298,7 +298,6 @@ export default async function DashboardPage() {
         ))}
       </div>
 
-      <FxNote fx={fx} className="-mt-1 mb-3 md:mb-4" />
 
       {/* KPI CRM */}
       <div className="grid grid-cols-3 gap-3 md:gap-4 mb-6 md:mb-8">
@@ -315,7 +314,7 @@ export default async function DashboardPage() {
         ))}
       </div>
 
-      <DashboardCharts pipeline={pipeline} invoiceStatus={invoiceStatus} billingData={billingData} fxLabel={fxCaption(fx)} missingFx={[...missingFx]} />
+      <DashboardCharts pipeline={pipeline} invoiceStatus={invoiceStatus} billingData={billingData} fx={fx} missingFx={[...missingFx]} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm">

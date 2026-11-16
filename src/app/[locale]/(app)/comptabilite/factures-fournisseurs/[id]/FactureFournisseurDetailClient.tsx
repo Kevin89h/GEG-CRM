@@ -7,6 +7,7 @@ import ActivityLog from "@/components/ActivityLog"
 import { formatDate } from "@/lib/utils"
 import { useRouter } from "next/navigation"
 import { usePerms } from "@/components/PermissionsProvider"
+import { bestDocRate, rateToInput, roundAmount, formatRate, ageInDays, rateOrigin, DOC_RATES_STALE_DAYS, type DocRate } from "@/lib/document-rates-shared"
 
 const STATUS_LABEL: Record<string, string> = {
   draft: "Brouillon",
@@ -40,20 +41,7 @@ type Invoice = {
   notes: string | null
 }
 
-type ExchangeRate = { from_currency: string; to_currency: string; rate: number; effective_date: string }
-
-function getBestRate(rates: ExchangeRate[], from: string, to: string): number | null {
-  if (from === to) return null
-  const match = rates
-    .filter(r => r.from_currency === from && r.to_currency === to)
-    .sort((a, b) => b.effective_date.localeCompare(a.effective_date))[0]
-  if (match) return Number(match.rate)
-  const inverse = rates
-    .filter(r => r.from_currency === to && r.to_currency === from)
-    .sort((a, b) => b.effective_date.localeCompare(a.effective_date))[0]
-  if (inverse) return 1 / Number(inverse.rate)
-  return null
-}
+type ExchangeRate = DocRate
 
 export default function FactureFournisseurDetailClient({
   invoice: initialInvoice,
@@ -96,11 +84,13 @@ export default function FactureFournisseurDetailClient({
           next.amount = String(Math.max(invoice.balance, 0))
           next.exchange_rate = ""
         } else {
-          const autoRate = getBestRate(exchangeRates, invoice.currency, v)
-          next.exchange_rate = autoRate ? String(Math.round(autoRate)) : prev.exchange_rate
-          const rate = autoRate ?? parseFloat(prev.exchange_rate)
+          // D-07: reference rate proposed with full precision (never rounded to the unit); it stays editable
+          // (bank or contractual rate) and only the amount is rounded, to the decimals of the payment currency
+          const ref = bestDocRate(exchangeRates, invoice.currency, v)
+          next.exchange_rate = ref ? rateToInput(ref.rate) : prev.exchange_rate
+          const rate = ref?.rate ?? parseFloat(prev.exchange_rate)
           if (rate > 0) {
-            next.amount = String(Math.round(invoice.balance * rate))
+            next.amount = String(roundAmount(invoice.balance * rate, v))
           } else {
             next.amount = ""
           }
@@ -109,7 +99,7 @@ export default function FactureFournisseurDetailClient({
       if (k === "exchange_rate") {
         const rate = parseFloat(v)
         if (rate > 0 && prev.currency !== invoice.currency) {
-          next.amount = String(Math.round(invoice.balance * rate))
+          next.amount = String(roundAmount(invoice.balance * rate, prev.currency))
         }
       }
       return next
@@ -481,13 +471,23 @@ export default function FactureFournisseurDetailClient({
                   </label>
                   <input
                     type="number"
-                    step="0.000001"
+                    step="any"
                     min="0"
                     value={form.exchange_rate}
                     onChange={e => setF("exchange_rate", e.target.value)}
                     placeholder={`1 ${invoice.currency} = ? ${form.currency}`}
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
+                  {(() => {
+                    const ref = bestDocRate(exchangeRates, invoice.currency, form.currency)
+                    if (!ref) return <p className="text-xs text-amber-700 mt-1" data-testid="ref-rate">Aucun taux de référence enregistré pour {invoice.currency} → {form.currency} : saisissez le taux appliqué.</p>
+                    const age = ageInDays(ref.date)
+                    return (
+                      <p className={`text-xs mt-1 ${age > DOC_RATES_STALE_DAYS ? "text-amber-700" : "text-gray-500"}`} data-testid="ref-rate">
+                        {age > DOC_RATES_STALE_DAYS ? "⚠ Taux ancien — " : ""}Taux de référence du {new Date(ref.date + "T00:00:00Z").toLocaleDateString("fr-FR", { timeZone: "UTC" })} ({rateOrigin(ref.notes)}{ref.inverse ? ", inverse du taux enregistré" : ""}) : 1 {invoice.currency} = {formatRate(ref.rate)} {form.currency}. Modifiable si un taux bancaire ou contractuel s&apos;applique.
+                      </p>
+                    )
+                  })()}
                   {form.exchange_rate && form.amount && (
                     <p className="text-xs text-gray-400 mt-1">
                       ≈ {(parseFloat(form.amount) / parseFloat(form.exchange_rate)).toLocaleString("fr", { maximumFractionDigits: 2 })} {invoice.currency}

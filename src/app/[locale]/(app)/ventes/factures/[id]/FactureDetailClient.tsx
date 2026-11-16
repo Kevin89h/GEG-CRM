@@ -17,6 +17,7 @@ import ActivityLog from "@/components/ActivityLog"
 import ShareButton from "@/components/ShareButton"
 import { ProductPickerDialog, type CatalogProduct } from "@/components/sales/ProductPicker"
 import StockAlert from "@/components/sales/StockAlert"
+import { formatRate, ageInDays, rateOrigin, DOC_RATES_STALE_DAYS } from "@/lib/document-rates-shared"
 
 interface Line {
   id: string
@@ -113,6 +114,8 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
     paid_at: new Date().toISOString().split("T")[0],
   })
   const [exchangeRate, setExchangeRate] = useState<number | null>(null)
+  // date and origin of the reference rate (D-08)
+  const [rateInfo, setRateInfo] = useState<{ date: string; notes: string | null } | null>(null)
   const [loadingRate, setLoadingRate] = useState(false)
   const [globalDiscount, setGlobalDiscount] = useState("")
   const [applyingDiscount, setApplyingDiscount] = useState(false)
@@ -133,8 +136,8 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
     setLoadingRate(true)
     fetch(`/api/exchange-rates?from=${payCurrency}&to=${invCurrency}`)
       .then(r => r.json())
-      .then(json => setExchangeRate(json.rate ?? null))
-      .catch(() => setExchangeRate(null))
+      .then(json => { setExchangeRate(json.rate ?? null); setRateInfo(json.effective_date ? { date: json.effective_date, notes: json.notes ?? null } : null) })
+      .catch(() => { setExchangeRate(null); setRateInfo(null) })
       .finally(() => setLoadingRate(false))
   }, [paymentForm.currency, invoice.currency])
 
@@ -1510,7 +1513,12 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
                       "Récupération du taux de change…"
                     ) : exchangeRate ? (
                       <>
-                        1 {paymentForm.currency} = {exchangeRate.toLocaleString("fr", { maximumFractionDigits: 4 })} {invoice.currency}
+                        1 {paymentForm.currency} = {formatRate(exchangeRate)} {invoice.currency}
+                        {rateInfo && (
+                          <span className="block text-[11px] text-amber-700/80" data-testid="ref-rate">
+                            {ageInDays(rateInfo.date) > DOC_RATES_STALE_DAYS ? "⚠ Taux ancien — " : ""}Taux de référence du {new Date(rateInfo.date + "T00:00:00Z").toLocaleDateString("fr-FR", { timeZone: "UTC" })} ({rateOrigin(rateInfo.notes)})
+                          </span>
+                        )}
                         {paymentForm.amount && !isNaN(parseFloat(paymentForm.amount)) && (
                           <span className="font-semibold ml-2">
                             → {formatCurrency(parseFloat(paymentForm.amount) * exchangeRate, invoice.currency as "USD" | "GNF" | "EUR")} crédités sur solde facture

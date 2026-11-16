@@ -3,7 +3,7 @@ import Link from "next/link"
 import { Plus, FileText, Receipt, TrendingUp, Clock } from "lucide-react"
 import { formatNumber } from "@/lib/utils"
 import { getMarketRates, sumByCurrency } from "@/lib/fx"
-import CurrencyAmounts, { FxNote } from "@/components/finance/CurrencyAmounts"
+import CurrencyAmounts from "@/components/finance/CurrencyAmounts"
 
 export default async function VentesPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params
@@ -87,7 +87,6 @@ export default async function VentesPage({ params }: { params: Promise<{ locale:
         ))}
       </div>
 
-      <FxNote fx={fx} className="-mt-6 mb-6" />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
         {/* Derniers devis */}

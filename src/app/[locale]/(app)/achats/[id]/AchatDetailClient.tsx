@@ -92,7 +92,7 @@ function getRate(rates: ExchangeRate[], from: string, to: string): number | null
   const match = rates
     .filter(r => r.from_currency === from && r.to_currency === to)
     .sort((a, b) => b.effective_date.localeCompare(a.effective_date))[0]
-  return match?.rate ?? null
+  return match ? Number(match.rate) : null
 }
 
 type Tab = "produits" | "receptions" | "autres"

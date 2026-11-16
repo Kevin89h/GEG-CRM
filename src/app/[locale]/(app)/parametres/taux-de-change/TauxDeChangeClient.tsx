@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Plus, TrendingUp, RefreshCw } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 import { usePerms } from "@/components/PermissionsProvider"
+import { formatRate, ageInDays, rateOrigin, DOC_RATES_STALE_DAYS } from "@/lib/document-rates-shared"
 
 interface Rate {
   id: string
@@ -12,6 +13,7 @@ interface Rate {
   rate: number
   effective_date: string
   notes: string | null
+  created_at?: string | null
 }
 
 interface Props {
@@ -58,7 +60,7 @@ export default function TauxDeChangeClient({ rates: initialRates }: Props) {
       }
       return updated
     })
-    setRefreshMsg(`${json.updated} taux mis à jour le ${new Date().toLocaleDateString("fr")}`)
+    setRefreshMsg(`${json.updated} taux de référence ajoutés le ${new Date().toLocaleDateString("fr")} (open.er-api.com). Les taux déjà appliqués aux documents et paiements ne changent pas.`)
   }
 
   // Group by pair, latest first
@@ -95,9 +97,14 @@ export default function TauxDeChangeClient({ rates: initialRates }: Props) {
     setSaving(false)
   }
 
+  const newest = (a: Rate, b: Rate) => b.effective_date.localeCompare(a.effective_date) || String(b.created_at ?? "").localeCompare(String(a.created_at ?? ""))
+  // D-08: last refresh (any origin) and alert when the reference rates are old
+  const lastRate = [...rates].sort(newest)[0]
+  const lastAge = lastRate ? ageInDays(lastRate.effective_date) : null
+  const lastAuto = [...rates].filter(r => /quotidienne/i.test(r.notes ?? "")).sort(newest)[0]
   const latestByPair = PAIRS.map(p => {
     const key = `${p.from}_${p.to}`
-    const latest = (byPair[key] ?? []).sort((a, b) => b.effective_date.localeCompare(a.effective_date))[0]
+    const latest = (byPair[key] ?? []).sort(newest)[0]
     return { ...p, latest }
   })
 
@@ -118,6 +125,14 @@ export default function TauxDeChangeClient({ rates: initialRates }: Props) {
       </div>
       {refreshMsg && <p className="text-sm text-emerald-600 mb-4">{refreshMsg}</p>}
 
+      {/* D-08: date and source of the last refresh, alert when old */}
+      <div className={`mb-6 rounded-xl border px-4 py-3 text-sm ${lastAge !== null && lastAge <= DOC_RATES_STALE_DAYS ? "border-gray-100 bg-white text-gray-600" : "border-amber-200 bg-amber-50 text-amber-800"}`} data-testid="rates-status">
+        {lastRate ? (
+          <p>{lastAge !== null && lastAge > DOC_RATES_STALE_DAYS ? <strong>⚠ Taux anciens : </strong> : null}Dernière actualisation : <strong>{formatDate(lastRate.effective_date, "fr")}</strong> ({rateOrigin(lastRate.notes)}){lastAge !== null && lastAge > DOC_RATES_STALE_DAYS ? ` — il y a ${lastAge} jours. Ces derniers taux restent proposés ; actualisez-les ou saisissez le taux appliqué.` : "."}</p>
+        ) : <p><strong>⚠ Aucun taux de référence enregistré.</strong></p>}
+        <p className="mt-1 text-xs text-gray-500">Source : open.er-api.com (ExchangeRate-API). Actualisation automatique chaque jour vers 5 h (UTC){lastAuto ? `, dernière le ${formatDate(lastAuto.effective_date, "fr")}` : ""} ; bouton d&apos;actualisation manuelle conservé. Ces taux sont proposés pour les <strong>nouvelles</strong> opérations ; un taux bancaire ou contractuel peut toujours être saisi, et les taux déjà appliqués aux documents et paiements ne sont jamais recalculés.</p>
+      </div>
+
       {/* Current rates */}
       <div className="grid grid-cols-2 gap-4 mb-8">
         {latestByPair.map(({ from, to, label, latest }) => (
@@ -126,9 +141,9 @@ export default function TauxDeChangeClient({ rates: initialRates }: Props) {
             {latest ? (
               <>
                 <p className="text-2xl font-bold text-gray-900">
-                  1 {from} = <span className="text-blue-600">{latest.rate.toLocaleString("fr", { maximumFractionDigits: 4 })} {to}</span>
+                  1 {from} = <span className="text-blue-600">{formatRate(latest.rate)} {to}</span>
                 </p>
-                <p className="text-xs text-gray-400 mt-1">Depuis le {formatDate(latest.effective_date, "fr")}</p>
+                <p className="text-xs text-gray-400 mt-1">Depuis le {formatDate(latest.effective_date, "fr")} · {rateOrigin(latest.notes)}</p>
               </>
             ) : (
               <p className="text-sm text-gray-400 italic">Aucun taux enregistré</p>
@@ -233,11 +248,11 @@ export default function TauxDeChangeClient({ rates: initialRates }: Props) {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {[...rates].sort((a, b) => b.effective_date.localeCompare(a.effective_date)).map(r => (
+              {[...rates].sort(newest).map(r => (
                 <tr key={r.id} className="hover:bg-gray-50/50">
                   <td className="px-4 py-3 font-medium text-gray-900">{r.from_currency} → {r.to_currency}</td>
                   <td className="px-4 py-3 text-right text-blue-700 font-semibold">
-                    {r.rate.toLocaleString("fr", { maximumFractionDigits: 4 })} {r.to_currency}
+                    {formatRate(r.rate)} {r.to_currency}
                   </td>
                   <td className="px-4 py-3 text-gray-600">{formatDate(r.effective_date, "fr")}</td>
                   <td className="px-4 py-3 text-gray-400 text-xs">{r.notes ?? "—"}</td>

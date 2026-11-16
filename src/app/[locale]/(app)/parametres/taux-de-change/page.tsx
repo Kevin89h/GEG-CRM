@@ -5,7 +5,7 @@ export default async function TauxDeChangePage() {
   const { db: supabase } = await createCompanyClient()
   const { data: rates } = await supabase
     .from("exchange_rates")
-    .select("id, from_currency, to_currency, rate, effective_date, notes")
+    .select("id, from_currency, to_currency, rate, effective_date, notes, created_at")
     .order("effective_date", { ascending: false })
 
   return <TauxDeChangeClient rates={rates ?? []} />

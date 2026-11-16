@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import CurrencyAmounts from "@/components/finance/CurrencyAmounts"
+import CurrencyAmounts, { InfoTip, fxDetailLines, type FxInfo } from "@/components/finance/CurrencyAmounts"
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
   PieChart, Pie, Legend, CartesianGrid,
@@ -17,7 +17,8 @@ interface Props {
   invoiceStatus: InvoiceItem[]
   billingData: { monthly: BillingPeriod[]; weekly: BillingPeriod[] }
   /** "Taux du marché du … — source …" */
-  fxLabel?: string
+  /** market rates used for the EUR bars: details shown only in the ⓘ next to the titles (OBS-001) */
+  fx?: FxInfo
   /** currencies without a market rate (left out of the EUR bars, listed in a warning) */
   missingFx?: string[]
 }
@@ -73,7 +74,11 @@ function BillingTooltip({ active, payload, label }: { active?: boolean; payload?
   )
 }
 
-export default function DashboardCharts({ pipeline, invoiceStatus, billingData, fxLabel, missingFx = [] }: Props) {
+export default function DashboardCharts({ pipeline, invoiceStatus, billingData, fx, missingFx = [] }: Props) {
+  // currencies actually present in each chart, for the rates listed in its ⓘ
+  const billingCurrencies = [...new Set([...billingData.monthly, ...billingData.weekly].flatMap(b => [...Object.keys(b.invoicedBy ?? {}), ...Object.keys(b.paidBy ?? {})]))]
+  const pipelineCurrencies = [...new Set(pipeline.flatMap(p => Object.keys(p.by ?? {})))]
+  const tipLines = (codes: string[]) => fx ? ["Montants convertis en EUR, détail par devise au survol des barres.", ...fxDetailLines(fx, codes)] : ["Montants convertis en EUR, détail par devise au survol des barres."]
   const [billingView, setBillingView] = useState<"monthly" | "weekly">("monthly")
 
   const activePipeline = pipeline.filter(p => p.value > 0 || p.count > 0)
@@ -88,10 +93,7 @@ export default function DashboardCharts({ pipeline, invoiceStatus, billingData, 
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
         <div className="flex items-center justify-between mb-1">
           <div>
-            <h2 className="font-semibold text-gray-900">Facturation &amp; Encaissements</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Montants convertis en EUR (indicatif) — détail par devise au survol</p>
-            {fxLabel && <p className="text-[11px] text-gray-400">{fxLabel}</p>}
-            {missingFx.length > 0 && <p className="text-[11px] text-amber-700">⚠ Sans taux du marché, non inclus dans les barres : {missingFx.join(", ")}</p>}
+            <h2 className="font-semibold text-gray-900 flex items-baseline gap-1.5">Facturation &amp; Encaissements <span className="text-xs font-normal text-gray-400">≈ EUR</span><InfoTip align="left" warn={!!fx?.stale || missingFx.length > 0} lines={[...tipLines(billingCurrencies), ...(missingFx.length ? [`⚠ Sans taux du marché, non inclus dans les barres : ${missingFx.join(", ")}`] : [])]} /></h2>
           </div>
           <div className="flex rounded-lg border border-gray-200 overflow-hidden text-xs">
             <button
@@ -139,8 +141,7 @@ export default function DashboardCharts({ pipeline, invoiceStatus, billingData, 
       {/* Pipeline + Statut factures — côte à côte */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-          <h2 className="font-semibold text-gray-900 mb-1">Pipeline commercial</h2>
-          <p className="text-xs text-gray-400 mb-4">Valeur des opportunités par étape, convertie en EUR (indicatif) — détail par devise au survol</p>
+          <h2 className="font-semibold text-gray-900 mb-4 flex items-baseline gap-1.5">Pipeline commercial <span className="text-xs font-normal text-gray-400">≈ EUR</span><InfoTip align="left" warn={!!fx?.stale} lines={["Valeur des opportunités par étape.", ...tipLines(pipelineCurrencies)]} /></h2>
           {activePipeline.length === 0 ? (
             <div className="flex items-center justify-center h-40 text-gray-300 text-sm">Aucune opportunité</div>
           ) : (

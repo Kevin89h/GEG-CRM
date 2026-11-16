@@ -2,6 +2,7 @@ import { createSchemaClient } from "@/lib/supabase/admin"
 import { getSchemaFromRequest } from "@/lib/company"
 import { logActivity } from "@/lib/activity-logger"
 import { NextRequest, NextResponse } from "next/server"
+import { supplierSettlement } from "@/lib/document-rates-shared"
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -67,15 +68,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .eq("supplier_invoice_id", id)
 
     const invoiceCurrency = invoice.currency ?? "GNF"
-    const totalPaid = (allPayments ?? []).reduce((s, p) => {
-      const amt = Number(p.amount)
-      if (p.currency && p.currency !== invoiceCurrency && p.exchange_rate) {
-        return s + amt / Number(p.exchange_rate)
-      }
-      return s + amt
-    }, 0)
-    const balance = Number(invoice.total_ttc) - totalPaid
-    const newStatus = balance <= 0 ? "paid" : totalPaid > 0 ? "partial" : "pending"
+    // each payment converted with its own recorded rate; rounding remainder of a foreign-currency payment ignored (D-07)
+    const { balance, status: newStatus } = supplierSettlement(Number(invoice.total_ttc), allPayments ?? [], invoiceCurrency)
     await db.from("supplier_invoices").update({ status: newStatus }).eq("id", id)
 
     logActivity({ action: "payment", resource: "achat", resourceId: id, label: `Paiement de ${Number(amount).toLocaleString("fr")} ${currency} enregistré — ${invoice.number ?? id}`, details: { amount, currency, method } })

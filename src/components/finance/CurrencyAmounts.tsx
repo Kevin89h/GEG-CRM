@@ -11,6 +11,8 @@ export interface FxInfo {
   date: string | null
   source: string
   stale: boolean
+  /** fixed parities (D-06: XOF), independent of the rate provider */
+  fixed?: Record<string, number>
 }
 
 export function eurTotal(byCurrency: Record<string, number>, fx: FxInfo): { eur: number | null; missing: string[] } {
@@ -42,19 +44,68 @@ export function formatEurTotal(eur: number): string {
   return new Intl.NumberFormat("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d }).format(eur) + " €"
 }
 
+const isFixed = (code: string, fx: FxInfo) => !!fx.fixed?.[code]
+
 function rateLine(code: string, fx: FxInfo): string {
   const r = fx.perEur[code]
-  return r ? `1 EUR = ${new Intl.NumberFormat("fr-FR", { maximumFractionDigits: r >= 100 ? 3 : 4 }).format(r)} ${currencyLabel(code)}` : `${currencyLabel(code)} : taux manquant`
+  if (!r) return `${currencyLabel(code)} : taux manquant`
+  return `1 EUR = ${new Intl.NumberFormat("fr-FR", { maximumFractionDigits: r >= 100 ? 3 : 4 }).format(r)} ${currencyLabel(code)}${isFixed(code, fx) ? " (parité fixe)" : ""}`
 }
 
-/** "Taux du marché du 11/11/2026 — source …" (with a warning when the rates are older or unavailable) */
-export function FxNote({ fx, className = "" }: { fx: FxInfo; className?: string }) {
-  if (!fx.date) return <p className={`text-[11px] text-amber-700 ${className}`}>⚠ Total consolidé en EUR indisponible : aucun taux du marché n&apos;a pu être récupéré. Les montants sont affichés dans leurs devises d&apos;origine.</p>
+/**
+ * Discreet ⓘ (OBS-001, GEG 16/11/2026): the conversion details are never shown permanently; they appear on hover
+ * (or on tap / click on a phone) in a small panel. Rendered in the page (hidden) so that screen readers and tests
+ * can read them.
+ */
+export function InfoTip({ lines, warn = false, label = "Détail de la conversion", align = "right", className = "" }: {
+  lines: string[]; warn?: boolean; label?: string; align?: "left" | "right"; className?: string
+}) {
+  // panel placed relative to the WINDOW (position: fixed), so that cards with hidden overflow never cut it
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+  const [pinned, setPinned] = useState(false)
+  const place = (el: HTMLElement) => {
+    const r = el.getBoundingClientRect(), w = Math.min(256, window.innerWidth * 0.8)
+    const left = align === "right" ? Math.max(8, r.right - w) : Math.min(r.left, window.innerWidth - w - 8)
+    setPos({ top: r.bottom + 4, left })
+  }
+  const open = !!pos
   return (
-    <p className={`text-[11px] ${fx.stale ? "text-amber-700" : "text-gray-400"} ${className}`}>
-      {fx.stale ? "⚠ " : ""}Total en EUR indicatif, au taux du marché du {fxDate(fx)}{fx.stale ? " (taux antérieurs : actualisation impossible)" : ""} — source : {fx.source}. Les montants des documents ne sont pas modifiés.
-    </p>
+    <span className={`relative inline-flex align-baseline ${className}`}>
+      <button
+        type="button"
+        aria-label={label}
+        aria-expanded={open}
+        onMouseEnter={e => place(e.currentTarget)}
+        onMouseLeave={() => { if (!pinned) setPos(null) }}
+        onClick={e => { e.preventDefault(); e.stopPropagation(); if (pinned) { setPinned(false); setPos(null) } else { setPinned(true); place(e.currentTarget); window.addEventListener("scroll", () => { setPinned(false); setPos(null) }, { once: true, capture: true }) } }}
+        onBlur={() => { setPinned(false); setPos(null) }}
+        className={`cursor-help text-[11px] font-normal leading-none ${warn ? "text-amber-600" : "text-gray-400 hover:text-gray-600"}`}
+        data-testid="fx-info"
+      >ⓘ</button>
+      <span
+        role="tooltip"
+        style={pos ? { position: "fixed", top: pos.top, left: pos.left } : undefined}
+        className={`z-50 w-64 max-w-[80vw] rounded-lg border border-gray-200 bg-white px-3 py-2 text-left text-[11px] font-normal leading-snug text-gray-600 shadow-lg ${open ? "block" : "hidden"}`}
+        data-testid="fx-details"
+      >
+        {lines.map(l => <span key={l} className={`block ${l.startsWith("⚠") ? "text-amber-700" : ""}`}>{l}</span>)}
+      </span>
+    </span>
   )
+}
+
+/** Lines of the ⓘ panel: date and source of the rates, rate of each currency concerned, indicative nature */
+export function fxDetailLines(fx: FxInfo, currencies: string[]): string[] {
+  const codes = [...new Set(currencies.map(c => c.toUpperCase()))].filter(c => c !== "EUR")
+  const variable = codes.some(c => !isFixed(c, fx))
+  return [
+    ...(variable ? [
+      fx.date ? `${fx.stale ? "⚠ " : ""}Taux du marché du ${fxDate(fx)}${fx.stale ? " (taux antérieurs : actualisation impossible)" : ""}` : "⚠ Aucun taux du marché disponible",
+      `Source : ${fx.source}`,
+    ] : []),
+    ...codes.map(c => rateLine(c, fx)),
+    "Conversion indicative : les montants des documents ne sont pas modifiés.",
+  ]
 }
 
 /**
@@ -72,7 +123,6 @@ export default function CurrencyAmounts({ byCurrency, fx, size = "md", emptyLabe
   /** @deprecated kept for older callers, same as size="sm" */
   compact?: boolean
 }) {
-  const [open, setOpen] = useState(false)
   const entries = Object.entries(byCurrency)
     .filter(([, v]) => v !== 0 && Number.isFinite(v))
     .map(([c, v]) => [c.toUpperCase(), v] as const)
@@ -82,12 +132,9 @@ export default function CurrencyAmounts({ byCurrency, fx, size = "md", emptyLabe
   const sm = size === "sm"
   const onlyEur = entries.length === 1 && entries[0][0] === "EUR"
   const total = fx && !onlyEur ? eurTotal(Object.fromEntries(entries), fx) : null
-  const details = fx && total ? [
-    fx.date ? `Taux du marché du ${fxDate(fx)}${fx.stale ? " (taux antérieurs : actualisation impossible)" : ""}` : "Aucun taux du marché disponible",
-    `Source : ${fx.source}`,
-    ...entries.filter(([c]) => c !== "EUR").map(([c]) => rateLine(c, fx)),
-    "Total indicatif : les montants des documents ne sont pas modifiés.",
-  ] : []
+  const variable = fx ? entries.filter(([c]) => c !== "EUR" && !isFixed(c, fx)).length > 0 : false
+  const stale = !!fx?.stale && variable
+  const details = fx && total ? fxDetailLines(fx, entries.map(([c]) => c)) : []
 
   return (
     <span className={`inline-grid w-full max-w-full grid-cols-[auto_1fr] items-baseline ${sm ? "gap-x-2 gap-y-0" : "gap-x-3 gap-y-0.5"} ${className}`} data-testid="currency-amounts">
@@ -101,27 +148,14 @@ export default function CurrencyAmounts({ byCurrency, fx, size = "md", emptyLabe
         <span className={`col-span-2 mt-1 border-t border-dashed border-gray-200 ${sm ? "pt-1" : "pt-1.5"}`} data-testid="eur-total">
           {total.eur !== null ? (
             <span className="flex flex-wrap items-baseline justify-between gap-x-2">
-              <span className={`font-normal text-gray-500 ${sm ? "text-[10px]" : "text-xs"}`}>
-                Total ≈ EUR
-                <button
-                  type="button"
-                  title={details.join("\n")}
-                  aria-expanded={open}
-                  onClick={e => { e.preventDefault(); e.stopPropagation(); setOpen(o => !o) }}
-                  className={`ml-1.5 cursor-help border-b border-dotted ${fx!.stale ? "border-amber-500 text-amber-700" : "border-gray-300 text-gray-400 hover:text-gray-600"}`}
-                >
-                  ⓘ {fx!.date ? `taux du ${fxDate(fx!, true)}` : "taux"}{fx!.stale ? " (taux antérieurs)" : ""}
-                </button>
+              <span className={`font-normal text-gray-500 ${sm ? "text-[10px]" : "text-xs"}`}>Total</span>
+              <span className="ml-auto inline-flex items-baseline gap-1.5">
+                <span className={`tabular-nums whitespace-nowrap font-semibold text-gray-800 ${sm ? "text-xs" : "text-sm"}`} data-testid="eur-total-amount">≈ {formatEurTotal(total.eur)}</span>
+                <InfoTip lines={details} warn={stale} />
               </span>
-              <span className={`ml-auto tabular-nums whitespace-nowrap font-semibold text-gray-800 ${sm ? "text-xs" : "text-sm"}`} data-testid="eur-total-amount">≈ {formatEurTotal(total.eur)}</span>
             </span>
           ) : (
             <span className={`font-normal text-amber-700 ${sm ? "text-[10px]" : "text-xs"}`}>⚠ Total EUR indisponible : taux manquant ({total.missing.map(currencyLabel).join(", ")})</span>
-          )}
-          {open && total.eur !== null && (
-            <span className="mt-1 block rounded-md bg-gray-50 px-2 py-1.5 text-[11px] font-normal leading-snug text-gray-600" data-testid="fx-details">
-              {details.map(l => <span key={l} className="block">{l}</span>)}
-            </span>
           )}
         </span>
       )}
