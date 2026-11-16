@@ -8,7 +8,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   // Fetch original invoice + lines
   const { data: original, error: fetchErr } = await db
     .from("invoices")
-    .select("account_id, currency, notes, lines:invoice_lines(description, product_id, quantity, unit_price, discount, tva_rate, position, line_type, print_on_pdf, print_on_delivery)")
+    .select("account_id, currency, notes, internal_notes, lines:invoice_lines(description, product_id, quantity, unit_price, discount, tva_rate, position, line_type, print_on_pdf, print_on_delivery)")
     .eq("id", id)
     .single()
 
@@ -29,6 +29,7 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
       account_id: original.account_id,
       currency: original.currency,
       notes: original.notes,
+      internal_notes: original.internal_notes, // G3: internal comments kept too (never printed)
       status: "draft",
       number,
       issue_date: now.toISOString().split("T")[0],
