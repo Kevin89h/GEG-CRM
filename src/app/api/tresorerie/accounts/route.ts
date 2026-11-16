@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createCompanyClient } from "@/lib/company"
-import { errorResponse } from "@/lib/access"
+import { errorResponse, requirePermission } from "@/lib/access"
 
 // POST: create a treasury account
 export async function POST(req: NextRequest)  {
   try {
+    await requirePermission("tresorerie.comptes")
     const body = await req.json()
     const { db } = await createCompanyClient()
 

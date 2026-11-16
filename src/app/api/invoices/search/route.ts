@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createCompanyClient } from "@/lib/company"
-import { errorResponse } from "@/lib/access"
+import { errorResponse, requirePermission } from "@/lib/access"
 
+// A1: invoice search (deal page). Amounts come from the totals view (computed from the lines),
+// never from a stored total column (absent in Guinée, always 0 in Singapour).
 export async function GET(req: NextRequest)  {
   try {
+    await requirePermission("factures.voir")
     const q = req.nextUrl.searchParams.get("q") ?? ""
     const { db } = await createCompanyClient()
 
     let query = db
-      .from("invoices")
-      .select("id, number, status, total_ht, currency")
-      .order("created_at", { ascending: false })
+      .from("invoice_totals")
+      .select("id, number, status, total_ht, currency, issue_date")
+      .order("issue_date", { ascending: false, nullsFirst: false })
       .limit(30)
 
     if (q) query = query.ilike("number", `%${q}%`)
