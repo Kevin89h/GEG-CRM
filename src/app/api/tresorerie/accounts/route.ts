@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createCompanyClient } from "@/lib/company"
-import { errorResponse } from "@/lib/access"
+import { AccessError, errorResponse, requireUser } from "@/lib/access"
 
 // POST: create a treasury account
 export async function POST(req: NextRequest)  {
   try {
+    // Security hotfix T1: admins and managers only
+    const access = await requireUser()
+    if (!["admin", "manager"].includes(access.role)) throw new AccessError(403, "Accès refusé")
     const body = await req.json()
     const { db } = await createCompanyClient()
 

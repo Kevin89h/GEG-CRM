@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createSchemaClient } from "@/lib/supabase/admin"
 import { getSchemaFromRequest } from "@/lib/company"
+import { AccessError, errorResponse, requireUser } from "@/lib/access"
 
 export async function GET(req: NextRequest) {
   try {
@@ -21,6 +22,9 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    // Security hotfix T1: creating a treasury account is reserved to admins and managers
+    const access = await requireUser()
+    if (!["admin", "manager"].includes(access.role)) throw new AccessError(403, "Accès refusé")
     const body = await req.json()
     const { name, type, institution, account_number, swift, iban, currency, initial_balance, color } = body
 
@@ -43,6 +47,7 @@ export async function POST(req: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ account: data })
   } catch (err) {
+    if (err instanceof AccessError) return errorResponse(err)
     console.error("Treasury account error:", err)
     return NextResponse.json({ error: "Erreur serveur" }, { status: 500 })
   }
