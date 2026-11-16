@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createCompanyClient } from "@/lib/company"
+import { errorResponse, requirePermission } from "@/lib/access"
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+  await requirePermission("factures_fournisseurs.gerer")
   const { id } = await params
   const { db } = await createCompanyClient()
 
@@ -37,8 +40,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       total_ht: Number(invoice.total_ht),
       tax_amount: Number(invoice.tax_amount),
       total_ttc: Number(invoice.total_ttc),
-      total_paid: 0,
-      balance: Number(invoice.total_ttc),
+      // A4: paid amount and balance are computed by supplier_invoice_totals (from the payments), never stored
       status: "draft",
       reference: invoice.reference ?? null,
       notes: invoice.notes ?? null,
@@ -62,4 +64,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   }
 
   return NextResponse.json({ id: duplicate.id, number })
+  } catch (err) {
+    return errorResponse(err)
+  }
 }
