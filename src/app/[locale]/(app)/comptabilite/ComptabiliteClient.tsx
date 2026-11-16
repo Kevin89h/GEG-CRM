@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Plus, Building2, Smartphone, Banknote, ArrowDownLeft, ArrowUpRight, MoreVertical, X, BarChart2, Trash2, Download, FileText, Sheet } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils"
+import CurrencyAmounts, { type FxInfo } from "@/components/finance/CurrencyAmounts"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Select } from "@/components/ui/Select"
@@ -31,6 +32,8 @@ interface Transaction {
 interface Props {
   locale: string
   isSuperAdmin?: boolean
+  /** market rates for the indicative EUR total of the multi-currency summaries (D-01) */
+  fx?: FxInfo
   clientStats: {
     draft: InvoiceStat[]; unpaid: InvoiceStat[]; overdue: InvoiceStat[]
     draftAmount: number; unpaidAmount: number; overdueAmount: number
@@ -71,16 +74,9 @@ const txTypeConfig = {
   transfer_out: { label: "Virement émis",  icon: ArrowUpRight,  color: "text-amber-600",   credit: false },
 }
 
-/** One amount per currency, e.g. "12 000 000 GNF · 5 000 USD"; "—" when empty (F6: never a cross-currency sum) */
-function formatAmountsByCurrency(amounts: Record<string, number> | undefined): string {
-  const parts = Object.entries(amounts ?? {})
-    .filter(([, v]) => v !== 0)
-    .map(([cur, v]) => formatCurrency(v, cur))
-  return parts.length ? parts.join(" · ") : "—"
-}
 
 /* ─── Carte "Factures clients" style Odoo ─────────────── */
-function InvoiceCard({ locale, stats, ageing }: { locale: string; stats: Props["clientStats"]; ageing: ChartBucket[] }) {
+function InvoiceCard({ locale, stats, ageing, fx }: { locale: string; stats: Props["clientStats"]; ageing: ChartBucket[]; fx?: FxInfo }) {
   const { can } = usePerms()
   const total = stats.draft.length + stats.unpaid.length
   return (
@@ -107,32 +103,32 @@ function InvoiceCard({ locale, stats, ageing }: { locale: string; stats: Props["
       ) : (
         <div className="px-5 pb-3 space-y-2">
           {stats.draft.length > 0 && (
-            <Link href={`/${locale}/ventes/factures`} className="flex justify-between items-center hover:bg-gray-50 rounded-lg px-2 py-1 -mx-2 transition-colors group">
-              <span className="text-sm font-medium text-blue-600 group-hover:underline">
+            <Link href={`/${locale}/ventes/factures`} className="flex justify-between items-start gap-4 hover:bg-gray-50 rounded-lg px-2 py-1 -mx-2 transition-colors group">
+              <span className="text-sm font-medium text-blue-600 group-hover:underline whitespace-nowrap shrink-0">
                 {stats.draft.length} À valider
               </span>
               <span className="text-sm font-semibold text-gray-800">
-                {formatAmountsByCurrency(stats.draftAmounts)}
+                <CurrencyAmounts byCurrency={stats.draftAmounts} fx={fx} className="max-w-[16rem]" />
               </span>
             </Link>
           )}
           {stats.unpaid.length > 0 && (
-            <Link href={`/${locale}/ventes/factures`} className="flex justify-between items-center hover:bg-gray-50 rounded-lg px-2 py-1 -mx-2 transition-colors group">
-              <span className="text-sm font-medium text-amber-600 group-hover:underline">
+            <Link href={`/${locale}/ventes/factures`} className="flex justify-between items-start gap-4 hover:bg-gray-50 rounded-lg px-2 py-1 -mx-2 transition-colors group">
+              <span className="text-sm font-medium text-amber-600 group-hover:underline whitespace-nowrap shrink-0">
                 {stats.unpaid.length} Non payé{stats.unpaid.length > 1 ? "s" : ""}
               </span>
               <span className="text-sm font-semibold text-gray-800">
-                {formatAmountsByCurrency(stats.unpaidAmounts)}
+                <CurrencyAmounts byCurrency={stats.unpaidAmounts} fx={fx} className="max-w-[16rem]" />
               </span>
             </Link>
           )}
           {stats.overdue.length > 0 && (
-            <Link href={`/${locale}/ventes/factures`} className="flex justify-between items-center hover:bg-gray-50 rounded-lg px-2 py-1 -mx-2 transition-colors group">
-              <span className="text-sm font-medium text-red-600 group-hover:underline">
+            <Link href={`/${locale}/ventes/factures`} className="flex justify-between items-start gap-4 hover:bg-gray-50 rounded-lg px-2 py-1 -mx-2 transition-colors group">
+              <span className="text-sm font-medium text-red-600 group-hover:underline whitespace-nowrap shrink-0">
                 {stats.overdue.length} En retard
               </span>
               <span className="text-sm font-semibold text-red-700">
-                {formatAmountsByCurrency(stats.overdueAmounts)}
+                <CurrencyAmounts byCurrency={stats.overdueAmounts} fx={fx} className="max-w-[16rem]" />
               </span>
             </Link>
           )}
@@ -150,7 +146,7 @@ function InvoiceCard({ locale, stats, ageing }: { locale: string; stats: Props["
 }
 
 /* ─── Carte "Factures fournisseurs" style Odoo ────────── */
-function PurchaseCard({ locale, stats, months }: { locale: string; stats: Props["purchaseStats"]; months: ChartBucket[] }) {
+function PurchaseCard({ locale, stats, months, fx }: { locale: string; stats: Props["purchaseStats"]; months: ChartBucket[]; fx?: FxInfo }) {
   const { can } = usePerms()
   return (
     <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
@@ -173,22 +169,22 @@ function PurchaseCard({ locale, stats, months }: { locale: string; stats: Props[
 
       <div className="px-5 pb-3 space-y-2">
         {stats.draft.length > 0 ? (
-          <Link href={`/${locale}/comptabilite/factures-fournisseurs`} className="flex justify-between items-center hover:bg-gray-50 rounded-lg px-2 py-1 -mx-2 transition-colors group">
-            <span className="text-sm font-medium text-blue-600 group-hover:underline">
+          <Link href={`/${locale}/comptabilite/factures-fournisseurs`} className="flex justify-between items-start gap-4 hover:bg-gray-50 rounded-lg px-2 py-1 -mx-2 transition-colors group">
+            <span className="text-sm font-medium text-blue-600 group-hover:underline whitespace-nowrap shrink-0">
               {stats.draft.length} À valider
             </span>
             <span className="text-sm font-semibold text-gray-800">
-              {formatAmountsByCurrency(stats.draftAmounts)}
+              <CurrencyAmounts byCurrency={stats.draftAmounts} fx={fx} className="max-w-[16rem]" />
             </span>
           </Link>
         ) : null}
         {stats.toPay.length > 0 ? (
-          <Link href={`/${locale}/comptabilite/factures-fournisseurs`} className="flex justify-between items-center hover:bg-gray-50 rounded-lg px-2 py-1 -mx-2 transition-colors group">
-            <span className="text-sm font-medium text-amber-600 group-hover:underline">
+          <Link href={`/${locale}/comptabilite/factures-fournisseurs`} className="flex justify-between items-start gap-4 hover:bg-gray-50 rounded-lg px-2 py-1 -mx-2 transition-colors group">
+            <span className="text-sm font-medium text-amber-600 group-hover:underline whitespace-nowrap shrink-0">
               {stats.toPay.length} À payer
             </span>
             <span className="text-sm font-semibold text-gray-800">
-              {formatAmountsByCurrency(stats.toPayAmounts)}
+              <CurrencyAmounts byCurrency={stats.toPayAmounts} fx={fx} className="max-w-[16rem]" />
             </span>
           </Link>
         ) : null}
@@ -731,7 +727,7 @@ function ConfigModal({ accountId, acc, form, setForm, onClose, onSaved, isSuperA
 }
 
 /* ─── Composant principal ────────────────────────────── */
-export default function ComptabiliteClient({ locale, isSuperAdmin, clientStats, purchaseStats, invoiceAgeing, purchaseMonths, accounts, transactions }: Props) {
+export default function ComptabiliteClient({ locale, isSuperAdmin, fx, clientStats, purchaseStats, invoiceAgeing, purchaseMonths, accounts, transactions }: Props) {
   const router = useRouter()
   const { can } = usePerms()
   // Display only (D2): the API checks the same keys again
@@ -880,8 +876,8 @@ export default function ComptabiliteClient({ locale, isSuperAdmin, clientStats, 
 
       {/* Ligne 1 : Factures clients | Factures fournisseurs | Opérations diverses */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-        <InvoiceCard locale={locale} stats={clientStats} ageing={invoiceAgeing} />
-        <PurchaseCard locale={locale} stats={purchaseStats} months={purchaseMonths} />
+        <InvoiceCard locale={locale} stats={clientStats} ageing={invoiceAgeing} fx={fx} />
+        <PurchaseCard locale={locale} stats={purchaseStats} months={purchaseMonths} fx={fx} />
 
         {/* Opérations diverses */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">

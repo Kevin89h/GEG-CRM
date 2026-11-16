@@ -219,7 +219,7 @@ export default function DealsClient({ deals: initial, accounts, profiles, curren
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-gray-900">Pipeline commercial</h1>
           <div className="flex items-center gap-3 mt-0.5">
-            <div className="text-gray-500 text-sm flex items-start gap-1">Pipeline actif : <CurrencyAmounts byCurrency={totalPipeline} fx={fx} compact /></div>
+            <div className="text-gray-500 text-sm flex items-start gap-1">Pipeline actif : <CurrencyAmounts byCurrency={totalPipeline} fx={fx} size="sm" className="max-w-[15rem]" /></div>
             {urgentCount > 0 && (
               <span className="flex items-center gap-1 text-xs font-medium text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full">
                 <AlertCircle className="w-3 h-3" /> {urgentCount} urgent{urgentCount > 1 ? "s" : ""}

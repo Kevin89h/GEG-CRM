@@ -1,4 +1,5 @@
 import { createCompanyClient } from "@/lib/company"
+import { getMarketRates } from "@/lib/fx"
 import { createClient as createAdminClient } from "@supabase/supabase-js"
 import { createClient } from "@/lib/supabase/server"
 import ComptabiliteClient from "./ComptabiliteClient"
@@ -147,8 +148,10 @@ export default async function ComptabilitePage({ params }: { params: Promise<{ l
     }
   })
 
+  // G1 / D-01: market rates for the indicative EUR total of the multi-currency summaries
+  const fx = await getMarketRates()
   return (
-    <ComptabiliteClient
+    <ComptabiliteClient fx={fx}
       locale={locale}
       clientStats={clientStats}
       purchaseStats={purchaseStats}

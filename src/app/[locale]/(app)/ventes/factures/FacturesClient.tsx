@@ -9,6 +9,7 @@ import {
   Receipt, Clock, ChevronUp, ChevronDown, ChevronsUpDown, AlertTriangle, Download, CreditCard, X, Ban,
 } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils"
+import CurrencyAmounts, { type FxInfo } from "@/components/finance/CurrencyAmounts"
 import { exportToXls } from "@/lib/exportXls"
 import { usePerms } from "@/components/PermissionsProvider"
 
@@ -29,6 +30,8 @@ interface Invoice {
 interface Props {
   invoices: Invoice[]
   schema?: string
+  /** market rates for the indicative EUR total (D-01) */
+  fx?: FxInfo
 }
 
 type Tab = "ouvertes" | "payees" | "brouillons" | "tout"
@@ -41,14 +44,8 @@ const CLIENT_STATUS_LABELS: Record<string, string> = {
   cancelled: "Annulée",
 }
 
-function fmtMulti(byCur: Record<string, number>) {
-  return Object.entries(byCur)
-    .filter(([, v]) => v > 0)
-    .map(([cur, val]) => formatCurrency(val, cur as "GNF" | "USD" | "EUR"))
-    .join(" · ") || "—"
-}
 
-export default function FacturesClient({ invoices, schema }: Props) {
+export default function FacturesClient({ invoices, schema, fx }: Props) {
   const params = useParams()
   const locale = params.locale as string
   const t = useTranslations("factures")
@@ -181,7 +178,6 @@ export default function FacturesClient({ invoices, schema }: Props) {
       brouillons: invoices.filter(i => i.status === "draft").length,
       total: invoices.length,
       unpaid,
-      unpaidTotal: fmtMulti(unpaid),
     }
   }, [invoices])
 
@@ -389,7 +385,7 @@ export default function FacturesClient({ invoices, schema }: Props) {
           <div className="w-px bg-gray-200 mx-3" />
           <div className="flex flex-col items-end justify-center px-4">
             <span className="text-xs text-gray-400">{t("toCollect")}</span>
-            <span className="text-lg font-bold text-red-600 tabular-nums">{stats.unpaidTotal}</span>
+            <span className="text-base font-bold text-red-600">{Object.keys(stats.unpaid).length ? <CurrencyAmounts byCurrency={stats.unpaid} fx={fx} className="min-w-[13rem]" /> : "—"}</span>
           </div>
         </div>
       </div>
@@ -558,10 +554,10 @@ export default function FacturesClient({ invoices, schema }: Props) {
                     </td>
                     {showPayments && (
                       <td className="px-4 py-3 text-right text-xs font-bold text-red-600 tabular-nums">
-                        {fmtMulti(displayed.reduce<Record<string, number>>((acc, i) => {
+                        <CurrencyAmounts size="sm" fx={fx} className="min-w-[11rem]" byCurrency={displayed.reduce<Record<string, number>>((acc, i) => {
                           if (i.balance > 0) acc[i.currency] = (acc[i.currency] ?? 0) + i.balance
                           return acc
-                        }, {}))}
+                        }, {})} />
                       </td>
                     )}
                     <td />

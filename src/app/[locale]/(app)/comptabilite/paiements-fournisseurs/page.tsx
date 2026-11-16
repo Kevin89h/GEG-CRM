@@ -1,4 +1,5 @@
 import { createCompanyClient, getCompanySchema } from "@/lib/company"
+import { getMarketRates } from "@/lib/fx"
 import { createClient as createAdminClient } from "@supabase/supabase-js"
 import PaiementsFournisseursClient from "./PaiementsFournisseursClient"
 
@@ -52,5 +53,7 @@ export default async function PaiementsFournisseursPage({ params }: { params: Pr
     }
   })
 
-  return <PaiementsFournisseursClient payments={rows} locale={locale} />
+  // G1 / D-01: market rates for the indicative EUR total of the multi-currency summaries
+  const fx = await getMarketRates()
+  return <PaiementsFournisseursClient fx={fx} payments={rows} locale={locale} />
 }

@@ -1,4 +1,5 @@
 import { createCompanyClient } from "@/lib/company"
+import { getMarketRates } from "@/lib/fx"
 import FacturesFournisseursListClient from "./FacturesFournisseursListClient"
 
 export default async function FacturesFournisseursPage({ params }: { params: Promise<{ locale: string }> }) {
@@ -11,5 +12,7 @@ export default async function FacturesFournisseursPage({ params }: { params: Pro
     .order("invoice_date", { ascending: false })
     .limit(500)
 
-  return <FacturesFournisseursListClient invoices={invoices ?? []} locale={locale} />
+  // G1 / D-01: market rates for the indicative EUR total of the multi-currency summaries
+  const fx = await getMarketRates()
+  return <FacturesFournisseursListClient fx={fx} invoices={invoices ?? []} locale={locale} />
 }

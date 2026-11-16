@@ -9,6 +9,7 @@ import {
 } from "lucide-react"
 import { Badge } from "@/components/ui/Badge"
 import { formatCurrency, formatDate } from "@/lib/utils"
+import CurrencyAmounts, { type FxInfo } from "@/components/finance/CurrencyAmounts"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import Link from "next/link"
 import { usePerms } from "@/components/PermissionsProvider"
@@ -67,6 +68,8 @@ interface Props {
   invoices: Invoice[]
   payments: Payment[]
   locale: string
+  /** market rates for the indicative EUR total of the multi-currency summaries (D-01) */
+  fx?: FxInfo
 }
 
 type Period = "30" | "90" | "365" | "all" | "custom"
@@ -92,10 +95,9 @@ function groupByCurrency<T extends { currency: string; total: number }>(items: T
   }, {})
 }
 
-function fmtMulti(byCur: Record<string, number>): string {
-  const entries = Object.entries(byCur).filter(([, v]) => v > 0)
-  if (entries.length === 0) return "—"
-  return entries.map(([cur, val]) => formatCurrency(val, cur as "GNF" | "USD" | "EUR")).join(" · ")
+/** positive amounts only, per currency */
+function positive(byCur: Record<string, number>): Record<string, number> {
+  return Object.fromEntries(Object.entries(byCur).filter(([, v]) => v > 0))
 }
 
 function periodStart(period: Period, customFrom: string): Date | null {
@@ -112,7 +114,9 @@ function daysOverdue(dueDateStr: string | null): number {
   return Math.max(0, Math.floor(diff / 86400000))
 }
 
-export default function AccountDetailClient({ account, orders, invoices, payments, locale }: Props) {
+export default function AccountDetailClient({ account, orders, invoices, payments, locale, fx }: Props) {
+  // multi-currency summary (D-01): one line per currency + indicative EUR total
+  const fmtMulti = (byCur: Record<string, number>, size: "sm" | "md" = "md") => <CurrencyAmounts byCurrency={positive(byCur)} fx={fx} size={size} className={size === "sm" ? "min-w-[10rem]" : ""} />
   const router = useRouter()
   const { db } = getCompanyClientBrowser()
   // Display only (D2): editing needs "comptes.modifier", the direct deletion "suppression" (checked again by the database)
@@ -475,9 +479,9 @@ export default function AccountDetailClient({ account, orders, invoices, payment
             </div>
             <div>
               <p className="text-xs font-semibold text-red-700 uppercase tracking-wide">Solde impayé</p>
-              <p className="text-2xl font-bold text-red-700 leading-tight">
-                {globalDueEntries.map(([cur, val]) => formatCurrency(val, cur as "GNF" | "USD" | "EUR")).join(" · ")}
-              </p>
+              <div className="text-xl font-bold text-red-700 leading-tight min-w-[14rem]">
+                {fmtMulti(globalDue)}
+              </div>
             </div>
           </div>
           <div className="text-right">
@@ -538,7 +542,7 @@ export default function AccountDetailClient({ account, orders, invoices, payment
                 <Icon className={`w-4 h-4 ${color}`} />
               </div>
             </div>
-            <p className={`text-sm font-bold leading-tight ${color}`}>{value}</p>
+            <div className={`text-sm font-bold leading-tight ${color}`}>{value}</div>
             <p className="text-xs text-gray-400 mt-1">{sub}</p>
           </div>
         ))}
@@ -718,9 +722,9 @@ export default function AccountDetailClient({ account, orders, invoices, payment
               <tfoot>
                 <tr className="bg-gray-50 border-t border-gray-200">
                   <td colSpan={4} className="px-4 py-3 text-xs font-medium text-gray-500">Total période</td>
-                  <td className="px-4 py-3 text-right font-bold text-gray-900 text-xs">{fmtMulti(totalInvoiced)}</td>
-                  <td className="px-4 py-3 text-right font-bold text-emerald-700 text-xs">{fmtMulti(totalPaidMap)}</td>
-                  <td className="px-4 py-3 text-right font-bold text-red-600 text-xs">{fmtMulti(totalDue)}</td>
+                  <td className="px-4 py-3 text-right font-bold text-gray-900 text-xs">{fmtMulti(totalInvoiced, "sm")}</td>
+                  <td className="px-4 py-3 text-right font-bold text-emerald-700 text-xs">{fmtMulti(totalPaidMap, "sm")}</td>
+                  <td className="px-4 py-3 text-right font-bold text-red-600 text-xs">{fmtMulti(totalDue, "sm")}</td>
                   <td></td>
                 </tr>
               </tfoot>
@@ -767,7 +771,7 @@ export default function AccountDetailClient({ account, orders, invoices, payment
               <tfoot>
                 <tr className="bg-gray-50 border-t border-gray-200">
                   <td colSpan={4} className="px-4 py-3 text-xs font-medium text-gray-500">Total période</td>
-                  <td className="px-4 py-3 text-right font-bold text-gray-900 text-xs">{fmtMulti(totalOrdered)}</td>
+                  <td className="px-4 py-3 text-right font-bold text-gray-900 text-xs">{fmtMulti(totalOrdered, "sm")}</td>
                   <td></td>
                 </tr>
               </tfoot>

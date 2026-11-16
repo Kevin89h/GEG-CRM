@@ -4,6 +4,7 @@ import { useState, useMemo } from "react"
 import Link from "next/link"
 import { Search, CreditCard, Building2, Smartphone, Banknote, ChevronLeft, ChevronRight, Download } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
+import CurrencyAmounts, { type FxInfo } from "@/components/finance/CurrencyAmounts"
 import { exportToXls } from "@/lib/exportXls"
 import { usePerms } from "@/components/PermissionsProvider"
 
@@ -25,6 +26,8 @@ interface Payment {
 interface Props {
   payments: Payment[]
   locale: string
+  /** market rates for the indicative EUR total of the multi-currency summaries (D-01) */
+  fx?: FxInfo
 }
 
 const PAGE_SIZE = 80
@@ -49,7 +52,7 @@ function fmtDate(iso: string) {
   return d.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: undefined })
 }
 
-export default function PaiementsClient({ payments, locale }: Props) {
+export default function PaiementsClient({ payments, locale, fx }: Props) {
   const { can } = usePerms()
   const [search, setSearch] = useState("")
   const [filterJournal, setFilterJournal] = useState("all")
@@ -85,10 +88,6 @@ export default function PaiementsClient({ payments, locale }: Props) {
     acc[p.currency] = (acc[p.currency] ?? 0) + p.amount
     return acc
   }, {})
-  const totalsLabel = Object.entries(totalsByCurrency)
-    .filter(([, v]) => v !== 0)
-    .map(([cur, v]) => formatCurrency(v, cur))
-    .join(" · ") || "—"
 
   return (
     <div>
@@ -97,11 +96,13 @@ export default function PaiementsClient({ payments, locale }: Props) {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Paiements</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            {filtered.length} paiement{filtered.length !== 1 ? "s" : ""} &nbsp;·&nbsp;
-            <span className="font-semibold text-gray-700">
-              {totalsLabel}
-            </span>
+            {filtered.length} paiement{filtered.length !== 1 ? "s" : ""}
           </p>
+          {Object.keys(totalsByCurrency).length > 0 && (
+            <div className="mt-2 text-sm font-semibold text-gray-700 w-full max-w-xs">
+              <CurrencyAmounts byCurrency={totalsByCurrency} fx={fx} />
+            </div>
+          )}
         </div>
         <div className="flex gap-2">
           {/* Exporting the treasury journal needs "tresorerie.saisir" (saisir, modifier, exporter) */}

@@ -1,4 +1,5 @@
 import { createCompanyClient } from "@/lib/company"
+import { getMarketRates } from "@/lib/fx"
 import { notFound } from "next/navigation"
 import AccountDetailClient from "./AccountDetailClient"
 
@@ -82,8 +83,10 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
     }
   })
 
+  // G1 / D-01: market rates for the indicative EUR total of the multi-currency summaries
+  const fx = await getMarketRates()
   return (
-    <AccountDetailClient
+    <AccountDetailClient fx={fx}
       account={{
         id: acct.id as string,
         name: acct.name as string,

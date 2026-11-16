@@ -4,6 +4,7 @@ import { useState, useMemo } from "react"
 import Link from "next/link"
 import { Search, CreditCard, Building2, Smartphone, Banknote, ChevronLeft, ChevronRight } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
+import CurrencyAmounts, { type FxInfo } from "@/components/finance/CurrencyAmounts"
 
 interface SupplierPayment {
   id: string
@@ -23,6 +24,8 @@ interface SupplierPayment {
 interface Props {
   payments: SupplierPayment[]
   locale: string
+  /** market rates for the indicative EUR total of the multi-currency summaries (D-01) */
+  fx?: FxInfo
 }
 
 const PAGE_SIZE = 80
@@ -54,7 +57,7 @@ function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })
 }
 
-export default function PaiementsFournisseursClient({ payments, locale }: Props) {
+export default function PaiementsFournisseursClient({ payments, locale, fx }: Props) {
   const [search, setSearch]               = useState("")
   const [filterJournal, setFilterJournal] = useState("all")
   const [filterStatus, setFilterStatus]   = useState("all")
@@ -84,13 +87,11 @@ export default function PaiementsFournisseursClient({ payments, locale }: Props)
   const currentPage  = Math.min(page, totalPages)
   const slice        = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
 
+  // totals per currency, never added across currencies (F6)
   const totals = useMemo(() => {
     const byCur: Record<string, number> = {}
     for (const p of filtered) byCur[p.currency] = (byCur[p.currency] ?? 0) + p.amount
-    return Object.entries(byCur)
-      .filter(([, v]) => v > 0)
-      .map(([cur, val]) => formatCurrency(val, cur as "GNF" | "USD" | "EUR"))
-      .join(" · ") || "—"
+    return Object.fromEntries(Object.entries(byCur).filter(([, v]) => v > 0))
   }, [filtered])
 
   return (
@@ -100,9 +101,13 @@ export default function PaiementsFournisseursClient({ payments, locale }: Props)
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Paiements fournisseurs</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            {filtered.length} paiement{filtered.length !== 1 ? "s" : ""}&nbsp;·&nbsp;
-            <span className="font-semibold text-gray-700">{totals}</span>
+            {filtered.length} paiement{filtered.length !== 1 ? "s" : ""}
           </p>
+          {Object.keys(totals).length > 0 && (
+            <div className="mt-2 text-sm font-semibold text-gray-700 w-full max-w-xs">
+              <CurrencyAmounts byCurrency={totals} fx={fx} />
+            </div>
+          )}
         </div>
         <Link
           href={`/${locale}/comptabilite/factures-fournisseurs`}

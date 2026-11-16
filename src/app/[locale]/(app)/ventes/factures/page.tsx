@@ -1,4 +1,5 @@
 import { createCompanyClient } from "@/lib/company"
+import { getMarketRates } from "@/lib/fx"
 import FacturesClient from "./FacturesClient"
 
 export default async function FacturesPage() {
@@ -34,5 +35,7 @@ export default async function FacturesPage() {
     client_name: i.account_id ? (accountMap[i.account_id] ?? "—") : "—",
   }))
 
-  return <FacturesClient invoices={list} schema={schema} />
+  // G1 / D-01: market rates for the indicative EUR total of the multi-currency summaries
+  const fx = await getMarketRates()
+  return <FacturesClient fx={fx} invoices={list} schema={schema} />
 }

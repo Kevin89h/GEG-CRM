@@ -1,4 +1,5 @@
 import { createCompanyClient } from "@/lib/company"
+import { getMarketRates } from "@/lib/fx"
 import AchatsClient from "./AchatsClient"
 
 export default async function AchatsPage() {
@@ -69,5 +70,7 @@ export default async function AchatsPage() {
     }
   })
 
-  return <AchatsClient orders={list} />
+  // G1 / D-01: market rates for the indicative EUR total of the multi-currency summaries
+  const fx = await getMarketRates()
+  return <AchatsClient fx={fx} orders={list} />
 }

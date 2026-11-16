@@ -4,6 +4,7 @@ import { useState, useMemo, useRef } from "react"
 import Link from "next/link"
 import { Plus, Download, Upload, Search, ChevronUp, ChevronDown, X, CreditCard, CreditCard as PayIcon } from "lucide-react"
 import { formatDate } from "@/lib/utils"
+import CurrencyAmounts, { type FxInfo } from "@/components/finance/CurrencyAmounts"
 import { useRouter } from "next/navigation"
 import { usePerms } from "@/components/PermissionsProvider"
 
@@ -29,9 +30,12 @@ type SortKey = "number" | "supplier_name" | "invoice_date" | "due_date" | "balan
 export default function FacturesFournisseursListClient({
   invoices: initial,
   locale,
+  fx,
 }: {
   invoices: Invoice[]
   locale: string
+  /** market rates for the indicative EUR total (D-01) */
+  fx?: FxInfo
 }) {
   const router = useRouter()
   const fileRef = useRef<HTMLInputElement>(null)
@@ -240,17 +244,17 @@ export default function FacturesFournisseursListClient({
           <p className="text-xs font-medium text-amber-500 uppercase tracking-wide">À payer</p>
           {Object.keys(totalPending).length === 0 ? (
             <p className="text-2xl font-bold text-amber-600 mt-1">—</p>
-          ) : Object.entries(totalPending).map(([cur, total]) => (
-            <p key={cur} className="text-2xl font-bold text-amber-600 mt-1">{total.toLocaleString("fr")} <span className="text-sm font-normal text-gray-400">{cur}</span></p>
-          ))}
+          ) : (
+            <div className="text-lg font-bold text-amber-600 mt-1"><CurrencyAmounts byCurrency={totalPending} fx={fx} /></div>
+          )}
         </div>
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
           <p className="text-xs font-medium text-emerald-500 uppercase tracking-wide">Payées</p>
           {Object.keys(totalPaid).length === 0 ? (
             <p className="text-2xl font-bold text-emerald-600 mt-1">—</p>
-          ) : Object.entries(totalPaid).map(([cur, total]) => (
-            <p key={cur} className="text-2xl font-bold text-emerald-600 mt-1">{total.toLocaleString("fr")} <span className="text-sm font-normal text-gray-400">{cur}</span></p>
-          ))}
+          ) : (
+            <div className="text-lg font-bold text-emerald-600 mt-1"><CurrencyAmounts byCurrency={totalPaid} fx={fx} /></div>
+          )}
         </div>
       </div>
 
@@ -421,7 +425,8 @@ export default function FacturesFournisseursListClient({
             </div>
 
             <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 mb-4 text-sm text-amber-800">
-              Total à payer : <strong>{Object.entries(bulkPayTotals).map(([cur, total]) => `${total.toLocaleString("fr")} ${cur}`).join(" · ") || "—"}</strong> — réparti de la plus ancienne à la plus récente
+              Total à payer (réparti de la plus ancienne à la plus récente) :
+              <strong className="block mt-1 max-w-xs"><CurrencyAmounts byCurrency={bulkPayTotals} /></strong>
             </div>
             {bulkPayMixed && (
               <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-2 mb-4 text-sm text-red-700">

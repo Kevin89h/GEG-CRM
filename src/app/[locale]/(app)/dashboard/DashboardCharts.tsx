@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import CurrencyAmounts from "@/components/finance/CurrencyAmounts"
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
   PieChart, Pie, Legend, CartesianGrid,
@@ -21,9 +22,9 @@ interface Props {
   missingFx?: string[]
 }
 
+/** detail per currency under the EUR value of a bar (D-01): one line per currency, F CFA label */
 function byCurrencyText(by?: Record<string, number>) {
-  const e = Object.entries(by ?? {}).filter(([, v]) => v !== 0)
-  return e.length ? e.map(([c, v]) => `${new Intl.NumberFormat("fr-FR", { maximumFractionDigits: c === "GNF" || c === "XOF" ? 0 : 2 }).format(v)} ${c}`).join(" · ") : "—"
+  return <CurrencyAmounts byCurrency={by ?? {}} size="sm" />
 }
 
 function formatAmount(v: number) {
@@ -65,7 +66,7 @@ function BillingTooltip({ active, payload, label }: { active?: boolean; payload?
           </span>
           <span className="font-semibold text-gray-900">≈ {formatFull(p.value)} EUR</span>
           </div>
-          <div className="text-[11px] text-gray-500 mb-1.5 pl-3.5">{byCurrencyText(p.dataKey === "paid" ? p.payload?.paidBy : p.payload?.invoicedBy)}</div>
+          <div className="text-[11px] text-gray-600 mb-1.5 pl-3.5">{byCurrencyText(p.dataKey === "paid" ? p.payload?.paidBy : p.payload?.invoicedBy)}</div>
         </div>
       ))}
     </div>
@@ -149,7 +150,7 @@ export default function DashboardCharts({ pipeline, invoiceStatus, billingData, 
                 <YAxis tickFormatter={formatAmount} tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} width={52} />
                 <Tooltip
                   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  formatter={(v: any, _n: any, item: any) => [`≈ ${formatFull(Number(v))} EUR (${byCurrencyText(item?.payload?.by)})`, "Valeur"]}
+                  formatter={(v: any, _n: any, item: any) => [<span key="v" className="inline-block min-w-[150px] align-top"><span className="block font-semibold">≈ {formatFull(Number(v))} EUR</span><span className="block mt-1 text-[11px] text-gray-600">{byCurrencyText(item?.payload?.by)}</span></span>, "Valeur"]}
                   contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid #f3f4f6" }}
                 />
                 <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={48}>

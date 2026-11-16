@@ -10,6 +10,7 @@ import {
   ChevronUp, ChevronDown, ChevronsUpDown,
 } from "lucide-react"
 import { formatCurrency, formatDate } from "@/lib/utils"
+import CurrencyAmounts, { type FxInfo } from "@/components/finance/CurrencyAmounts"
 import { exportToXls } from "@/lib/exportXls"
 import { usePerms } from "@/components/PermissionsProvider"
 
@@ -42,16 +43,12 @@ interface Order {
 
 interface Props {
   orders: Order[]
+  /** market rates for the indicative EUR total (D-01) */
+  fx?: FxInfo
 }
 
 type Tab = "all" | "draft" | "pending" | "received" | "cancelled"
 
-function fmtMulti(byCur: Record<string, number>) {
-  return Object.entries(byCur)
-    .filter(([, v]) => v > 0)
-    .map(([cur, val]) => formatCurrency(val, cur as "GNF" | "USD" | "EUR"))
-    .join(" · ") || "—"
-}
 
 const PENDING_STATUSES = new Set(["confirmed", "ordered", "in_transit", "partial"])
 
@@ -62,7 +59,7 @@ function isOverdue(dateStr: string | null) {
   return d < today
 }
 
-export default function AchatsClient({ orders }: Props) {
+export default function AchatsClient({ orders, fx }: Props) {
   const params = useParams()
   const locale = params.locale as string
   const t = useTranslations("achats")
@@ -144,7 +141,6 @@ export default function AchatsClient({ orders }: Props) {
       enRetard:  overdue.length,
       total:     orders.length,
       toPay,
-      toPayTotal: fmtMulti(toPay),
     }
   }, [orders]) // PENDING_STATUSES is a module-level constant
 
@@ -306,7 +302,7 @@ export default function AchatsClient({ orders }: Props) {
           <div className="w-px bg-gray-200 mx-3" />
           <div className="flex flex-col items-end justify-center px-4">
             <span className="text-xs text-gray-400">À payer</span>
-            <span className="text-lg font-bold text-red-600 tabular-nums">{stats.toPayTotal}</span>
+            <span className="text-base font-bold text-red-600">{Object.keys(stats.toPay).length ? <CurrencyAmounts byCurrency={stats.toPay} fx={fx} className="min-w-[13rem]" /> : "—"}</span>
           </div>
         </div>
       </div>
