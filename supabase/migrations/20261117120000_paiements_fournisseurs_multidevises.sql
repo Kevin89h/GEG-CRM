@@ -6,7 +6,8 @@
 -- D-07 / D-12 : un reste inférieur à l'arrondi d'un paiement en devise (½ centime, ou ½ franc pour GNF / XOF,
 --        converti dans la devise de la facture) n'est pas une dette : le solde affiché est 0 et, à l'annulation d'un
 --        paiement, le statut recalculé suit la même règle (public.delete_payment_safe).
--- D-10 : geg_singapore.supplier_payments n'avait pas de colonne exchange_rate : un paiement fournisseur dans une
+-- D-10 : geg_singapore.exchange_rates n'avait pas de colonne notes (source du taux) et geg_singapore.supplier_payments
+--        n'avait pas de colonne exchange_rate : un paiement fournisseur dans une
 --        autre devise ne pouvait pas enregistrer son taux. Colonne ajoutée, comme en Guinée (numeric(24,12)).
 --
 -- AUCUNE donnée n'est modifiée : ni facture, ni paiement, ni taux, ni statut existant. Seuls des CALCULS changent
@@ -23,6 +24,8 @@ grant execute on function public.currency_decimals(text) to authenticated, servi
 
 -- D-10 : taux appliqué aux paiements fournisseurs de Singapour
 alter table geg_singapore.supplier_payments add column if not exists exchange_rate numeric(24,12);
+-- D-10 : source et date de chaque taux de référence (colonne absente à Singapour, présente en Guinée)
+alter table geg_singapore.exchange_rates add column if not exists notes text;
 
 -- D-09 : vues des totaux, une par société (mêmes colonnes, même ordre, droits du lecteur conservés)
 create or replace view geg_guinee.supplier_invoice_totals with (security_invoker = true) as

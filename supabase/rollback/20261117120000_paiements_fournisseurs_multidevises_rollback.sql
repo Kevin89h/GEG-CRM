@@ -120,6 +120,14 @@ do $$ begin
   end if;
 end $$;
 
+do $ begin
+  if exists (select 1 from geg_singapore.exchange_rates where notes is not null) then
+    raise notice 'Colonne geg_singapore.exchange_rates.notes conservée : des taux l''utilisent';
+  else
+    alter table geg_singapore.exchange_rates drop column if exists notes;
+  end if;
+end $;
+
 drop function if exists public.currency_decimals(text);
 
 notify pgrst, 'reload schema';
