@@ -10,6 +10,7 @@ import { Modal } from "@/components/ui/Modal"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { formatDate } from "@/lib/utils"
 import { usePerms } from "@/components/PermissionsProvider"
+import { deliveryLineKind, suggestProducts } from "@/lib/delivery-lines"
 
 
 interface DNLine {
@@ -22,7 +23,11 @@ interface DNLine {
   // "comment": text only copied from the source document (no quantity, warehouse nor stock move)
   line_type?: string | null
   print_on_delivery?: boolean | null
+  /** type of the linked catalogue sheet: "service" lines never move stock */
+  product_type?: string | null
 }
+
+interface CatalogueProduct { id: string; name: string; reference: string | null; product_type: string | null }
 
 const isComment = (l: { line_type?: string | null }) => l.line_type === "comment"
 
@@ -40,7 +45,7 @@ interface DN {
 interface Warehouse { id: string; name: string; city: string | null }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-interface Props { dn: DN; lines: DNLine[]; warehouses: Warehouse[]; locale: string; docSettings?: Record<string, any> }
+interface Props { dn: DN; lines: DNLine[]; warehouses: Warehouse[]; locale: string; docSettings?: Record<string, any>; products?: CatalogueProduct[] }
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   draft:     { label: "En cours", color: "bg-amber-100 text-amber-700" },
@@ -48,7 +53,7 @@ const statusConfig: Record<string, { label: string; color: string }> = {
   cancelled: { label: "Annulé",   color: "bg-red-100 text-red-600" },
 }
 
-export default function BonLivraisonClient({ dn, lines: initialLines, warehouses, locale, docSettings = {} }: Props) {
+export default function BonLivraisonClient({ dn, lines: initialLines, warehouses, locale, docSettings = {}, products = [] }: Props) {
   const router = useRouter()
   const { can } = usePerms()
   const firstWarehouseId = warehouses[0]?.id ?? ""
@@ -73,6 +78,25 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
   // Quantities and warehouses are only sent by the confirmation, so they are editable with it.
   const canCancel = isDraft && can("livraisons.annuler")
   const canConfirm = isDraft && can("livraisons.confirmer")
+  // a line without a catalogue sheet is NOT a service: it must be linked before validation (regression 17/11/2026)
+  const canLink = isDraft && (can("livraisons.creer") || can("livraisons.confirmer"))
+  const kind = (l: DNLine) => deliveryLineKind(l)
+  const unlinkedLines = lines.filter(l => kind(l) === "unlinked" && Number(l.quantity) > 0)
+  const stockLines = lines.filter(l => kind(l) === "product")
+  const [linking, setLinking] = useState<string | null>(null)
+  const [linkInfo, setLinkInfo] = useState<string | null>(null)
+
+  async function linkLine(lineId: string, productId: string) {
+    if (!productId) return
+    setLinking(lineId); setError(null); setLinkInfo(null)
+    const res = await fetch(`/api/bons-livraison/${dn.id}/lines/${lineId}/link`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ product_id: productId }) })
+    const json = await res.json().catch(() => ({}))
+    setLinking(null)
+    if (!res.ok) { setError(json.error ?? "Rattachement impossible"); return }
+    setLines(prev => prev.map(l => l.id === lineId ? { ...l, product_id: productId, product_type: json.product?.product_type ?? null } : l))
+    setShortages(null)
+    setLinkInfo(`« ${json.product?.name} » rattachée — ${json.correspondence}`)
+  }
 
   function setLineWarehouse(lineId: string, warehouseId: string) {
     setLines(prev => prev.map(l => l.id === lineId ? { ...l, warehouse_id: warehouseId } : l))
@@ -93,7 +117,10 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
   }
 
   async function confirmDelivery(derogation?: { reason: string; confirmed: true }) {
-    const stockLines = lines.filter(l => !isComment(l) && l.product_id)
+    if (unlinkedLines.length) {
+      setError("Rattachez d'abord chaque ligne à sa fiche du catalogue.")
+      return
+    }
     if (stockLines.some(l => !l.warehouse_id)) {
       setError("Assigne un entrepôt à chaque produit avant de confirmer.")
       return
@@ -224,7 +251,7 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
             </Button>
           )}
           {canConfirm && (
-            <Button onClick={() => setConfirmOpen(true)}>
+            <Button onClick={() => setConfirmOpen(true)} disabled={unlinkedLines.length > 0} title={unlinkedLines.length ? "Rattachez d'abord les lignes au catalogue" : undefined}>
               <Truck className="w-4 h-4" /> Confirmer la livraison
             </Button>
           )}
@@ -282,6 +309,15 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
         </div>
       )}
 
+      {isDraft && unlinkedLines.length > 0 && (
+        <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800" data-testid="unlinked-warning">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <p><strong>{unlinkedLines.length} ligne{unlinkedLines.length > 1 ? "s" : ""} non rattachée{unlinkedLines.length > 1 ? "s" : ""} au catalogue.</strong> Une ligne sans fiche n&apos;est pas une prestation : rattachez-la à sa fiche (produit ou prestation) pour que le stock soit contrôlé et sorti normalement. La livraison ne peut pas être confirmée avant.</p>
+        </div>
+      )}
+      {linkInfo && <p className="mb-4 text-sm text-emerald-700">{linkInfo}</p>}
+      {error && !confirmOpen && <p className="mb-4 text-sm text-red-600">{error}</p>}
+
       {/* Lignes */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden mb-6">
         <table className="w-full text-sm">
@@ -306,15 +342,39 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
                 </td>
               </tr>
             ) : (
-              <tr key={l.id} className={!l.product_id ? "opacity-60" : ""}>
+              <tr key={l.id} className={kind(l) === "unlinked" ? "bg-amber-50/60" : kind(l) === "service" ? "opacity-60" : ""} data-kind={kind(l)}>
                 <td className="px-4 py-3 font-medium text-gray-900">
                   {l.description}
-                  {!l.product_id && (
+                  {kind(l) === "service" && (
                     <span className="ml-2 text-xs text-gray-400 font-normal">(prestation — pas de stock)</span>
+                  )}
+                  {kind(l) === "unlinked" && (
+                    <div className="mt-1 font-normal">
+                      <span className="text-xs font-semibold text-amber-700">Non rattachée au catalogue</span>
+                      {canLink && (
+                        <select
+                          defaultValue=""
+                          disabled={linking === l.id}
+                          onChange={e => linkLine(l.id, e.target.value)}
+                          className="ml-2 max-w-xs rounded-lg border border-amber-300 bg-white px-2 py-1 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          data-testid="link-select"
+                        >
+                          <option value="">{linking === l.id ? "Rattachement…" : "Rattacher à la fiche…"}</option>
+                          {suggestProducts(l.description, products).length > 0 && (
+                            <optgroup label="Suggestions (à vérifier)">
+                              {suggestProducts(l.description, products).map(p => <option key={`s-${p.id}`} value={p.id}>{p.name}{p.reference ? ` — ${p.reference}` : ""}{p.product_type === "service" ? " (prestation)" : ""}</option>)}
+                            </optgroup>
+                          )}
+                          <optgroup label="Toutes les fiches actives">
+                            {products.map(p => <option key={p.id} value={p.id}>{p.name}{p.reference ? ` — ${p.reference}` : ""}{p.product_type === "service" ? " (prestation)" : ""}</option>)}
+                          </optgroup>
+                        </select>
+                      )}
+                    </div>
                   )}
                 </td>
                 <td className="px-4 py-3 text-right">
-                  {canConfirm && l.product_id ? (
+                  {canConfirm && kind(l) === "product" ? (
                     <input
                       type="number" min="0" step="any"
                       value={l.quantity}
@@ -326,7 +386,7 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
                   )}
                 </td>
                 <td className="px-4 py-3">
-                  {l.product_id ? (
+                  {kind(l) === "product" ? (
                     canConfirm ? (
                       <select
                         value={l.warehouse_id ?? ""}
@@ -371,16 +431,16 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
             <div>
               <p className="font-semibold mb-1">Sortie de stock définitive</p>
               <p>
-                {lines.filter(l => !isComment(l) && l.product_id).length} produit(s) seront retirés du stock.
+                {stockLines.length} produit(s) seront retirés du stock.
                 Cette action est irréversible.
               </p>
             </div>
           </div>
 
           {/* Récap par entrepôt */}
-          {lines.filter(l => !isComment(l) && l.product_id && l.warehouse_id).length > 0 && (
+          {stockLines.filter(l => l.warehouse_id).length > 0 && (
             <div className="space-y-1 text-sm">
-              {lines.filter(l => !isComment(l) && l.product_id).map(l => (
+              {stockLines.map(l => (
                 <div key={l.id} className="flex justify-between py-1 border-b border-gray-50 last:border-0">
                   <span className="text-gray-700">{l.description}</span>
                   <span className="text-gray-500 text-xs">{l.quantity} × {warehouseLabel(l.warehouse_id)}</span>

@@ -22,7 +22,7 @@ export default async function BonLivraisonPage({ params }: { params: Promise<{ l
       .single(),
     supabase
       .from("delivery_note_lines")
-      .select("id, product_id, description, quantity, warehouse_id, position, line_type, print_on_delivery")
+      .select("id, product_id, description, quantity, warehouse_id, position, line_type, print_on_delivery, product:products(name, product_type)")
       .eq("delivery_note_id", id)
       .order("position"),
     supabase
@@ -31,6 +31,10 @@ export default async function BonLivraisonPage({ params }: { params: Promise<{ l
       .eq("is_active", true)
       .order("name"),
   ])
+  // active catalogue sheets, to link a line that has none (regression 17/11/2026) — only useful on a draft
+  const { data: catalogue } = dn?.status === "draft"
+    ? await supabase.from("products").select("id, name, reference, product_type").eq("is_active", true).order("name")
+    : { data: [] }
 
   if (!dn) notFound()
 
@@ -72,7 +76,10 @@ export default async function BonLivraisonPage({ params }: { params: Promise<{ l
         position: l.position,
         line_type: l.line_type ?? "product",
         print_on_delivery: l.print_on_delivery ?? false,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        product_type: ((Array.isArray((l as any).product) ? (l as any).product[0] : (l as any).product) as { product_type?: string } | null)?.product_type ?? null,
       }))}
+      products={(catalogue ?? []) as { id: string; name: string; reference: string | null; product_type: string | null }[]}
       warehouses={(warehouses ?? []) as { id: string; name: string; city: string | null }[]}
       locale={locale}
       docSettings={docSettings ?? {}}

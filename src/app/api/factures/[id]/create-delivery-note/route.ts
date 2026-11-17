@@ -3,6 +3,7 @@ import { nextDeliveryNoteNumber } from "@/lib/numbering"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCompanySchema } from "@/lib/company"
 import { deliveryRowsWithComments } from "@/lib/catalog"
+import { applyValidatedLinks } from "@/lib/delivery-lines"
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -48,6 +49,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (linesError) {
       return NextResponse.json({ error: linesError.message }, { status: 400 })
     }
+    // an old free line of the invoice gets its catalogue sheet from a VALIDATED historical correspondence (never a
+    // proposed one); the others stay "not linked" and must be linked before the delivery note can be validated
+    await applyValidatedLinks(db, dn.id, "invoice_lines", id)
   }
 
   return NextResponse.json({ deliveryNoteId: dn.id })

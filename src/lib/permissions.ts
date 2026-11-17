@@ -86,6 +86,8 @@ export const API_RULES: ApiRule[] = [
   rule("invoices/bulk-payment", "*", "paiements_clients.enregistrer"),
   rule(`bons-livraison/${ID}/cancel`, "*", "livraisons.annuler"),
   rule(`bons-livraison/${ID}/confirm`, "*", "livraisons.confirmer"),
+  // link a draft delivery line to its catalogue sheet (regression 17/11/2026)
+  rule(`bons-livraison/${ID}/lines/${ID}/link`, ["POST"], "livraisons.creer", "livraisons.confirmer"),
   rule(`bons-livraison/${ID}/pdf`, ["GET"], "livraisons.voir"),
   rule("document-tokens", "*", "devis.voir", "factures.voir", "livraisons.voir"),
 

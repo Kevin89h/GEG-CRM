@@ -12,7 +12,10 @@ import { deliveryShortages, derogationReason } from "@/lib/catalog"
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const body = await req.json()
-  const { lines, userId } = body as {
+  let { lines } = body as {
+    lines: { id: string; product_id: string | null; quantity: number; warehouse_id: string | null }[]
+  }
+  const { userId } = body as {
     lines: { id: string; product_id: string | null; quantity: number; warehouse_id: string | null }[]
     userId: string
   }
@@ -25,6 +28,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { data: dn } = await db.from("delivery_notes").select("status, number").eq("id", id).single()
   if (!dn) return NextResponse.json({ error: "Bon de livraison introuvable" }, { status: 404 })
   if (dn.status !== "draft") return NextResponse.json({ error: "Ce bon de livraison n'est plus en brouillon" }, { status: 409 })
+
+  // Catalogue sheet of each line read from the DATABASE (never trusted from the browser). A line without a sheet is
+  // not a service: it must be linked first (regression 17/11/2026: a physical product left the stock untouched).
+  const { data: dbLines } = await db.from("delivery_note_lines").select("id, product_id, description, line_type").eq("delivery_note_id", id)
+  const dbById = new Map(((dbLines ?? []) as { id: string; product_id: string | null; description: string; line_type: string | null }[]).map(l => [l.id, l]))
+  lines = lines.filter(l => dbById.has(l.id) && dbById.get(l.id)!.line_type !== "comment").map(l => ({ ...l, product_id: dbById.get(l.id)!.product_id }))
+  const unlinked = lines.filter(l => !l.product_id && Number(l.quantity) > 0)
+  if (unlinked.length) {
+    return NextResponse.json({
+      error: `Ligne(s) non rattachée(s) au catalogue : ${unlinked.map(l => `« ${dbById.get(l.id)!.description} »`).join(", ")}. Rattachez chaque ligne à sa fiche (produit ou prestation) avant de valider.`,
+      unlinked: unlinked.map(l => ({ id: l.id, description: dbById.get(l.id)!.description })),
+    }, { status: 409 })
+  }
 
   // Stock check before any write
   const { shortages, stockLines } = await deliveryShortages(db, lines.map(l => ({ product_id: l.product_id, warehouse_id: l.warehouse_id, quantity: Number(l.quantity) })))

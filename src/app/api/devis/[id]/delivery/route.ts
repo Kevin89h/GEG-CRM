@@ -37,6 +37,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   lines = lines.filter(l => !commentIds.has(l.order_line_id))
   if (lines.length === 0) return NextResponse.json({ error: "Aucune ligne à livrer" }, { status: 400 })
 
+  // Catalogue sheet of each line read from the database (an old free line uses its VALIDATED historical
+  // correspondence). A line still without a sheet is NOT a service: it blocks the delivery (regression 17/11/2026).
+  const { data: srcLines } = await db.from("sales_order_lines").select("id, product_id, description").eq("order_id", id)
+  const srcById = new Map(((srcLines ?? []) as { id: string; product_id: string | null; description: string }[]).map(s => [s.id, s]))
+  const freeIds = [...srcById.values()].filter(s => !s.product_id).map(s => s.id)
+  const { data: validLinks } = freeIds.length
+    ? await db.from("historical_line_links").select("line_id, product_id").eq("line_table", "sales_order_lines").eq("status", "validated").in("line_id", freeIds)
+    : { data: [] }
+  const linked = new Map(((validLinks ?? []) as { line_id: string; product_id: string }[]).map(l => [l.line_id, l.product_id]))
+  lines = lines.map(l => { const s = srcById.get(l.order_line_id); return s ? { ...l, product_id: s.product_id ?? linked.get(s.id) ?? null } : l })
+  const unlinked = lines.filter(l => !l.product_id && Number(l.qty_to_deliver) > 0)
+  if (unlinked.length) {
+    return NextResponse.json({
+      error: `Ligne(s) non rattachée(s) au catalogue : ${unlinked.map(l => `« ${l.description} »`).join(", ")}. Rattachez chaque ligne à sa fiche (produit ou prestation) avant de livrer.`,
+      unlinked: unlinked.map(l => ({ order_line_id: l.order_line_id, description: l.description })),
+    }, { status: 409 })
+  }
+
   // R4: stock check BEFORE creating the delivery note; derogation only with "stock.livraison_hors_stock",
   // explicit confirmation and justification (audited). R5: services never move stock.
   const { shortages, stockLines } = await deliveryShortages(db, lines.map(l => ({ product_id: l.product_id, warehouse_id, quantity: Number(l.qty_to_deliver) })))
