@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Plus, TrendingUp, RefreshCw } from "lucide-react"
 import { formatDate } from "@/lib/utils"
 import { usePerms } from "@/components/PermissionsProvider"
-import { formatRate, ageInDays, rateOrigin, DOC_RATES_STALE_DAYS } from "@/lib/document-rates-shared"
+import { formatRate, ageInDays, rateOrigin, DOC_RATES_STALE_DAYS, docPairsFor } from "@/lib/document-rates-shared"
 
 interface Rate {
   id: string
@@ -18,27 +18,22 @@ interface Rate {
 
 interface Props {
   rates: Rate[]
+  /** active company: each one has its own pairs (D-10) */
+  schema?: string
 }
 
-const CURRENCIES = ["USD", "EUR", "GNF", "XOF"] as const
-type Currency = typeof CURRENCIES[number]
+type Currency = string
+const NAMES: Record<string, string> = { USD: "Dollar", EUR: "Euro", GNF: "Franc guinéen", XOF: "Franc CFA", SGD: "Dollar de Singapour" }
 
-const PAIRS: { from: Currency; to: Currency; label: string }[] = [
-  { from: "USD", to: "GNF", label: "Dollar → Franc guinéen" },
-  { from: "EUR", to: "GNF", label: "Euro → Franc guinéen" },
-  { from: "XOF", to: "GNF", label: "Franc CFA → Franc guinéen" },
-  { from: "EUR", to: "USD", label: "Euro → Dollar" },
-  { from: "USD", to: "EUR", label: "Dollar → Euro" },
-  { from: "XOF", to: "USD", label: "Franc CFA → Dollar" },
-  { from: "XOF", to: "EUR", label: "Franc CFA → Euro" },
-]
-
-export default function TauxDeChangeClient({ rates: initialRates }: Props) {
+export default function TauxDeChangeClient({ rates: initialRates, schema }: Props) {
+  // pairs and currencies of the active company (Guinée : GNF, USD, EUR, XOF — Singapour : EUR, USD)
+  const PAIRS = docPairsFor(schema).map(p => ({ ...p, label: `${NAMES[p.from] ?? p.from} → ${NAMES[p.to] ?? p.to}` }))
+  const CURRENCIES = [...new Set(PAIRS.flatMap(p => [p.from, p.to]))]
   const { can } = usePerms()
   // Display only (D2): refreshing and adding rates need "parametres.gerer"
   const canManage = can("parametres.gerer")
   const [rates, setRates] = useState(initialRates)
-  const [form, setForm] = useState({ from: "USD" as Currency, to: "GNF" as Currency, rate: "", notes: "", date: new Date().toISOString().slice(0, 10) })
+  const [form, setForm] = useState({ from: PAIRS[0]?.from ?? "USD", to: PAIRS[0]?.to ?? "EUR", rate: "", notes: "", date: new Date().toISOString().slice(0, 10) })
   const [saving, setSaving] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -111,7 +106,7 @@ export default function TauxDeChangeClient({ rates: initialRates }: Props) {
   return (
     <div className="max-w-3xl">
       <div className="flex items-center justify-between mb-6">
-        <p className="text-sm text-gray-500">Gérez les taux de change (USD, EUR, XOF ↔ GNF) pour les calculs de prix de revient</p>
+        <p className="text-sm text-gray-500">Gérez les taux de change de cette société ({CURRENCIES.join(", ")}) pour les achats et les paiements en devise</p>
         {canManage && (
           <button
             onClick={refreshRates}

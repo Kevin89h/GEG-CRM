@@ -18,7 +18,7 @@ type Db = { from: (t: string) => any } // eslint-disable-line @typescript-eslint
 export interface DocRateRow { from_currency: string; to_currency: string; rate: number; effective_date: string; notes: string }
 
 /** Fetches the provider (base USD) and derives the 7 reference pairs with full precision. Throws on any problem. */
-export async function fetchDocumentRates(note: string, today = new Date().toISOString().slice(0, 10)): Promise<DocRateRow[]> {
+export async function fetchDocumentRates(note: string, today = new Date().toISOString().slice(0, 10), pairs: ReadonlyArray<{ from: string; to: string }> = DOC_PAIRS): Promise<DocRateRow[]> {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), 8000)
   try {
@@ -30,7 +30,7 @@ export async function fetchDocumentRates(note: string, today = new Date().toISOS
     // sanity check: the CFA franc (XOF) is pegged to the euro at 655.957
     const xofPerEur = fromUsd("XOF") / fromUsd("EUR")
     if (!(Math.abs(xofPerEur - 655.957) / 655.957 <= 0.02)) throw new Error("Taux XOF incohérent : réponse rejetée")
-    return DOC_PAIRS.map(({ from, to }) => {
+    return pairs.map(({ from, to }) => {
       const f = fromUsd(from), t = fromUsd(to)
       if (!(f > 0) || !(t > 0)) throw new Error(`Taux manquant pour ${from} ou ${to}`)
       // D-06: XOF → EUR is the fixed parity, whatever the provider's cross rate (≈ 0.015 % away from it)
@@ -47,13 +47,13 @@ export async function fetchDocumentRates(note: string, today = new Date().toISOS
  * mode "auto": at most once a day (skipped when today's automatic set already exists).
  * mode "manual": always inserts a new set (the "Actualiser les taux" button).
  */
-export async function refreshDocumentRates(db: Db, mode: "auto" | "manual"): Promise<{ inserted: number; skipped: boolean; rows: DocRateRow[] }> {
+export async function refreshDocumentRates(db: Db, mode: "auto" | "manual", pairs: ReadonlyArray<{ from: string; to: string }> = DOC_PAIRS): Promise<{ inserted: number; skipped: boolean; rows: DocRateRow[] }> {
   const today = new Date().toISOString().slice(0, 10)
   if (mode === "auto") {
     const { data: existing } = await db.from("exchange_rates").select("id").eq("effective_date", today).eq("notes", AUTO_NOTE).limit(1)
     if (existing && existing.length) return { inserted: 0, skipped: true, rows: [] }
   }
-  const rows = await fetchDocumentRates(mode === "auto" ? AUTO_NOTE : MANUAL_NOTE, today)
+  const rows = await fetchDocumentRates(mode === "auto" ? AUTO_NOTE : MANUAL_NOTE, today, pairs)
   const { error } = await db.from("exchange_rates").insert(rows)
   if (error) throw new Error(error.message)
   return { inserted: rows.length, skipped: false, rows }

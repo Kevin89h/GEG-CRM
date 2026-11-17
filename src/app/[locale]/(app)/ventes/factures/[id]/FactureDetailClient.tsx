@@ -17,7 +17,7 @@ import ActivityLog from "@/components/ActivityLog"
 import ShareButton from "@/components/ShareButton"
 import { ProductPickerDialog, type CatalogProduct } from "@/components/sales/ProductPicker"
 import StockAlert from "@/components/sales/StockAlert"
-import { formatRate, ageInDays, rateOrigin, DOC_RATES_STALE_DAYS } from "@/lib/document-rates-shared"
+import { formatRate, ageInDays, rateOrigin, DOC_RATES_STALE_DAYS, rateToInput, roundAmount } from "@/lib/document-rates-shared"
 
 interface Line {
   id: string
@@ -117,6 +117,8 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
   // date and origin of the reference rate (D-08)
   const [rateInfo, setRateInfo] = useState<{ date: string; notes: string | null } | null>(null)
   const [loadingRate, setLoadingRate] = useState(false)
+  // D-11: rate actually applied (bank or contractual), pre-filled with the reference rate and editable
+  const [rateInput, setRateInput] = useState("")
   const [globalDiscount, setGlobalDiscount] = useState("")
   const [applyingDiscount, setApplyingDiscount] = useState(false)
   // Catalogue picker: "new" adds a line, a line id attaches that free line to a product (R1)
@@ -132,12 +134,12 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
   useEffect(() => {
     const payCurrency = paymentForm.currency
     const invCurrency = invoice.currency
-    if (payCurrency === invCurrency) { setExchangeRate(null); return }
+    if (payCurrency === invCurrency) { setExchangeRate(null); setRateInput(""); return }
     setLoadingRate(true)
     fetch(`/api/exchange-rates?from=${payCurrency}&to=${invCurrency}`)
       .then(r => r.json())
-      .then(json => { setExchangeRate(json.rate ?? null); setRateInfo(json.effective_date ? { date: json.effective_date, notes: json.notes ?? null } : null) })
-      .catch(() => { setExchangeRate(null); setRateInfo(null) })
+      .then(json => { setExchangeRate(json.rate ?? null); setRateInput(json.rate ? rateToInput(json.rate) : ""); setRateInfo(json.effective_date ? { date: json.effective_date, notes: json.notes ?? null } : null) })
+      .catch(() => { setExchangeRate(null); setRateInput(""); setRateInfo(null) })
       .finally(() => setLoadingRate(false))
   }, [paymentForm.currency, invoice.currency])
 
@@ -536,13 +538,16 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
     if (!amount || amount <= 0) { setError(t("invalidAmount")); return }
 
     const isCrossCurrency = paymentForm.currency !== invoice.currency
-    if (isCrossCurrency && !exchangeRate) {
-      setError("Taux de change introuvable pour cette paire de devises. Configurez-le dans Paramètres → Taux de change.")
+    // D-11: the rate entered (bank / contractual) wins over the reference rate; it is stored with the payment
+    const appliedRate = parseFloat(rateInput) > 0 ? parseFloat(rateInput) : exchangeRate
+    if (isCrossCurrency && !appliedRate) {
+      setError("Saisissez le taux de change appliqué (aucun taux de référence pour cette paire de devises).")
       return
     }
 
-    const amountInInvoiceCurrency = isCrossCurrency && exchangeRate
-      ? amount * exchangeRate
+    // amount credited on the invoice, rounded to the decimals of the invoice currency (the server recomputes it)
+    const amountInInvoiceCurrency = isCrossCurrency && appliedRate
+      ? roundAmount(amount * appliedRate, invoice.currency)
       : null
 
     setSaving(true)
@@ -558,7 +563,7 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
       body: JSON.stringify({
         amount,
         currency: paymentForm.currency,
-        exchange_rate: isCrossCurrency ? exchangeRate : null,
+        exchange_rate: isCrossCurrency ? appliedRate : null,
         amount_in_invoice_currency: amountInInvoiceCurrency,
         method: paymentForm.method,
         treasury_account_id: paymentForm.treasury_account_id || null,
@@ -1511,22 +1516,35 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
                   <div className="mt-2 text-xs rounded-lg px-3 py-2 bg-amber-50 border border-amber-200 text-amber-800">
                     {loadingRate ? (
                       "Récupération du taux de change…"
-                    ) : exchangeRate ? (
+                    ) : (
                       <>
-                        1 {paymentForm.currency} = {formatRate(exchangeRate)} {invoice.currency}
+                        <label className="flex items-center gap-2 font-medium">
+                          <span className="whitespace-nowrap">1 {paymentForm.currency} =</span>
+                          <input
+                            type="number" min="0" step="any" value={rateInput}
+                            onChange={e => setRateInput(e.target.value)}
+                            placeholder="taux appliqué"
+                            className="w-36 rounded border border-amber-300 bg-white px-2 py-1 text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            data-testid="rate-input"
+                          />
+                          <span>{invoice.currency}</span>
+                        </label>
+                        {exchangeRate && parseFloat(rateInput) > 0 && Math.abs(parseFloat(rateInput) - exchangeRate) / exchangeRate > 1e-9 && (
+                          <span className="block text-[11px] text-amber-800">Taux modifié (taux de référence : {formatRate(exchangeRate)}).</span>
+                        )}
+                        {!exchangeRate && <span className="block text-[11px] text-red-700">Aucun taux de référence pour cette paire : saisissez le taux appliqué.</span>}
                         {rateInfo && (
                           <span className="block text-[11px] text-amber-700/80" data-testid="ref-rate">
                             {ageInDays(rateInfo.date) > DOC_RATES_STALE_DAYS ? "⚠ Taux ancien — " : ""}Taux de référence du {new Date(rateInfo.date + "T00:00:00Z").toLocaleDateString("fr-FR", { timeZone: "UTC" })} ({rateOrigin(rateInfo.notes)})
                           </span>
                         )}
-                        {paymentForm.amount && !isNaN(parseFloat(paymentForm.amount)) && (
-                          <span className="font-semibold ml-2">
-                            → {formatCurrency(parseFloat(paymentForm.amount) * exchangeRate, invoice.currency as "USD" | "GNF" | "EUR")} crédités sur solde facture
+                        {paymentForm.amount && !isNaN(parseFloat(paymentForm.amount)) && parseFloat(rateInput) > 0 && (
+                          <span className="block font-semibold mt-1">
+                            → {formatCurrency(roundAmount(parseFloat(paymentForm.amount) * parseFloat(rateInput), invoice.currency), invoice.currency as "USD" | "GNF" | "EUR")} crédités sur le solde de la facture
                           </span>
                         )}
+                        <span className="block text-[11px] text-amber-700/80 mt-1">Saisissez le taux réellement appliqué par la banque ou prévu au contrat. Les frais bancaires ne s&apos;incluent pas dans le taux : enregistrez-les à part (mouvement de trésorerie).</span>
                       </>
-                    ) : (
-                      <span className="text-red-700">Taux introuvable — configurez-le dans Paramètres → Taux de change</span>
                     )}
                   </div>
                 )}

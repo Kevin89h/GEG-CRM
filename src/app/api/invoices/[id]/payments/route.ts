@@ -3,6 +3,7 @@ import { createSchemaClient } from "@/lib/supabase/admin"
 import { getSchemaFromRequest } from "@/lib/company"
 import { logActivity } from "@/lib/activity-logger"
 import { NextRequest, NextResponse } from "next/server"
+import { roundAmount } from "@/lib/document-rates-shared"
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -20,14 +21,24 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const schema = await getSchemaFromRequest(req)
     const db = createSchemaClient(schema)
 
+    // D-11: a payment in another currency stores the rate ACTUALLY applied (reference rate or the bank / contractual
+    // rate entered) and the amount credited on the invoice is recomputed here from that rate, rounded to the invoice
+    // currency. Existing payments are never recalculated. Bank fees are not part of the rate (recorded separately).
+    const { data: inv } = await db.from("invoices").select("currency").eq("id", id).single()
+    const invoiceCurrency = inv?.currency ?? currency
+    const cross = !!currency && currency !== invoiceCurrency
+    const rate = cross ? Number(exchange_rate) : null
+    if (cross && !(rate! > 0)) return NextResponse.json({ error: "Taux de change requis pour un paiement dans une autre devise" }, { status: 400 })
+    const credited = cross ? roundAmount(Number(amount) * rate!, invoiceCurrency) : (amount_in_invoice_currency ?? null)
+
     const { data: payment, error: payErr } = await db
       .from("payments")
       .insert([{
         invoice_id: id,
         amount,
         currency,
-        exchange_rate: exchange_rate ?? null,
-        amount_in_invoice_currency: amount_in_invoice_currency ?? null,
+        exchange_rate: cross ? rate : (exchange_rate ?? null),
+        amount_in_invoice_currency: credited,
         method,
         treasury_account_id: treasury_account_id || null,
         reference: reference || null,
@@ -77,7 +88,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       const ht = Number(l.quantity) * Number(l.unit_price) * (1 - Number(l.discount ?? 0) / 100)
       return s + ht * (1 + Number(l.tva_rate ?? 0) / 100)
     }, 0)
-    const newStatus = totalPaid >= totalTTC ? "paid" : totalPaid > 0 ? "partial" : "sent"
+    const newStatus = totalPaid >= totalTTC - 0.005 ? "paid" : totalPaid > 0 ? "partial" : "sent"
     await db.from("invoices").update({ status: newStatus }).eq("id", id)
 
     logActivity({ action: "payment", resource: "invoice", resourceId: id, label: `Paiement de ${amount} ${currency ?? ""} enregistré sur facture`, details: { amount, currency, method } })

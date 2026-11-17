@@ -22,6 +22,22 @@ export const DOC_PAIRS: ReadonlyArray<{ from: string; to: string }> = [
   { from: "XOF", to: "EUR" },
 ]
 
+/**
+ * Pairs refreshed for each company (D-10, GEG 17/11/2026), from the currencies each one really uses:
+ * GEG Guinée: GNF, USD, EUR, XOF — GEG Singapour: EUR (invoices, treasury) and USD (deals). Each company keeps its
+ * own rates in its own schema; nothing is shared between them.
+ */
+export const DOC_PAIRS_BY_SCHEMA: Readonly<Record<string, ReadonlyArray<{ from: string; to: string }>>> = {
+  geg_guinee: DOC_PAIRS,
+  geg_singapore: [
+    { from: "USD", to: "EUR" },
+    { from: "EUR", to: "USD" },
+  ],
+}
+export function docPairsFor(schema: string | null | undefined): ReadonlyArray<{ from: string; to: string }> {
+  return DOC_PAIRS_BY_SCHEMA[schema ?? ""] ?? DOC_PAIRS
+}
+
 /** Reference rates older than this are flagged with a visible alert */
 export const DOC_RATES_STALE_DAYS = 2
 
@@ -74,7 +90,9 @@ export function supplierSettlement(totalTtc: number, payments: PaymentLike[], in
     } else totalPaid += amt
   }
   const balance = Number(totalTtc) - totalPaid
-  const status = balance <= tolerance + 1e-9 ? "paid" : totalPaid > 0 ? "partial" : "pending"
+  // same thresholds as the database (supplier_invoice_totals, delete_payment_safe — D-09 / D-12): 0.005 for a
+  // same-currency payment, widened only by the rounding of a foreign-currency one
+  const status = balance <= Math.max(tolerance, 0.005) + 1e-9 ? "paid" : totalPaid > 0 ? "partial" : "pending"
   return { totalPaid, balance: status === "paid" && balance > 0 ? 0 : balance, status }
 }
 
