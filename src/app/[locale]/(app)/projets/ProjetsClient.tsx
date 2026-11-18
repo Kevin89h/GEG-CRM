@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useParams } from "next/navigation"
 import { TrendingUp, ShoppingBag, ArrowUpRight, Layers, ChevronRight, BarChart3, RefreshCw } from "lucide-react"
 import { formatCurrency } from "@/lib/utils"
+import QuoteStatusBadge from "@/components/QuoteStatusBadge"
 
 interface SalesOrder {
   id: string
@@ -265,9 +266,7 @@ export default function ProjetsClient() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-mono font-semibold text-gray-700">{so.number}</span>
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[so.status] ?? "bg-gray-100 text-gray-600"}`}>
-                            {STATUS_LABELS[so.status] ?? so.status}
-                          </span>
+                          <QuoteStatusBadge status={so.status} />
                         </div>
                         <p className="text-xs text-gray-500 mt-0.5 truncate">
                           {so.account?.name ?? "—"}{so.salesperson ? ` · ${so.salesperson.full_name}` : ""}

@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Printer, Check, X, ChevronDown } from "lucide-react"
+import { ArrowLeft, Check, X, ChevronDown } from "lucide-react"
 import Link from "next/link"
 import { useTranslations } from "next-intl"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
@@ -372,7 +372,7 @@ export default function NouveauDevisClient({
           tva_exempt: l.tva_exempt,
           unit_id: l.unit_id || null,
         }),
-        user_id: user.id,
+        // the author is set by the server from the signed-in user (OBS-003)
       }),
     })
     const json = await res.json()
@@ -403,18 +403,16 @@ export default function NouveauDevisClient({
           className="flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-40 transition-colors"
         >
           <Check className="w-4 h-4" />
-          {saving ? t("enregistrement") : t("confirmer")}
-        </button>
-        <button className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">
-          <Printer className="w-4 h-4" /> {t("imprimer")}
+          {/* OBS-003 / S1-06: this button saves the quote as a DRAFT (it does not confirm it) */}
+          {saving ? t("enregistrement") : t("enregistrerBrouillon")}
         </button>
         <button onClick={() => router.back()} className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">
           {t("annuler")}
         </button>
 
-        {/* Stepper status */}
-        <div className="ml-auto flex items-center gap-0">
-          {([t("statusDevis"), t("statusEnvoye"), t("statusBonDeCommande")] as const).map((s, i) => (
+        {/* Stepper: real steps of a quote (OBS-003); a new quote is a draft */}
+        <div className="ml-auto flex items-center gap-0" data-testid="new-quote-steps">
+          {([t("statusDevis"), t("statusBonDeCommande"), t("statusFacture")] as const).map((s, i) => (
             <div key={s} className={`flex items-center ${i > 0 ? "-ml-2" : ""}`}>
               <div className={`px-4 py-1.5 text-xs font-semibold rounded-full border-2 ${
                 i === 0

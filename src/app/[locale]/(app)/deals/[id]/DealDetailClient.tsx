@@ -12,6 +12,7 @@ import { formatCurrency } from "@/lib/utils"
 import type { DealStage } from "@/types"
 import DealFinancialsPanel from "@/components/DealFinancialsPanel"
 import { usePerms } from "@/components/PermissionsProvider"
+import QuoteStatusBadge from "@/components/QuoteStatusBadge"
 
 interface Activity {
   id: string
@@ -922,14 +923,7 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
                     </div>
                     <div className="text-right flex-shrink-0">
                       <p className="text-xs text-gray-400">{new Date(d.created_at).toLocaleDateString("fr-FR")}</p>
-                      <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-                        d.status === "confirmed" ? "bg-green-50 text-green-600" :
-                        d.status === "draft" ? "bg-gray-100 text-gray-500" :
-                        d.status === "invoiced" ? "bg-blue-50 text-blue-600" :
-                        "bg-red-50 text-red-500"
-                      }`}>
-                        {d.status === "draft" ? "Brouillon" : d.status === "confirmed" ? "Confirmé" : d.status === "invoiced" ? "Facturé" : "Annulé"}
-                      </span>
+                      <QuoteStatusBadge status={d.status} />
                     </div>
                     {canLinkDevis && (
                     <button
@@ -1087,13 +1081,7 @@ export default function DealDetailClient({ deal: initial, activities: initialAct
                   </div>
                   <div className="text-right flex-shrink-0">
                     <p className="text-xs text-gray-400">{new Date(d.created_at).toLocaleDateString("fr-FR")}</p>
-                    <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-                      d.status === "confirmed" ? "bg-green-50 text-green-600" :
-                      d.status === "draft" ? "bg-gray-100 text-gray-500" :
-                      "bg-blue-50 text-blue-600"
-                    }`}>
-                      {d.status === "draft" ? "Brouillon" : d.status === "confirmed" ? "Confirmé" : "Facturé"}
-                    </span>
+                    <QuoteStatusBadge status={d.status} />
                   </div>
                 </button>
               ))}

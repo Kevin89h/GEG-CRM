@@ -13,6 +13,7 @@ import CurrencyAmounts, { type FxInfo } from "@/components/finance/CurrencyAmoun
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import Link from "next/link"
 import { usePerms } from "@/components/PermissionsProvider"
+import QuoteStatusBadge from "@/components/QuoteStatusBadge"
 
 interface SalesOrder {
   id: string
@@ -75,12 +76,6 @@ interface Props {
 type Period = "30" | "90" | "365" | "all" | "custom"
 type Tab = "historique" | "factures" | "devis"
 
-const orderStatusColor: Record<string, "gray" | "blue" | "yellow" | "green" | "red"> = {
-  draft: "gray", confirmed: "blue", invoiced: "yellow", cancelled: "red",
-}
-const orderStatusLabel: Record<string, string> = {
-  draft: "Brouillon", confirmed: "Confirmé", invoiced: "Facturé", cancelled: "Annulé",
-}
 const invoiceStatusColor: Record<string, "gray" | "blue" | "yellow" | "green" | "red"> = {
   draft: "gray", sent: "blue", partial: "yellow", paid: "green", cancelled: "red",
 }
@@ -647,10 +642,10 @@ export default function AccountDetailClient({ account, orders, invoices, payment
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-semibold text-gray-900 font-mono">{ord.number || "—"}</span>
-                        <Badge variant={orderStatusColor[ord.status] ?? "gray"}>{orderStatusLabel[ord.status] ?? ord.status}</Badge>
+                        <QuoteStatusBadge status={ord.status} />
                       </div>
                       <p className="text-xs text-gray-400 mt-0.5">
-                        {ord.status === "confirmed" ? "Bon de commande" : "Devis"} · {formatDate(ord.created_at, "fr")}
+                        Devis · {formatDate(ord.created_at, "fr")}
                         {ord.salesperson && ` · ${ord.salesperson.full_name}`}
                       </p>
                     </div>
@@ -756,7 +751,7 @@ export default function AccountDetailClient({ account, orders, invoices, payment
                     <td className="px-4 py-3 font-mono font-medium text-gray-900">{o.number || "—"}</td>
                     <td className="px-4 py-3 text-gray-600">{formatDate(o.created_at, "fr")}</td>
                     <td className="px-4 py-3">
-                      <Badge variant={orderStatusColor[o.status] ?? "gray"}>{orderStatusLabel[o.status] ?? o.status}</Badge>
+                      <QuoteStatusBadge status={o.status} />
                     </td>
                     <td className="px-4 py-3 text-gray-600">{o.salesperson?.full_name ?? "—"}</td>
                     <td className="px-4 py-3 text-right font-semibold text-gray-900">{formatCurrency(o.total, o.currency as "GNF" | "USD" | "EUR")}</td>

@@ -4,6 +4,7 @@ import { Plus, FileText, Receipt, TrendingUp, Clock } from "lucide-react"
 import { formatNumber } from "@/lib/utils"
 import { getMarketRates, sumByCurrency } from "@/lib/fx"
 import CurrencyAmounts from "@/components/finance/CurrencyAmounts"
+import QuoteStatusBadge from "@/components/QuoteStatusBadge"
 
 export default async function VentesPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params
@@ -107,9 +108,7 @@ export default async function VentesPage({ params }: { params: Promise<{ locale:
                   <p className="text-sm font-medium text-gray-900">{o.number as string}</p>
                   <p className="text-xs text-gray-500">{(o.account as { name: string } | null)?.name ?? "—"}</p>
                 </div>
-                <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColor[o.status as string] ?? ""}`}>
-                  {statusLabel[o.status as string]}
-                </span>
+                <QuoteStatusBadge status={o.status as string} size="md" />
               </Link>
             ))}
           </div>

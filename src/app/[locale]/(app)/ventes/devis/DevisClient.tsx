@@ -11,6 +11,8 @@ import {
 import { formatCurrency, formatDate } from "@/lib/utils"
 import { exportToXls } from "@/lib/exportXls"
 import { usePerms } from "@/components/PermissionsProvider"
+import QuoteStatusBadge from "@/components/QuoteStatusBadge"
+import { QUOTE_STATUS_KEY, isQuoteStatus } from "@/lib/quote-status"
 
 interface Order {
   id: string
@@ -40,12 +42,8 @@ export default function DevisClient({ orders, schema }: Props) {
   // Selection only serves the bulk cancel: shown with "devis.annuler" (D2)
   const canBulkCancel = can("devis.annuler")
 
-  const STATUS_CONFIG: Record<string, { label: string; bg: string; text: string; dot: string }> = {
-    draft:     { label: t("statusDraft"),     bg: "bg-gray-50",    text: "text-gray-600",    dot: "bg-gray-400" },
-    confirmed: { label: t("statusConfirmed"), bg: "bg-green-50",   text: "text-green-700",   dot: "bg-green-500" },
-    invoiced:  { label: t("statusInvoiced"),  bg: "bg-purple-50",  text: "text-purple-700",  dot: "bg-purple-500" },
-    cancelled: { label: t("statusCancelled"), bg: "bg-red-50",     text: "text-red-700",     dot: "bg-red-400" },
-  }
+  // Status label shown in the list, the filters and the export (OBS-003): Brouillon, Confirmé, Facturé, Annulé
+  const statusLabel = (status: string) => (isQuoteStatus(status) ? t(QUOTE_STATUS_KEY[status]) : status)
 
   const [tab, setTab] = useState<Tab>("all")
   const [search, setSearch] = useState("")
@@ -158,7 +156,7 @@ export default function DevisClient({ orders, schema }: Props) {
             "Numéro": o.number,
             "Client": o.client_name,
             "Commercial": o.salesperson_name,
-            "Statut": o.status,
+            "Statut": statusLabel(o.status),
             "Date": o.created_at?.slice(0, 10) ?? "",
             "Total HT": o.total_ht,
             "Devise": o.currency,
@@ -271,7 +269,6 @@ export default function DevisClient({ orders, schema }: Props) {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {paged.map(o => {
-                  const cfg = STATUS_CONFIG[o.status] ?? STATUS_CONFIG.draft
                   return (
                     <tr key={o.id} className="hover:bg-blue-50/20 transition-colors">
                       {canBulkCancel && (
@@ -302,10 +299,7 @@ export default function DevisClient({ orders, schema }: Props) {
                         {formatCurrency(o.total_ht, o.currency as "GNF" | "USD" | "EUR")}
                       </td>
                       <td className="px-4 py-3">
-                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${cfg.bg} ${cfg.text}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
-                          {cfg.label}
-                        </span>
+                        <QuoteStatusBadge status={o.status} />
                       </td>
                     </tr>
                   )

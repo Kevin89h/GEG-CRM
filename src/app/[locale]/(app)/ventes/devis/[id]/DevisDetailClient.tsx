@@ -16,6 +16,7 @@ import { PROJECT_OPTIONS } from "@/lib/projects"
 import { usePerms } from "@/components/PermissionsProvider"
 import { ProductPickerDialog, type CatalogProduct } from "@/components/sales/ProductPicker"
 import StockAlert, { type Availability } from "@/components/sales/StockAlert"
+import QuoteStatusBadge from "@/components/QuoteStatusBadge"
 
 interface Line {
   id: string
@@ -71,10 +72,11 @@ interface ProductOption {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 interface Props { order: Order; locale: string; docSettings?: Record<string, any>; stockByProduct: Record<string, number>; firstWarehouse: { id: string; name: string } | null; invoiceCount?: number; firstInvoiceId?: string | null; deliveryCount?: number; allProducts?: ProductOption[] }
 
+// Real steps of a quote (OBS-003): Brouillon → Confirmé → Facturé; a cancelled quote has no step (badge only)
 function getStepIndex(status: string) {
   if (status === "draft") return 0
-  if (status === "confirmed") return 2
-  if (status === "invoiced") return 3
+  if (status === "confirmed") return 1
+  if (status === "invoiced") return 2
   return -1 // cancelled
 }
 
@@ -214,7 +216,6 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
   const STEPS = [
     { key: "draft", label: t("stepDraft") },
     { key: "confirmed", label: t("stepConfirmed") },
-    { key: "invoiced_pending", label: t("stepToInvoice") },
     { key: "invoiced", label: t("stepInvoiced") },
   ]
 
@@ -485,9 +486,8 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
         <div>
           <div className="flex items-center gap-3 mb-1">
             <h1 className="text-2xl font-bold text-gray-900 font-mono">{order.number}</h1>
-            {isCancelled && (
-              <span className="text-xs px-2.5 py-1 rounded-full font-medium bg-red-100 text-red-600">{t("statusCancelled")}</span>
-            )}
+            {/* Real status of the quote, always visible next to its number (OBS-003) */}
+            <QuoteStatusBadge status={order.status} size="md" />
           </div>
           <p className="text-gray-500 text-sm">{t("createdOn")} {formatDate(order.created_at, locale)}</p>
           {isCancelled && (
@@ -587,7 +587,7 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
               const isActive = i === stepIndex
               const isDone = i < stepIndex
               return (
-                <div key={step.key} className="flex items-center flex-1 last:flex-none">
+                <div key={step.key} className="flex items-center flex-1 last:flex-none" data-testid="quote-step" data-step={step.key} data-state={isActive ? "active" : isDone ? "done" : "todo"}>
                   <div className={`flex items-center gap-2 text-sm font-medium transition-colors ${
                     isActive ? "text-blue-600" : isDone ? "text-gray-700" : "text-gray-400"
                   }`}>

@@ -2,7 +2,7 @@ import { invalidSalesLines, lineKind } from "@/lib/catalog"
 import { NextRequest, NextResponse } from "next/server"
 import { createCompanyClient } from "@/lib/company"
 import { logActivity } from "@/lib/activity-logger"
-import { errorResponse } from "@/lib/access"
+import { errorResponse, requireUser } from "@/lib/access"
 
 interface DevisLine {
   product_id: string | null
@@ -18,11 +18,12 @@ interface DevisLine {
 export async function POST(req: NextRequest)  {
   try {
     const body = await req.json()
-    const { order: orderData, lines, user_id } = body as {
+    const { order: orderData, lines } = body as {
       order: Record<string, unknown>
       lines: DevisLine[]
-      user_id: string
     }
+    // OBS-003: the author is the signed-in user, read on the server; any user_id sent by the browser is ignored
+    const { userId: user_id } = await requireUser()
 
     const { db, schema } = await createCompanyClient()
     // R1 / R2: every line is an active product or service of the catalogue
@@ -46,10 +47,14 @@ export async function POST(req: NextRequest)  {
     const seq = String(maxSeq + 1).padStart(4, "0")
     const number = `${prefix}${seq}`
 
+    // status / number / author can never come from the browser: a new quote is always a draft
+    const { status: _s, number: _n, user_id: _u, id: _i, ...safeOrder } = (orderData ?? {}) as Record<string, unknown>
+    void _s; void _n; void _u; void _i
     const { data: order, error: orderErr } = await db.from("sales_orders").insert([{
-      ...orderData,
+      ...safeOrder,
       number,
       user_id,
+      status: "draft",
     }]).select("id").single()
 
     if (orderErr || !order) return NextResponse.json({ error: orderErr?.message ?? "Erreur création devis" }, { status: 400 })
