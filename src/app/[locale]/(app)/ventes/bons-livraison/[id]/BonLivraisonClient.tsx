@@ -2,13 +2,14 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Printer, Download, Share2, CheckCircle, Truck, X } from "lucide-react"
+import { ArrowLeft, Printer, Download, Share2, CheckCircle, Truck, X, AlertTriangle } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/Button"
 import { Select } from "@/components/ui/Select"
 import { Modal } from "@/components/ui/Modal"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { formatDate } from "@/lib/utils"
+import { deliveryLineKind, suggestProducts, type Shortage } from "@/lib/delivery-rules"
 
 
 interface DNLine {
@@ -18,7 +19,11 @@ interface DNLine {
   quantity: number
   warehouse_id: string | null
   position: number
+  /** type of the linked catalogue sheet: "service" lines never move stock */
+  product_type?: string | null
 }
+
+interface CatalogueProduct { id: string; name: string; reference: string | null; product_type: string | null }
 
 interface DN {
   id: string
@@ -34,7 +39,7 @@ interface DN {
 interface Warehouse { id: string; name: string; city: string | null }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-interface Props { dn: DN; lines: DNLine[]; warehouses: Warehouse[]; locale: string; docSettings?: Record<string, any> }
+interface Props { dn: DN; lines: DNLine[]; warehouses: Warehouse[]; locale: string; docSettings?: Record<string, any>; products?: CatalogueProduct[] }
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   draft:     { label: "En cours", color: "bg-amber-100 text-amber-700" },
@@ -42,7 +47,7 @@ const statusConfig: Record<string, { label: string; color: string }> = {
   cancelled: { label: "Annulé",   color: "bg-red-100 text-red-600" },
 }
 
-export default function BonLivraisonClient({ dn, lines: initialLines, warehouses, locale, docSettings = {} }: Props) {
+export default function BonLivraisonClient({ dn, lines: initialLines, warehouses, locale, docSettings = {}, products = [] }: Props) {
   const router = useRouter()
   const firstWarehouseId = warehouses[0]?.id ?? ""
   const [lines, setLines] = useState(() =>
@@ -54,14 +59,38 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
   const [defaultWarehouse, setDefaultWarehouse] = useState(firstWarehouseId)
 
   const isDraft = dn.status === "draft"
+  // Targeted fix R4 + ANO-001: a line without a catalogue sheet is NOT a service; it must be linked before delivery
+  const kind = (l: DNLine) => deliveryLineKind(l)
+  const unlinkedLines = lines.filter(l => kind(l) === "unlinked" && Number(l.quantity) > 0)
+  const stockLines = lines.filter(l => kind(l) === "product")
+  const [linking, setLinking] = useState<string | null>(null)
+  const [linkInfo, setLinkInfo] = useState<string | null>(null)
+  const [shortages, setShortages] = useState<Shortage[] | null>(null)
+  const [canOverride, setCanOverride] = useState(false)
+  const [derogationReason, setDerogationReason] = useState("")
+  const [derogationConfirmed, setDerogationConfirmed] = useState(false)
+
+  async function linkLine(lineId: string, productId: string) {
+    if (!productId) return
+    setLinking(lineId); setError(null); setLinkInfo(null)
+    const res = await fetch(`/api/bons-livraison/${dn.id}/lines/${lineId}/link`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ product_id: productId }) })
+    const json = await res.json().catch(() => ({}))
+    setLinking(null)
+    if (!res.ok) { setError(json.error ?? "Rattachement impossible"); return }
+    setLines(prev => prev.map(l => l.id === lineId ? { ...l, product_id: productId, product_type: json.product?.product_type ?? null } : l))
+    setShortages(null)
+    setLinkInfo(`« ${json.product?.name} » rattachée à la ligne.`)
+  }
 
   function setLineWarehouse(lineId: string, warehouseId: string) {
     setLines(prev => prev.map(l => l.id === lineId ? { ...l, warehouse_id: warehouseId } : l))
+    setShortages(null)
   }
 
   function setLineQuantity(lineId: string, value: string) {
     const qty = parseFloat(value) || 0
     setLines(prev => prev.map(l => l.id === lineId ? { ...l, quantity: qty } : l))
+    setShortages(null)
   }
 
   // Appliquer l'entrepôt par défaut à toutes les lignes sans entrepôt
@@ -70,8 +99,11 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
     setLines(prev => prev.map(l => ({ ...l, warehouse_id: l.warehouse_id || wid })))
   }
 
-  async function confirmDelivery() {
-    const stockLines = lines.filter(l => l.product_id)
+  async function confirmDelivery(withDerogation = false) {
+    if (unlinkedLines.length) {
+      setError("Rattachez d'abord chaque ligne à sa fiche du catalogue.")
+      return
+    }
     if (stockLines.some(l => !l.warehouse_id)) {
       setError("Assigne un entrepôt à chaque produit avant de confirmer.")
       return
@@ -86,14 +118,17 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
     const res = await fetch(`/api/bons-livraison/${dn.id}/confirm`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lines, userId: user.id }),
+      body: JSON.stringify({ lines, userId: user.id, ...(withDerogation ? { derogation: { reason: derogationReason, confirmed: derogationConfirmed } } : {}) }),
     })
-    const json = await res.json()
+    const json = await res.json().catch(() => ({}))
     if (!res.ok) {
+      // R4: stock shortage — detailed panel, derogation only for an administrator (decided by the server)
+      if (Array.isArray(json.shortages) && json.shortages.length) { setShortages(json.shortages); setCanOverride(!!json.canOverride) }
       setError(json.error ?? "Erreur lors de la confirmation")
       setSaving(false)
       return
     }
+    setShortages(null)
 
     setConfirmOpen(false)
     setSaving(false)
@@ -179,7 +214,7 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
               <Button variant="secondary" onClick={cancel} className="text-red-500 border-red-200 hover:bg-red-50">
                 <X className="w-4 h-4" /> Annuler
               </Button>
-              <Button onClick={() => setConfirmOpen(true)}>
+              <Button onClick={() => setConfirmOpen(true)} disabled={unlinkedLines.length > 0} title={unlinkedLines.length ? "Rattachez d'abord les lignes au catalogue" : undefined}>
                 <Truck className="w-4 h-4" /> Confirmer la livraison
               </Button>
             </>
@@ -211,6 +246,15 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
         </div>
       )}
 
+      {isDraft && unlinkedLines.length > 0 && (
+        <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800" data-testid="unlinked-warning">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <p><strong>{unlinkedLines.length} ligne{unlinkedLines.length > 1 ? "s" : ""} non rattachée{unlinkedLines.length > 1 ? "s" : ""} au catalogue.</strong> Une ligne sans fiche n&apos;est pas une prestation : rattachez-la à sa fiche (produit ou prestation) pour que le stock soit contrôlé et sorti normalement. La livraison ne peut pas être confirmée avant.</p>
+        </div>
+      )}
+      {linkInfo && <p className="mb-4 text-sm text-emerald-700">{linkInfo}</p>}
+      {error && !confirmOpen && <p className="mb-4 text-sm text-red-600">{error}</p>}
+
       {/* Lignes */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden mb-6">
         <table className="w-full text-sm">
@@ -223,15 +267,34 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
           </thead>
           <tbody className="divide-y divide-gray-50">
             {lines.map(l => (
-              <tr key={l.id} className={!l.product_id ? "opacity-60" : ""}>
+              <tr key={l.id} className={kind(l) === "unlinked" ? "bg-amber-50/60" : kind(l) === "service" ? "opacity-60" : ""} data-kind={kind(l)}>
                 <td className="px-4 py-3 font-medium text-gray-900">
                   {l.description}
-                  {!l.product_id && (
+                  {kind(l) === "service" && (
                     <span className="ml-2 text-xs text-gray-400 font-normal">(prestation — pas de stock)</span>
+                  )}
+                  {kind(l) === "unlinked" && (
+                    <div className="mt-1 font-normal">
+                      <span className="text-xs font-semibold text-amber-700">Non rattachée au catalogue</span>
+                      {isDraft && (
+                        <select defaultValue="" disabled={linking === l.id} onChange={e => linkLine(l.id, e.target.value)} data-testid="link-select"
+                          className="ml-2 max-w-xs rounded-lg border border-amber-300 bg-white px-2 py-1 text-xs text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                          <option value="">{linking === l.id ? "Rattachement…" : "Rattacher à la fiche…"}</option>
+                          {suggestProducts(l.description, products).length > 0 && (
+                            <optgroup label="Suggestions (à vérifier)">
+                              {suggestProducts(l.description, products).map(p => <option key={`s-${p.id}`} value={p.id}>{p.name}{p.reference ? ` — ${p.reference}` : ""}{p.product_type === "service" ? " (prestation)" : ""}</option>)}
+                            </optgroup>
+                          )}
+                          <optgroup label="Toutes les fiches actives">
+                            {products.map(p => <option key={p.id} value={p.id}>{p.name}{p.reference ? ` — ${p.reference}` : ""}{p.product_type === "service" ? " (prestation)" : ""}</option>)}
+                          </optgroup>
+                        </select>
+                      )}
+                    </div>
                   )}
                 </td>
                 <td className="px-4 py-3 text-right">
-                  {isDraft && l.product_id ? (
+                  {isDraft && kind(l) === "product" ? (
                     <input
                       type="number" min="0" step="any"
                       value={l.quantity}
@@ -243,7 +306,7 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
                   )}
                 </td>
                 <td className="px-4 py-3">
-                  {l.product_id ? (
+                  {kind(l) === "product" ? (
                     isDraft ? (
                       <select
                         value={l.warehouse_id ?? ""}
@@ -288,16 +351,16 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
             <div>
               <p className="font-semibold mb-1">Sortie de stock définitive</p>
               <p>
-                {lines.filter(l => l.product_id).length} produit(s) seront retirés du stock.
+                {stockLines.length} produit(s) seront retirés du stock.
                 Cette action est irréversible.
               </p>
             </div>
           </div>
 
           {/* Récap par entrepôt */}
-          {lines.filter(l => l.product_id && l.warehouse_id).length > 0 && (
+          {stockLines.filter(l => l.warehouse_id).length > 0 && (
             <div className="space-y-1 text-sm">
-              {lines.filter(l => l.product_id).map(l => (
+              {stockLines.map(l => (
                 <div key={l.id} className="flex justify-between py-1 border-b border-gray-50 last:border-0">
                   <span className="text-gray-700">{l.description}</span>
                   <span className="text-gray-500 text-xs">{l.quantity} × {warehouseLabel(l.warehouse_id)}</span>
@@ -308,9 +371,24 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
 
           {error && <p className="text-sm text-red-600">{error}</p>}
 
+          {shortages && shortages.length > 0 && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800" data-testid="shortages">
+              <p className="font-semibold mb-1">Stock insuffisant</p>
+              {shortages.map(s => <p key={`${s.product_id}-${s.warehouse_id}`}>{s.product} — {s.warehouse} : {s.requested} demandé(s), {s.available} disponible(s), manque {s.missing}</p>)}
+              {canOverride && (
+                <div className="mt-3 space-y-2 border-t border-red-200 pt-3">
+                  <p className="text-xs">Dérogation réservée aux administrateurs : le stock deviendra négatif, la justification sera enregistrée sur le bon et sur les mouvements de stock.</p>
+                  <textarea value={derogationReason} onChange={e => setDerogationReason(e.target.value)} rows={2} placeholder="Justification (10 caractères minimum)" className="w-full rounded-lg border border-red-200 bg-white px-2 py-1 text-sm text-gray-900" />
+                  <label className="flex items-center gap-2 text-xs"><input type="checkbox" checked={derogationConfirmed} onChange={e => setDerogationConfirmed(e.target.checked)} /> Je confirme livrer au-delà du stock disponible</label>
+                  <Button onClick={() => confirmDelivery(true)} disabled={saving || !derogationConfirmed || derogationReason.trim().length < 10}>Livrer avec dérogation</Button>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" onClick={() => { setConfirmOpen(false); setError(null) }}>Annuler</Button>
-            <Button onClick={confirmDelivery} disabled={saving}>
+            <Button variant="secondary" onClick={() => { setConfirmOpen(false); setError(null); setShortages(null) }}>Annuler</Button>
+            <Button onClick={() => confirmDelivery()} disabled={saving}>
               {saving ? "Confirmation…" : "Confirmer la livraison"}
             </Button>
           </div>

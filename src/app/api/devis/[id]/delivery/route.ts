@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { getCompanySchema } from "@/lib/company"
+import { requireSchemaAccess, AccessError } from "@/lib/access"
+import { canOverrideStock, deliveryShortages, derogationReason } from "@/lib/delivery-rules"
 
 interface DeliveryLine {
   order_line_id: string
@@ -12,7 +14,8 @@ interface DeliveryLine {
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const body = await req.json()
-  const { lines, warehouse_id, notes, user_id } = body as {
+  let { lines } = body as { lines: DeliveryLine[] }
+  const { warehouse_id, notes, user_id } = body as {
     lines: DeliveryLine[]
     warehouse_id: string
     notes?: string
@@ -24,8 +27,44 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const schema = await getCompanySchema()
+  let role = ""
+  try { role = (await requireSchemaAccess(schema)).role } catch (e) {
+    if (e instanceof AccessError) return NextResponse.json({ error: e.message }, { status: e.status })
+    throw e
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = (createAdminClient() as any).schema(schema)
+
+  // Targeted fix R4 + ANO-001 (18/11/2026): catalogue sheets read from the database (never from the browser); a line
+  // without a sheet blocks the delivery (it is not a service); service sheets never move stock; stock checked BEFORE
+  // any write, a shortage blocks unless an ADMIN gives a justified derogation (traced); real quantity kept, never 0.
+  const { data: srcLines } = await db.from("sales_order_lines").select("id, product_id").eq("order_id", id)
+  const srcById = new Map(((srcLines ?? []) as { id: string; product_id: string | null }[]).map(s => [s.id, s.product_id]))
+  if (lines.some(l => !srcById.has(l.order_line_id))) return NextResponse.json({ error: "Ligne de devis inconnue" }, { status: 400 })
+  lines = lines.map(l => ({ ...l, qty_to_deliver: Number(l.qty_to_deliver), product_id: srcById.get(l.order_line_id) ?? null }))
+  if (lines.some(l => !(l.qty_to_deliver >= 0))) return NextResponse.json({ error: "Quantité invalide" }, { status: 400 })
+  const unlinked = lines.filter(l => !l.product_id && l.qty_to_deliver > 0)
+  if (unlinked.length) {
+    return NextResponse.json({
+      error: `Ligne(s) non rattachée(s) au catalogue : ${unlinked.map(l => `« ${l.description} »`).join(", ")}. Rattachez chaque ligne à sa fiche (produit ou prestation) avant de livrer.`,
+    }, { status: 409 })
+  }
+  const { shortages, stockLines } = await deliveryShortages(db, lines.map(l => ({ product_id: l.product_id, warehouse_id, quantity: l.qty_to_deliver })))
+  let derogation: string | null = null
+  if (shortages.length) {
+    const canOverride = canOverrideStock(role)
+    const reason = derogationReason(body)
+    if (!reason || !canOverride) {
+      return NextResponse.json({
+        error: canOverride
+          ? "Stock insuffisant : confirmez la dérogation et indiquez une justification (10 caractères minimum)"
+          : "Stock insuffisant : livraison impossible au-delà du stock disponible (dérogation réservée à un administrateur)",
+        shortages, canOverride,
+      }, { status: canOverride ? 409 : 403 })
+    }
+    derogation = reason
+  }
+  const stockProductIds = new Set(stockLines.map(l => l.product_id))
 
   // Generate BL number
   const { count } = await db.from("delivery_notes").select("id", { count: "exact", head: true })
@@ -43,7 +82,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       order_id: id,
       status: "draft",
       user_id,
-      notes: notes ?? null,
+      notes: [notes, derogation ? `Dérogation stock insuffisant : ${derogation} — ${shortages.map(s => `${s.product} @ ${s.warehouse} : ${s.requested} demandé(s), ${s.available} disponible(s)`).join(" ; ")}` : null].filter(Boolean).join("\n") || null,
     }])
     .select("id")
     .single()
@@ -69,7 +108,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   // Stock moves and stock_levels update for product lines
-  const productLines = lines.filter(l => l.product_id && l.qty_to_deliver > 0)
+  const productLines = lines.filter(l => l.product_id && l.qty_to_deliver > 0 && stockProductIds.has(l.product_id))
   if (productLines.length > 0) {
     const { error: moveErr } = await db.from("stock_moves").insert(
       productLines.map(l => ({
@@ -77,7 +116,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         product_id: l.product_id,
         from_warehouse_id: warehouse_id,
         quantity: l.qty_to_deliver,
-        notes: `Livraison partielle ${blNumber}`,
+        notes: derogation ? `Livraison partielle ${blNumber} — DÉROGATION stock insuffisant : ${derogation}` : `Livraison partielle ${blNumber}`,
         user_id,
       }))
     )
@@ -94,7 +133,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         .maybeSingle()
       const current = Number(level?.quantity ?? 0)
       const { error: levelErr } = await db.from("stock_levels").upsert(
-        { product_id: l.product_id!, warehouse_id, quantity: Math.max(0, current - l.qty_to_deliver) },
+        { product_id: l.product_id!, warehouse_id, quantity: current - l.qty_to_deliver },
         { onConflict: "product_id,warehouse_id" }
       )
       if (levelErr) {

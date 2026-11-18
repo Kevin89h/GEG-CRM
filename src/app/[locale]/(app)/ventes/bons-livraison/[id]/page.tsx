@@ -22,7 +22,7 @@ export default async function BonLivraisonPage({ params }: { params: Promise<{ l
       .single(),
     supabase
       .from("delivery_note_lines")
-      .select("id, product_id, description, quantity, warehouse_id, position")
+      .select("id, product_id, description, quantity, warehouse_id, position, product:products(product_type)")
       .eq("delivery_note_id", id)
       .order("position"),
     supabase
@@ -33,6 +33,10 @@ export default async function BonLivraisonPage({ params }: { params: Promise<{ l
   ])
 
   if (!dn) notFound()
+  // active catalogue sheets, to link a line that has none (targeted fix ANO-001) — only useful on a draft
+  const { data: catalogue } = dn.status === "draft"
+    ? await supabase.from("products").select("id, name, reference, product_type").eq("is_active", true).order("name")
+    : { data: [] }
 
   // Récupérer le client depuis la facture liée si pas de account_id direct
   let accountName: string | null = null
@@ -70,7 +74,10 @@ export default async function BonLivraisonPage({ params }: { params: Promise<{ l
         quantity: Number(l.quantity),
         warehouse_id: l.warehouse_id,
         position: l.position,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        product_type: ((Array.isArray((l as any).product) ? (l as any).product[0] : (l as any).product) as { product_type?: string } | null)?.product_type ?? null,
       }))}
+      products={(catalogue ?? []) as { id: string; name: string; reference: string | null; product_type: string | null }[]}
       warehouses={(warehouses ?? []) as { id: string; name: string; city: string | null }[]}
       locale={locale}
       docSettings={docSettings ?? {}}
