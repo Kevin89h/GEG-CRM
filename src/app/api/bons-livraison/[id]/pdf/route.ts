@@ -54,19 +54,8 @@ export async function GET(
     }
   }
 
-  // Resolve warehouse names
+  // The warehouse is internal information: it is never loaded nor printed on the customer PDF (A2, GEG 23/11/2026)
   const rawLines = ((lines ?? []) as Record<string, unknown>[])
-  const warehouseIds = rawLines.map(l => l.warehouse_id as string).filter(Boolean)
-  const warehouseMap: Record<string, string> = {}
-  if (warehouseIds.length > 0) {
-    const { data: warehouses } = await db
-      .from("warehouses")
-      .select("id, name, city")
-      .in("id", warehouseIds)
-    for (const w of (warehouses ?? []) as Record<string, string | null>[]) {
-      warehouseMap[w.id as string] = w.city ? `${w.name} — ${w.city}` : (w.name ?? "")
-    }
-  }
 
   // Comment lines are printed only when chosen for the delivery note (print_on_delivery)
   const pdfLines = rawLines
@@ -79,7 +68,7 @@ export async function GET(
     } : {
       description: String(l.description ?? ""),
       quantity: Number(l.quantity) || 0,
-      warehouse: l.warehouse_id ? (warehouseMap[l.warehouse_id as string] ?? null) : null,
+      warehouse: null,
     })
 
   const filename = `BL ${dn.number}.pdf`

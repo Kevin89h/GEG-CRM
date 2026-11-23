@@ -37,10 +37,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   lines = lines.filter(l => !commentIds.has(l.order_line_id))
   if (lines.length === 0) return NextResponse.json({ error: "Aucune ligne à livrer" }, { status: 400 })
 
+  // Phase 0 (D1/D6): only a CONFIRMED quote can be delivered directly; a warehouse is mandatory; quantities are
+  // checked by the server against what remains to deliver on each quote line (never trusted from the browser).
+  const { data: order } = await db.from("sales_orders").select("status").eq("id", id).maybeSingle()
+  if (!order) return NextResponse.json({ error: "Devis introuvable" }, { status: 404 })
+  if (order.status !== "confirmed") return NextResponse.json({ error: "Seul un devis confirmé peut être livré directement" }, { status: 409 })
+  if (!warehouse_id) return NextResponse.json({ error: "Choisissez le dépôt de sortie" }, { status: 400 })
+
   // Catalogue sheet of each line read from the database (an old free line uses its VALIDATED historical
   // correspondence). A line still without a sheet is NOT a service: it blocks the delivery (regression 17/11/2026).
-  const { data: srcLines } = await db.from("sales_order_lines").select("id, product_id, description").eq("order_id", id)
-  const srcById = new Map(((srcLines ?? []) as { id: string; product_id: string | null; description: string }[]).map(s => [s.id, s]))
+  const { data: srcLines } = await db.from("sales_order_lines").select("id, product_id, description, quantity, qty_delivered").eq("order_id", id)
+  const srcById = new Map(((srcLines ?? []) as { id: string; product_id: string | null; description: string; quantity: number; qty_delivered: number | null }[]).map(s => [s.id, s]))
+  if (lines.some(l => !srcById.has(l.order_line_id))) return NextResponse.json({ error: "Ligne de devis inconnue" }, { status: 400 })
+  if (lines.some(l => !(Number(l.qty_to_deliver) >= 0))) return NextResponse.json({ error: "Quantité invalide" }, { status: 400 })
+  const over = lines.filter(l => { const s = srcById.get(l.order_line_id)!; return Number(l.qty_to_deliver) > Number(s.quantity) - Number(s.qty_delivered ?? 0) + 1e-9 })
+  if (over.length) {
+    return NextResponse.json({
+      error: `Quantité supérieure au reste à livrer : ${over.map(l => { const s = srcById.get(l.order_line_id)!; return `« ${s.description} » (reste ${Number(s.quantity) - Number(s.qty_delivered ?? 0)}, demandé ${Number(l.qty_to_deliver)})` }).join(", ")}`,
+    }, { status: 409 })
+  }
   const freeIds = [...srcById.values()].filter(s => !s.product_id).map(s => s.id)
   const { data: validLinks } = freeIds.length
     ? await db.from("historical_line_links").select("line_id, product_id").eq("line_table", "sales_order_lines").eq("status", "validated").in("line_id", freeIds)
@@ -97,7 +112,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // Create delivery note lines, with the quote's comments in their place ("Imprimer sur le bon de livraison" choice kept)
   const { data: source } = await db.from("sales_order_lines").select("id, description, line_type, print_on_delivery, position").eq("order_id", id).order("position")
   const byLine = new Map(lines.map(l => [l.order_line_id, l]))
-  const toRow = (l: DeliveryLine) => ({ order_line_id: l.order_line_id, product_id: l.product_id ?? null, description: l.description, quantity: l.qty_to_deliver, qty_delivered: l.qty_to_deliver })
+  // the warehouse is kept on each goods line (internal traceability; never printed for the customer)
+  const toRow = (l: DeliveryLine) => ({ order_line_id: l.order_line_id, product_id: l.product_id ?? null, description: l.description, quantity: l.qty_to_deliver, qty_delivered: l.qty_to_deliver, warehouse_id: l.product_id && stockProductIds.has(l.product_id) ? warehouse_id : null })
   const sourceIds = new Set((source ?? []).map((s: { id: string }) => s.id))
   const rows = deliveryRowsWithComments((source ?? []) as { id: string; description: string; line_type: string | null; print_on_delivery: boolean | null }[],
     s => { const l = byLine.get(s.id); return l ? toRow(l) : null },
@@ -143,6 +159,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       }
     }
   }
+
+  // Phase 0 (D1): the stock has just left: this delivery note is DELIVERED, never a draft. Before this fix it stayed a
+  // draft, and confirming it later took the stock out a SECOND time.
+  const { error: doneErr } = await db.from("delivery_notes")
+    .update({ status: "delivered", delivery_date: new Date().toISOString().split("T")[0] }).eq("id", dn.id).eq("status", "draft")
+  if (doneErr) return NextResponse.json({ error: `delivery_notes: ${doneErr.message}` }, { status: 400 })
 
   // Update qty_delivered on each order line
   for (const l of lines) {

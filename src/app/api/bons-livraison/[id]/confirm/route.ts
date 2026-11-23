@@ -59,6 +59,32 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     derogation = reason
   }
 
+  // A physical product line must have a warehouse: otherwise it would silently leave the stock untouched (phase 0, D6)
+  const productIds = [...new Set(lines.filter(l => l.product_id && Number(l.quantity) > 0).map(l => l.product_id as string))]
+  if (productIds.length) {
+    const { data: types } = await db.from("products").select("id, product_type").in("id", productIds)
+    const service = new Set(((types ?? []) as { id: string; product_type: string | null }[]).filter(p => p.product_type === "service").map(p => p.id))
+    const noWarehouse = lines.filter(l => l.product_id && Number(l.quantity) > 0 && !service.has(l.product_id) && !l.warehouse_id)
+    if (noWarehouse.length) {
+      return NextResponse.json({
+        error: `Choisissez le dépôt de sortie pour : ${noWarehouse.map(l => `« ${dbById.get(l.id)!.description} »`).join(", ")}`,
+      }, { status: 400 })
+    }
+  }
+
+  // Phase 0 (D2): the delivery note is CLAIMED first, with a conditional update (draft → delivered). Two simultaneous
+  // confirmations cannot both pass: the second one finds no draft and stops before any stock write. If a later write
+  // fails, the claim is released (back to draft) and the error is returned. Phase 1 replaces this with one transaction.
+  const today = new Date().toISOString().split("T")[0]
+  const { data: claimed, error: claimErr } = await db.from("delivery_notes")
+    .update({ status: "delivered", delivery_date: today }).eq("id", id).eq("status", "draft").select("id")
+  if (claimErr) return NextResponse.json({ error: `delivery_notes: ${claimErr.message}` }, { status: 400 })
+  if (!claimed?.length) return NextResponse.json({ error: "Ce bon de livraison vient d'être confirmé par une autre opération : rien n'a été fait" }, { status: 409 })
+  const release = async (msg: string) => {
+    await db.from("delivery_notes").update({ status: "draft", delivery_date: null }).eq("id", id).eq("status", "delivered")
+    return NextResponse.json({ error: msg }, { status: 400 })
+  }
+
   // Save updated quantities/warehouses on delivery note lines (comment lines are text only: left as they are)
   const { data: commentRows } = await db.from("delivery_note_lines").select("id").eq("delivery_note_id", id).eq("line_type", "comment")
   const commentIds = new Set((commentRows ?? []).map((r: { id: string }) => r.id))
@@ -68,7 +94,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .from("delivery_note_lines")
       .update({ quantity: l.quantity, warehouse_id: l.warehouse_id })
       .eq("id", l.id)
-    if (error) return NextResponse.json({ error: `delivery_note_lines update: ${error.message}` }, { status: 400 })
+    if (error) return release(`delivery_note_lines update: ${error.message}`)
   }
 
   // Stock out moves and stock levels (goods only); the real quantity is kept, even negative
@@ -83,7 +109,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         user_id: userId,
       }))
     )
-    if (moveErr) return NextResponse.json({ error: `stock_moves: ${moveErr.message}` }, { status: 400 })
+    if (moveErr) return release(`stock_moves: ${moveErr.message}`)
 
     for (const l of stockLines) {
       const { data: level } = await db
@@ -100,13 +126,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (levelErr) return NextResponse.json({ error: `stock_levels: ${levelErr.message}` }, { status: 400 })
     }
   }
-
-  // Mark delivery note as delivered
-  const { error: dnErr } = await db
-    .from("delivery_notes")
-    .update({ status: "delivered", delivery_date: new Date().toISOString().split("T")[0] })
-    .eq("id", id)
-  if (dnErr) return NextResponse.json({ error: `delivery_notes: ${dnErr.message}` }, { status: 400 })
 
   if (derogation) {
     await createAdminClient().rpc("audit_log_event", {

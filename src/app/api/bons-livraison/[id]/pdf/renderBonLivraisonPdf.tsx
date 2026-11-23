@@ -174,9 +174,9 @@ export async function renderBonLivraisonPdf(props: BonLivraisonPdfProps): Promis
           {/* Lines table */}
           <View style={s.tableWrap}>
             <View style={s.tableHeader}>
+              {/* The warehouse is internal information: never printed on a customer document (A2, GEG 23/11/2026) */}
               <Text style={[s.thText, { flex: 4 }]}>Description</Text>
               <Text style={[s.thText, { width: 50, textAlign: "right" }]}>Qté</Text>
-              <Text style={[s.thText, { flex: 2, textAlign: "right" }]}>Entrepôt</Text>
             </View>
             {lines.map((l, i) => l.is_comment ? (
               <View key={i} style={[s.tableRow, i % 2 === 1 ? s.tableRowEven : {}]} wrap={false}>
@@ -186,7 +186,6 @@ export async function renderBonLivraisonPdf(props: BonLivraisonPdfProps): Promis
               <View key={i} style={[s.tableRow, i % 2 === 1 ? s.tableRowEven : {}]} wrap={false}>
                 <Text style={[s.tdDesc, { flex: 4 }]}>{l.description}</Text>
                 <Text style={[s.tdNorm, { width: 50 }, s.tdR]}>{l.quantity}</Text>
-                <Text style={[s.tdNorm, { flex: 2 }, s.tdR]}>{l.warehouse ?? "—"}</Text>
               </View>
             ))}
           </View>
