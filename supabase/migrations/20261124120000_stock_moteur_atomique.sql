@@ -485,11 +485,12 @@ begin
               v_il.description, geg_qte(v_il.quantity), geg_qte(v_done), geg_qte(v_il.quantity - v_done), geg_qte(v_l.q)));
           end if;
         end loop;
-        -- plafond par produit pour un BL de facture (y compris les lignes historiques sans lien) : jamais plus que facturé
+        -- plafond par produit pour les lignes HISTORIQUES sans lien vers une ligne de facture (les autres sont plafonnées
+        -- ligne par ligne ci-dessus : une ligne libre de facture rattachée sur le BL ne porte pas le produit sur la facture)
         if v_dn.invoice_id is not null then
           for v_l in select l.product_id, sum(l.quantity) as q, min(l.description) as d
                      from delivery_note_lines l join products p on p.id = l.product_id
-                     where l.delivery_note_id = p_dn and l.line_type <> 'comment' and l.quantity > 0
+                     where l.delivery_note_id = p_dn and l.line_type <> 'comment' and l.quantity > 0 and l.invoice_line_id is null
                        and coalesce(p.product_type, 'storable') in ('storable', 'consumable') group by 1 loop
             select coalesce(sum(quantity), 0), coalesce(sum(delivered), 0) into v_fact, v_done from invoice_line_delivery
             where invoice_id = v_dn.invoice_id and product_id = v_l.product_id;
