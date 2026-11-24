@@ -157,9 +157,16 @@ begin
 end $function$;
 
 do $$
-declare s text;
+declare s text; t text;
 begin
   foreach s in array array['geg_guinee', 'geg_singapore'] loop
+    -- règle de lignes temporaire du déploiement ciblé « stock » (PROD_14) : retirée dès que les règles du catalogue
+    -- (catalog_line_rules, migration 20261110) sont attachées, car elles la contiennent
+    foreach t in array array['invoice_lines', 'sales_order_lines'] loop
+      if exists (select 1 from pg_trigger tg join pg_class c on c.oid = tg.tgrelid where c.relnamespace = s::regnamespace and c.relname = t and tg.tgname = 'catalog_line_rules') then
+        execute format('drop trigger if exists stock_line_rules on %I.%I', s, t);
+      end if;
+    end loop;
     if exists (select 1 from information_schema.columns where table_schema = s and table_name = 'sales_order_lines' and column_name = 'unit_id') then
       execute format('drop trigger if exists unite_de_la_fiche on %I.sales_order_lines', s);
       execute format('create trigger unite_de_la_fiche before insert or update on %I.sales_order_lines for each row execute function public.sales_line_unit_rule()', s);
@@ -173,17 +180,22 @@ end $$;
 -- Les BL historiques n'ont pas de lien vers la ligne de facture : leurs quantités sont réparties par produit
 -- (ou par désignation pour une ligne libre non rattachée), dans l'ordre des lignes de la facture.
 do $$
-declare s text;
+declare s text; v_hl text;
 begin
   foreach s in array array['geg_guinee', 'geg_singapore'] loop
+    -- correspondances historiques validées : seulement là où la table existe (déploiement ciblé « stock » : pas encore)
+    v_hl := case when to_regclass(s || '.historical_line_links') is not null
+      then format('left join %I.historical_line_links hl on il.product_id is null and hl.line_table = ''invoice_lines'' and hl.line_id = il.id and hl.status = ''validated''', s)
+      else 'left join (select null::uuid as product_id) hl on false' end;
+    execute format('drop view if exists %I.invoice_delivery_status', s);
+    execute format('drop view if exists %I.invoice_line_delivery', s);
     execute format($v$
       create or replace view %1$I.invoice_line_delivery with (security_invoker = true) as
       with lines as (
         select il.id as invoice_line_id, il.invoice_id, il.position, il.description, il.quantity,
                coalesce(il.product_id, hl.product_id) as product_id
         from %1$I.invoice_lines il
-        left join %1$I.historical_line_links hl
-          on il.product_id is null and hl.line_table = 'invoice_lines' and hl.line_id = il.id and hl.status = 'validated'
+        %2$s
         where il.line_type <> 'comment' and il.quantity > 0
       ), goods as (
         select l.* from lines l left join %1$I.products p on p.id = l.product_id
@@ -214,7 +226,7 @@ begin
         left join histdesc hd on a.product_id is null and hd.invoice_id = a.invoice_id and hd.d = btrim(lower(a.description))
       )
       select res.*, greatest(res.quantity - res.delivered, 0) as remaining from res
-    $v$, s);
+    $v$, s, v_hl);
 
     execute format($v$
       create or replace view %1$I.invoice_delivery_status with (security_invoker = true) as
