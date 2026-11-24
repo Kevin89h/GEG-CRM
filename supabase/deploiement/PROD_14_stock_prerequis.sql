@@ -8,8 +8,9 @@
 --    - M6 : seul un article de type « Remise » peut avoir un montant négatif (nouvelles lignes, ou prix modifié) ;
 --    - M5 : une fiche au conditionnement « Autre » non validé par un Manager est inutilisable ;
 --    - les avoirs (AVR-) recopient les lignes d'origine : non contrôlés ;
---    - les lignes libres (sans fiche) restent possibles, comme aujourd'hui : la règle « aucune ligne libre » (R1)
---      arrivera avec le déploiement général. À la livraison, une ligne libre doit être rattachée à sa fiche (ANO-001).
+--    - R1 (décision GEG du 25/11) : plus aucune NOUVELLE ligne libre vendue sur les devis et factures ; une ligne de
+--      texte (quantité 0, prix 0) reste permise. Les lignes libres EXISTANTES (13 devis ouverts) ne sont pas bloquées :
+--      elles se rattachent à leur fiche depuis l'écran ; à la livraison, une ligne libre doit être rattachée (ANO-001).
 --    La migration 20261124 la retire automatiquement dès que les règles du catalogue sont attachées.
 -- Aucune donnée existante n'est modifiée (colonnes ajoutées avec leur valeur par défaut).
 begin;
@@ -43,10 +44,19 @@ create or replace function public.stock_line_rules() returns trigger
 language plpgsql set search_path = public as $function$
 declare v_type text; v_pack text; v_number text;
 begin
-  if new.product_id is null then return new; end if;   -- ligne libre : inchangé jusqu'au déploiement général (R1)
   if tg_table_name = 'invoice_lines' then
     execute format('select number from %I.invoices where id = $1', tg_table_schema) into v_number using new.invoice_id;
     if coalesce(v_number, '') like 'AVR-%' then return new; end if;   -- avoirs : copie des lignes d'origine
+  end if;
+  -- R1 (décision GEG) : plus de NOUVELLE ligne libre vendue. Une ligne de texte (quantité 0 et prix 0) reste permise :
+  -- la production n'a pas encore de « lignes de commentaire ». Les lignes libres existantes ne sont pas touchées et
+  -- peuvent être rattachées à leur fiche ; une note ne peut pas devenir une vente libre.
+  if new.product_id is null then
+    if coalesce(new.quantity, 0) = 0 and coalesce(new.unit_price, 0) = 0 then return new; end if;
+    if tg_op = 'INSERT' or (coalesce(old.quantity, 0) = 0 and coalesce(old.unit_price, 0) = 0) then
+      raise exception 'Ligne refusée : chaque ligne vendue doit être une fiche du catalogue GEG (produit, prestation ou remise). Choisissez la fiche, ou créez-la dans Stock › Produits. Pour un simple texte, laissez la quantité et le prix à 0.';
+    end if;
+    return new;   -- ligne libre ANCIENNE (quantité ou prix modifiés) : à rattacher, non bloquée
   end if;
   -- lignes existantes : contrôlées seulement si leur fiche ou leur prix change
   if tg_op = 'UPDATE' and new.product_id is not distinct from old.product_id and new.unit_price is not distinct from old.unit_price then

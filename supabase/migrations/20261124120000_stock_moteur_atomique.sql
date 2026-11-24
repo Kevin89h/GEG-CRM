@@ -247,8 +247,9 @@ begin
       group by i.id, i.status, i.number
     $v$, s);
 
-    execute format('revoke all on %I.invoice_line_delivery, %I.invoice_delivery_status from anon', s, s);
-    execute format('grant select on %I.invoice_line_delivery, %I.invoice_delivery_status to authenticated, service_role', s, s);
+    execute format('revoke all on %I.invoice_line_delivery, %I.invoice_delivery_status from anon, authenticated', s, s);
+    -- lus par le serveur uniquement (jamais directement depuis le navigateur, quelle que soit la société)
+    execute format('grant select on %I.invoice_line_delivery, %I.invoice_delivery_status to service_role', s, s);
   end loop;
 end $$;
 
