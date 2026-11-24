@@ -55,6 +55,11 @@ export default async function FactureDetailPage({ params }: { params: Promise<{ 
     db.from("invoice_delivery_status").select("delivery_state, remaining_qty, draft_notes").eq("invoice_id", id).maybeSingle(),
     db.from("invoice_line_delivery").select("invoice_line_id, delivered, remaining").eq("invoice_id", id),
   ])
+  // R1: active catalogue sheets, to link the old free lines of a DRAFT invoice
+  const hasFree = inv.status === "draft" && (lines ?? []).some((l: { product_id: string | null; quantity: number; unit_price: number }) => !l.product_id && (Number(l.quantity) !== 0 || Number(l.unit_price) !== 0))
+  const { data: linkProducts } = hasFree
+    ? await db.from("products").select("id, name, product_code").eq("is_active", true).or("packaging_status.is.null,packaging_status.neq.a_valider").order("name")
+    : { data: [] }
   const deliveryNotes = (dnRows ?? []) as { id: string; number: string; status: string; delivery_date: string | null }[]
   const delivery = dState ? {
     state: dState.delivery_state as "non_livree" | "partielle" | "livree" | "sans_marchandise" | "avoir" | "annulee" | "brouillon",
@@ -123,6 +128,7 @@ export default async function FactureDetailPage({ params }: { params: Promise<{ 
       warehouses={warehouses}
       deliveryNotes={deliveryNotes}
       delivery={delivery}
+      linkProducts={(linkProducts ?? []) as { id: string; name: string; product_code: string | null }[]}
       docSettings={docSettings ?? {}}
     />
   )

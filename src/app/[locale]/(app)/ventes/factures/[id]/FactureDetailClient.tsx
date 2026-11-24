@@ -62,7 +62,7 @@ interface Invoice {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-interface Props { invoice: Invoice; locale: string; treasuryAccounts: TreasuryAccount[]; warehouses: Warehouse[]; deliveryNotes: DeliveryNote[]; docSettings?: Record<string, any>; delivery?: Delivery }
+interface Props { invoice: Invoice; locale: string; treasuryAccounts: TreasuryAccount[]; warehouses: Warehouse[]; deliveryNotes: DeliveryNote[]; docSettings?: Record<string, any>; delivery?: Delivery; linkProducts?: { id: string; name: string; product_code: string | null }[] }
 
 /** A1: delivery state of the invoice and, per goods line, quantities delivered / remaining (all confirmed notes) */
 export interface Delivery {
@@ -90,7 +90,7 @@ const statusColor: Record<string, string> = {
   cancelled: "bg-red-100 text-red-600",
 }
 
-export default function FactureDetailClient({ invoice: initial, locale, treasuryAccounts, warehouses, deliveryNotes: initialDNs, docSettings = {}, delivery }: Props) {
+export default function FactureDetailClient({ invoice: initial, locale, treasuryAccounts, warehouses, deliveryNotes: initialDNs, docSettings = {}, delivery, linkProducts = [] }: Props) {
   const router = useRouter()
   const t = useTranslations("factures")
   const [invoice, setInvoice] = useState(initial)
@@ -842,6 +842,24 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
                     />
                   ) : (
                     <span className="font-medium text-gray-900">{l.description}</span>
+                  )}
+                  {/* R1: an old FREE line of a draft invoice is linked to its catalogue sheet (designation and price kept) */}
+                  {isDraft && !l.product_id && (Number(l.quantity) !== 0 || Number(l.unit_price) !== 0) && (
+                    <div className="mt-1 flex items-center gap-2 flex-wrap">
+                      <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-medium">Ligne libre : à rattacher à une fiche du catalogue</span>
+                      <select defaultValue="" data-testid="link-invoice-line" className="max-w-xs rounded border border-amber-300 bg-white px-2 py-0.5 text-xs"
+                        onChange={async e => {
+                          const pid = e.target.value
+                          if (!pid) return
+                          const res = await fetch(`/api/invoices/${invoice.id}/lines/${l.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ product_id: pid }) })
+                          const j = await res.json().catch(() => ({}))
+                          if (!res.ok) { setError(j.error ?? "Rattachement impossible"); e.target.value = ""; return }
+                          setInvoice(prev => ({ ...prev, lines: prev.lines.map(x => x.id === l.id ? { ...x, product_id: pid } : x) }))
+                        }}>
+                        <option value="">Rattacher à la fiche…</option>
+                        {linkProducts.map(p => <option key={p.id} value={p.id}>{p.product_code ? `${p.product_code} ` : ""}{p.name}</option>)}
+                      </select>
+                    </div>
                   )}
                   {/* A1: delivered / remaining per goods line (emitted invoice) */}
                   {!isDraft && delivery?.lines[l.id] && (

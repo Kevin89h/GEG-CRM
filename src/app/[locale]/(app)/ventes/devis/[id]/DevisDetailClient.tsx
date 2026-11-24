@@ -282,6 +282,14 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
     if (!p) return
     selectingProductRef.current = false
     setProductSearch(prev => ({ ...prev, [lineId]: "" }))
+    // R1: linking an existing FREE line to its sheet keeps the negotiated designation and price of the line
+    const current = lines.find(l => l.id === lineId) as { product_id?: string | null } | undefined
+    if (current && !current.product_id) {
+      const res = await fetch(`/api/devis/${order.id}/lines/${lineId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ product_id: productId }) })
+      if (!res.ok) { const j = await res.json().catch(() => ({})); window.alert(j.error ?? "Rattachement impossible"); return }
+      setLines(prev => prev.map(l => l.id === lineId ? { ...l, product_id: productId, product: { name: p.name, reference: p.reference }, unit: p.unit } : l))
+      return
+    }
     setLines(prev => prev.map(l => l.id === lineId ? {
       ...l,
       description: p.name,
