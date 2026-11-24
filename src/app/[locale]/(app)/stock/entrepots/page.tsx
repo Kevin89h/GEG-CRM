@@ -6,6 +6,7 @@ export default async function EntrepotsPage() {
   const { data: warehouses } = await supabase
     .from("warehouses")
     .select("*")
+    .eq("kind", "physical")
     .order("name")
   return <EntrepotsClient warehouses={warehouses ?? []} />
 }

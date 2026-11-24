@@ -12,7 +12,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     const { db } = await createCompanyClient()
     const { error } = await db.from("invoices").update({ status }).eq("id", id)
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    // a business refusal of the database (e.g. M4 purchase check at emission) is a 409 with its precise message
+    if (error) return NextResponse.json({ error: error.message }, { status: error.hint === "GEG_REFUS" ? 409 : 500 })
     return NextResponse.json({ success: true })
   } catch (err) {
     console.error("Invoice status error:", err)

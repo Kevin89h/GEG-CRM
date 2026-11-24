@@ -27,7 +27,14 @@ interface LandedLine {
   landed_total: number
   landed_unit_price: number
   warehouse_id: string | null
+  /** quantity already received on this line (cumulated receptions) */
+  qty_received?: number
+  /** type of the catalogue sheet: services are received without stock (T-01) */
+  product_type?: string | null
 }
+
+/** M3: a customer invoice line that can receive goods delivered directly by the supplier */
+interface DirectTarget { invoice_line_id: string; product_id: string; label: string; remaining: number }
 
 interface Cost {
   id: string
@@ -59,7 +66,7 @@ interface Order {
   pret_echeance?: string | null
 }
 
-interface Warehouse { id: string; name: string; city: string | null }
+interface Warehouse { id: string; name: string; city: string | null; kind?: string }
 interface ExchangeRate { from_currency: string; to_currency: string; rate: number; effective_date: string }
 
 interface ReceptionLine { id: string; description: string; quantity: number; unit_price: number; warehouse_id: string | null }
@@ -75,6 +82,7 @@ interface Props {
   receptions?: Reception[]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   docSettings?: Record<string, any>
+  directTargets?: DirectTarget[]
 }
 
 function getStepIndex(status: string) {
@@ -93,10 +101,19 @@ function getRate(rates: ExchangeRate[], from: string, to: string): number | null
 
 type Tab = "produits" | "receptions" | "autres"
 
-export default function AchatDetailClient({ order, lines: initialLines, costs: initialCosts, warehouses, exchangeRates, locale, receptions = [], docSettings = {} }: Props) {
+export default function AchatDetailClient({ order, lines: initialLines, costs: initialCosts, warehouses, exchangeRates, locale, receptions = [], docSettings = {}, directTargets = [] }: Props) {
   const t = useTranslations("achats")
   const router = useRouter()
   const [lines, setLines] = useState(initialLines)
+  // D3: quantity received NOW per line, by default what REMAINS to receive (never the whole order again)
+  const remainingOf = (l: LandedLine) => Math.max(0, l.quantity - Number(l.qty_received ?? 0))
+  const isGoods = (l: LandedLine) => !["service", "discount"].includes(l.product_type ?? "")
+  const [receiveQty, setReceiveQty] = useState<Record<string, string>>(() => Object.fromEntries(initialLines.map(l => [l.line_id, String(Math.max(0, l.quantity - Number(l.qty_received ?? 0)))])))
+  const [directLine, setDirectLine] = useState<Record<string, string>>({})
+  const qtyToReceive = (l: LandedLine) => Math.max(0, Number(receiveQty[l.line_id] ?? 0) || 0)
+  const directWarehouseId = warehouses.find(w => w.kind === "direct")?.id ?? null
+  // production role model: every user of the company may receive (as today)
+  const canReceive = true
   const [costs, setCosts] = useState(initialCosts)
   const [saving, setSaving] = useState(false)
   const [statusMsg, setStatusMsg] = useState("")
@@ -348,10 +365,19 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
   }
 
   function receive() {
-    if (lines.some(l => !l.warehouse_id)) {
+    const toReceive = lines.filter(l => qtyToReceive(l) > 0)
+    if (!toReceive.length) { setStatusMsg("Aucune quantité à réceptionner"); return }
+    const over = toReceive.find(l => qtyToReceive(l) > remainingOf(l))
+    if (over) { setStatusMsg(`Quantité supérieure au reste à recevoir : « ${over.description} » (reste ${remainingOf(over)})`); return }
+    if (toReceive.some(l => isGoods(l) && !l.warehouse_id)) {
       setStatusMsg(t("assignWarehouseError"))
       return
     }
+    if (toReceive.some(l => l.warehouse_id === directWarehouseId && !directLine[l.line_id])) {
+      setStatusMsg("Livraison directe : choisissez la ligne de facture du client")
+      return
+    }
+    setStatusMsg("")
     setReceiveConfirmOpen(true)
   }
 
@@ -366,23 +392,9 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
     const discountTotal = orderFOBTotal * (order.global_discount_pct / 100)
     const totalExtra = costs.reduce((s, c) => s + c.amount, 0)
 
-    const stockMoves = lines.map(l => {
-      const lineDiscount = orderFOBTotal > 0 ? discountTotal * (l.fob_total / orderFOBTotal) : 0
-      const lineFOBNet = l.fob_total - lineDiscount
-      const allocated = orderFOBTotal > 0 ? totalExtra * (l.fob_total / orderFOBTotal) : 0
-      const landedUnit = l.quantity > 0 ? (lineFOBNet + allocated) / l.quantity : 0
-      return {
-        type: "in" as const,
-        product_id: l.product_id,
-        to_warehouse_id: l.warehouse_id,
-        quantity: l.quantity,
-        notes: `Réception ${order.number} — PR : ${formatCurrency(landedUnit, cur)}/u`,
-        user_id: user.id,
-      }
-    })
-
-    const productUpdates = lines
-      .filter(l => l.product_id)
+    const received = lines.filter(l => qtyToReceive(l) > 0)
+    const productUpdates = received
+      .filter(l => l.product_id && isGoods(l))
       .map(l => {
         const lineDiscount2 = orderFOBTotal > 0 ? discountTotal * (l.fob_total / orderFOBTotal) : 0
         const lineFOBNet2 = l.fob_total - lineDiscount2
@@ -396,25 +408,25 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
         }
       })
 
-    const receptionLines = lines.map(l => {
+    const receptionLines = received.map(l => {
       const lineDiscount3 = orderFOBTotal > 0 ? discountTotal * (l.fob_total / orderFOBTotal) : 0
       const lineFOBNet3 = l.fob_total - lineDiscount3
       const allocated3 = orderFOBTotal > 0 ? totalExtra * (l.fob_total / orderFOBTotal) : 0
       const landedUnit3 = l.quantity > 0 ? (lineFOBNet3 + allocated3) / l.quantity : 0
       return {
         order_line_id: l.line_id,
-        product_id: l.product_id,
-        description: l.description,
-        quantity: l.quantity,
+        quantity: qtyToReceive(l),
         unit_price: landedUnit3,
-        warehouse_id: l.warehouse_id,
+        warehouse_id: isGoods(l) ? l.warehouse_id : null,
+        invoice_line_id: l.warehouse_id === directWarehouseId ? directLine[l.line_id] ?? null : null,
+        notes: `Réception ${order.number} — PR : ${formatCurrency(landedUnit3, cur)}/u`,
       }
     })
 
     const res = await fetch(`/api/achats/${order.id}/receive`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ stockMoves, productUpdates, receptionLines }),
+      body: JSON.stringify({ productUpdates, receptionLines }),
     })
     const json = await res.json()
     if (!res.ok) {
@@ -745,7 +757,7 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
                           <td className="px-4 py-2.5 font-medium text-[#7c3aed]">{l.description}</td>
                           <td className="px-4 py-2.5 text-gray-400 text-xs">—</td>
                           <td className="px-4 py-2.5 text-right text-gray-700">{l.quantity.toLocaleString("fr")}</td>
-                          <td className="px-4 py-2.5 text-right text-gray-500">{isReceived ? l.quantity.toLocaleString("fr") : "0,00"}</td>
+                          <td className="px-4 py-2.5 text-right text-gray-500">{Number(l.qty_received ?? 0).toLocaleString("fr")}</td>
                           <td className="px-4 py-2.5 text-gray-500 text-xs">{t("unitLabel")}</td>
                           <td className="px-4 py-2.5 text-right text-gray-700 tabular-nums">
                             {l.fob_unit_price.toLocaleString("fr", { minimumFractionDigits: 2 })}
@@ -756,14 +768,40 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
                           </td>
                           {isDraft && (
                             <td className="px-4 py-2.5">
-                              <select
-                                value={l.warehouse_id ?? ""}
-                                onChange={e => updateWarehouse(l.line_id, e.target.value)}
-                                className={`w-full px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white ${!l.warehouse_id ? "border-red-300 bg-red-50" : "border-gray-200"}`}
-                              >
-                                <option value="">{t("chooseWarehouse")}</option>
-                                {warehouses.map(w => <option key={w.id} value={w.id}>{w.city ? `${w.name} — ${w.city}` : w.name}</option>)}
-                              </select>
+                              <div className="space-y-1">
+                                {canReceive && remainingOf(l) > 0 && (
+                                  <label className="flex items-center gap-1 text-[11px] text-gray-500">
+                                    À recevoir
+                                    <input type="number" min="0" max={remainingOf(l)} step="any" value={receiveQty[l.line_id] ?? ""}
+                                      onChange={e => setReceiveQty(prev => ({ ...prev, [l.line_id]: e.target.value }))}
+                                      className="w-20 px-1.5 py-0.5 text-xs text-right border border-gray-200 rounded" data-testid="receive-qty" />
+                                    <span>/ {remainingOf(l).toLocaleString("fr")}</span>
+                                  </label>
+                                )}
+                                {isGoods(l) ? (
+                                  <select
+                                    value={l.warehouse_id ?? ""}
+                                    onChange={e => updateWarehouse(l.line_id, e.target.value)}
+                                    disabled={!canReceive}
+                                    className={`w-full px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white ${!l.warehouse_id ? "border-red-300 bg-red-50" : "border-gray-200"}`}
+                                  >
+                                    <option value="">{t("chooseWarehouse")}</option>
+                                    {warehouses.filter(w => w.kind !== "direct").map(w => <option key={w.id} value={w.id}>{w.city ? `${w.name} — ${w.city}` : w.name}</option>)}
+                                    {directWarehouseId && directTargets.some(d => d.product_id === l.product_id) && (
+                                      <option value={directWarehouseId}>Livraison directe au client (sans passage en dépôt)</option>
+                                    )}
+                                  </select>
+                                ) : (
+                                  <span className="text-[11px] text-gray-400">Prestation : réceptionnée sans stock</span>
+                                )}
+                                {l.warehouse_id && l.warehouse_id === directWarehouseId && (
+                                  <select value={directLine[l.line_id] ?? ""} onChange={e => setDirectLine(prev => ({ ...prev, [l.line_id]: e.target.value }))}
+                                    className={`w-full px-2 py-1 text-xs border rounded bg-white ${directLine[l.line_id] ? "border-gray-200" : "border-red-300 bg-red-50"}`}>
+                                    <option value="">Ligne de facture du client…</option>
+                                    {directTargets.filter(d => d.product_id === l.product_id).map(d => <option key={d.invoice_line_id} value={d.invoice_line_id}>{d.label} (reste {d.remaining.toLocaleString("fr")})</option>)}
+                                  </select>
+                                )}
+                              </div>
                             </td>
                           )}
                           <td className="px-4 py-2.5">
@@ -1219,14 +1257,14 @@ export default function AchatDetailClient({ order, lines: initialLines, costs: i
             <Truck className="w-4 h-4 flex-shrink-0 mt-0.5" />
             <div>
               <p className="font-semibold mb-1">Entrée de stock définitive</p>
-              <p>{lines.length} ligne(s) seront ajoutées au stock. Cette action est irréversible.</p>
+              <p>{lines.filter(l => qtyToReceive(l) > 0).length} ligne(s) seront réceptionnées (les prestations sans stock). Cette action est irréversible.</p>
             </div>
           </div>
           <div className="space-y-1 text-sm">
-            {lines.map(l => (
+            {lines.filter(l => qtyToReceive(l) > 0).map(l => (
               <div key={l.line_id} className="flex justify-between py-1 border-b border-gray-50 last:border-0">
                 <span className="text-gray-700">{l.description}</span>
-                <span className="text-gray-500 text-xs">{l.quantity} → {warehouses.find(w => w.id === l.warehouse_id)?.name ?? "—"}</span>
+                <span className="text-gray-500 text-xs">{qtyToReceive(l)} → {isGoods(l) ? warehouses.find(w => w.id === l.warehouse_id)?.name ?? "—" : "prestation"}</span>
               </div>
             ))}
           </div>

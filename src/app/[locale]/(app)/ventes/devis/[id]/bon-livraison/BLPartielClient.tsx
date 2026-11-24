@@ -31,7 +31,8 @@ interface Props {
 
 export default function BLPartielClient({ orderId, orderNumber, locale, lines, warehouses }: Props) {
   const router = useRouter()
-  const [warehouseId, setWarehouseId] = useState(warehouses[0]?.id ?? "")
+  // chosen by the user, never automatically (GEG 24/11/2026)
+  const [warehouseId, setWarehouseId] = useState("")
   const [notes, setNotes] = useState("")
   const [qtys, setQtys] = useState<Record<string, number>>(() => {
     const init: Record<string, number> = {}
@@ -126,6 +127,7 @@ export default function BLPartielClient({ orderId, orderNumber, locale, lines, w
           onChange={e => setWarehouseId(e.target.value)}
           className="w-full max-w-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
+          <option value="">Choisir le dépôt…</option>
           {warehouses.map(w => (
             <option key={w.id} value={w.id}>{w.name}</option>
           ))}

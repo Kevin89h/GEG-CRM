@@ -49,7 +49,19 @@ export default async function FactureDetailPage({ params }: { params: Promise<{ 
   ])
 
   const warehouses: { id: string; name: string; city: string | null }[] = []
-  const deliveryNotes: { id: string; number: string; status: string; delivery_date: string | null }[] = []
+  // A1: delivery notes of the invoice, its delivery state and, per goods line, delivered / remaining quantities
+  const [{ data: dnRows }, { data: dState }, { data: dLines }] = await Promise.all([
+    db.from("delivery_notes").select("id, number, status, delivery_date").eq("invoice_id", id).order("created_at"),
+    db.from("invoice_delivery_status").select("delivery_state, remaining_qty, draft_notes").eq("invoice_id", id).maybeSingle(),
+    db.from("invoice_line_delivery").select("invoice_line_id, delivered, remaining").eq("invoice_id", id),
+  ])
+  const deliveryNotes = (dnRows ?? []) as { id: string; number: string; status: string; delivery_date: string | null }[]
+  const delivery = dState ? {
+    state: dState.delivery_state as "non_livree" | "partielle" | "livree" | "sans_marchandise" | "avoir" | "annulee" | "brouillon",
+    remaining: Number(dState.remaining_qty),
+    draftNotes: Number(dState.draft_notes),
+    lines: Object.fromEntries(((dLines ?? []) as { invoice_line_id: string; delivered: number; remaining: number }[]).map(l => [l.invoice_line_id, { delivered: Number(l.delivered), remaining: Number(l.remaining) }])),
+  } : undefined
 
   const { data: account } = inv.account_id
     ? await db.from("accounts").select("name, country").eq("id", inv.account_id).single()
@@ -110,6 +122,7 @@ export default async function FactureDetailPage({ params }: { params: Promise<{ 
       treasuryAccounts={treasuryAccounts ?? []}
       warehouses={warehouses}
       deliveryNotes={deliveryNotes}
+      delivery={delivery}
       docSettings={docSettings ?? {}}
     />
   )

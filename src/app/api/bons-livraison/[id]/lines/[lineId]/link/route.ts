@@ -21,8 +21,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (dn.status !== "draft") return NextResponse.json({ error: "Seul un bon de livraison en brouillon peut être modifié" }, { status: 409 })
     const { data: line } = await db.from("delivery_note_lines").select("id").eq("id", lineId).eq("delivery_note_id", id).single()
     if (!line) return NextResponse.json({ error: "Ligne introuvable" }, { status: 404 })
-    const { data: product } = await db.from("products").select("id, name, product_type, is_active").eq("id", product_id).single()
+    const { data: product } = await db.from("products").select("id, name, product_type, is_active, packaging_status").eq("id", product_id).single()
     if (!product || !product.is_active) return NextResponse.json({ error: "Fiche introuvable ou désactivée" }, { status: 400 })
+    if (product.packaging_status === "a_valider") return NextResponse.json({ error: "Fiche inutilisable tant que son conditionnement « Autre » n'est pas validé par un Manager" }, { status: 409 })
 
     const { error } = await db.from("delivery_note_lines").update({ product_id }).eq("id", lineId).eq("delivery_note_id", id)
     if (error) return NextResponse.json({ error: error.message }, { status: 400 })

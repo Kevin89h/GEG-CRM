@@ -10,7 +10,8 @@ export type DeliveryLineKind = "product" | "service" | "unlinked"
 
 export function deliveryLineKind(l: { product_id?: string | null; product_type?: string | null }): DeliveryLineKind {
   if (!l.product_id) return "unlinked"
-  return l.product_type === "service" ? "service" : "product"
+  // services and discounts (« Remise », M6) never move stock
+  return l.product_type === "service" || l.product_type === "discount" ? "service" : "product"
 }
 
 /** Words of a label, for suggestions: lower case, accents removed, "200L" → "200", "l" */

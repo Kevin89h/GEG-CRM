@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin"
 import { createClient } from "@/lib/supabase/server"
-import { requireSchemaPage } from "@/lib/access"
+import { getAccess, requireSchemaPage } from "@/lib/access"
+import { MANAGER_ROLES } from "@/lib/catalog-identity"
 import { notFound } from "next/navigation"
 import ProductDetailClient from "./ProductDetailClient"
 
@@ -39,7 +40,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       .limit(50),
     db.from("product_categories").select("id, name, color").order("name"),
     db.from("units").select("id, name, type").order("name"),
-    db.from("warehouses").select("id, name").eq("is_active", true),
+    db.from("warehouses").select("id, name").eq("is_active", true).eq("kind", "physical"),
     db.from("product_documents")
       .select("id, type, name, url, file_size, created_at")
       .eq("product_id", id)
@@ -66,6 +67,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       warehouses={warehouses ?? []}
       locale={locale}
       isAdmin={isAdmin}
+      canValidatePackaging={MANAGER_ROLES.includes((await getAccess())?.role ?? "")}
     />
   )
 }

@@ -13,6 +13,7 @@ import DocumentLayout from "@/components/print/DocumentLayout"
 import ActivityLog from "@/components/ActivityLog"
 import ShareButton from "@/components/ShareButton"
 import { PROJECT_OPTIONS } from "@/lib/projects"
+import StockAlert from "@/components/sales/StockAlert"
 
 interface Line {
   id: string
@@ -895,6 +896,9 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
                 </button>
               </div>
             )}
+
+            {/* A2: stock per warehouse (internal, never printed) */}
+            <StockAlert className="mx-4 my-3" lines={lines.map(l => ({ product_id: (l as { product_id?: string | null }).product_id ?? null, quantity: (l as { quantity: number | string }).quantity }))} />
 
             <div className="border-t border-gray-100 px-6 py-4 flex items-start justify-between gap-4">
               {/* Toggle TVA global */}

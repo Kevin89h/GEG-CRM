@@ -66,8 +66,11 @@ export default function ProduitsClient({ products: initial, categories, units }:
   const [localUnits, setLocalUnits] = useState(units)
   interface PkgFormRow { unit_id: string; sell_price: string; buy_price: string; sell_currency: Currency; buy_currency: Currency }
 
+  // A4 / M5 / M6: type of sheet, brand and packaging (closed list) are part of the identity of a sheet
+  const PACKAGING_OPTIONS = ["1 L", "4 L", "5 L", "20 L", "200 L", "208 L", "Autre"]
   const [form, setForm] = useState({
     reference: "", name: "", description: "",
+    product_type: "storable", brand: "", packaging: "", packaging_other: "",
     category_id: categories[0]?.id ?? "",
     sell_price: "", currency: "GNF" as Currency,
     buy_price: "", buy_price_currency: "GNF" as Currency,
@@ -77,8 +80,9 @@ export default function ProduitsClient({ products: initial, categories, units }:
   const [newFormatName, setNewFormatName] = useState("")
   const [newFormatSaving, setNewFormatSaving] = useState(false)
 
+  // M5: one sheet = one unit (another packaging = another sheet)
   function addPkgRow() {
-    setPkgRows(r => [...r, { unit_id: localUnits[0]?.id ?? "", sell_price: "", buy_price: "", sell_currency: form.currency, buy_currency: form.buy_price_currency }])
+    setPkgRows(r => r.length >= 1 ? r : [...r, { unit_id: localUnits[0]?.id ?? "", sell_price: "", buy_price: "", sell_currency: form.currency, buy_currency: form.buy_price_currency }])
   }
   function updatePkgRow(i: number, patch: Partial<PkgFormRow>) {
     setPkgRows(r => r.map((row, idx) => idx === i ? { ...row, ...patch } : row))
@@ -98,7 +102,7 @@ export default function ProduitsClient({ products: initial, categories, units }:
     const json = await res.json()
     if (res.ok && json.unit) {
       setLocalUnits(prev => [...prev, json.unit])
-      setPkgRows(r => [...r, { unit_id: json.unit.id, sell_price: "", buy_price: "", sell_currency: form.currency, buy_currency: form.buy_price_currency }])
+      setPkgRows([{ unit_id: json.unit.id, sell_price: "", buy_price: "", sell_currency: form.currency, buy_currency: form.buy_price_currency }])
       setShowNewFormat(false)
       setNewFormatName("")
     }
@@ -114,6 +118,10 @@ export default function ProduitsClient({ products: initial, categories, units }:
   })
 
   async function handleSave() {
+    if (["storable", "consumable"].includes(form.product_type) && (!form.packaging || (form.packaging === "Autre" && !form.packaging_other.trim()))) {
+      setSaveError("Conditionnement obligatoire pour une marchandise (et sa précision pour « Autre »).")
+      return
+    }
     setSaving(true)
     setSaveError("")
     // Derive unit_ids from packaging rows for backwards compat
@@ -126,6 +134,10 @@ export default function ProduitsClient({ products: initial, categories, units }:
         name: form.name,
         reference: form.reference || null,
         description: form.description || null,
+        product_type: form.product_type,
+        brand: form.brand.trim() || null,
+        packaging: ["storable", "consumable"].includes(form.product_type) ? form.packaging || null : null,
+        packaging_other: form.packaging === "Autre" ? form.packaging_other.trim() || null : null,
         category_id: form.category_id || null,
         unit_ids,
         buy_price: form.buy_price ? parseFloat(form.buy_price) : null,
@@ -162,7 +174,7 @@ export default function ProduitsClient({ products: initial, categories, units }:
     setShowNewFormat(false)
     setNewFormatName("")
     setPkgRows([])
-    setForm({ reference: "", name: "", description: "", category_id: categories[0]?.id ?? "", sell_price: "", currency: "GNF", buy_price: "", buy_price_currency: "GNF" })
+    setForm({ reference: "", name: "", description: "", product_type: "storable", brand: "", packaging: "", packaging_other: "", category_id: categories[0]?.id ?? "", sell_price: "", currency: "GNF", buy_price: "", buy_price_currency: "GNF" })
     setSaving(false)
   }
 
@@ -297,6 +309,37 @@ export default function ProduitsClient({ products: initial, categories, units }:
             <Input label={`${t("reference")} (optionnel)`} value={form.reference} onChange={e => setForm(f => ({ ...f, reference: e.target.value }))} placeholder="ex: CIM-42.5-001" />
           </div>
 
+          {/* A4 / M5 / M6: type, brand and packaging (20 L and 200 L are two distinct sheets, no conversion) */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Type <span className="text-red-500">*</span></label>
+              <select value={form.product_type} onChange={e => setForm(f => ({ ...f, product_type: e.target.value }))} data-testid="new-type"
+                className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="storable">Marchandise (suivie en stock)</option>
+                <option value="consumable">Consommable</option>
+                <option value="service">Prestation (jamais de stock)</option>
+                <option value="discount">Remise (jamais de stock, montant négatif)</option>
+              </select>
+            </div>
+            <Input label="Marque (optionnel)" value={form.brand} onChange={e => setForm(f => ({ ...f, brand: e.target.value }))} placeholder="ex: Total, Shell…" />
+            {["storable", "consumable"].includes(form.product_type) && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Conditionnement <span className="text-red-500">*</span></label>
+                <select value={form.packaging} onChange={e => setForm(f => ({ ...f, packaging: e.target.value }))} data-testid="new-packaging"
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="">Choisir…</option>
+                  {PACKAGING_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+            )}
+          </div>
+          {["storable", "consumable"].includes(form.product_type) && form.packaging === "Autre" && (
+            <div>
+              <Input label="Précisez le conditionnement *" value={form.packaging_other} onChange={e => setForm(f => ({ ...f, packaging_other: e.target.value }))} placeholder="ex : Fût 180 kg" />
+              <p className="text-xs text-amber-700 mt-1">La fiche devra être validée par un Manager avant d&apos;être utilisée sur un document.</p>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Select
               label={t("categorie")}
@@ -318,13 +361,15 @@ export default function ProduitsClient({ products: initial, categories, units }:
                   >
                     <span className="text-base font-bold leading-none">+</span> Créer format
                   </button>
+                  {pkgRows.length === 0 && (
                   <button
                     type="button"
                     onClick={addPkgRow}
                     className="flex items-center gap-1 text-xs text-green-700 hover:text-green-800 font-medium"
                   >
-                    <span className="text-base font-bold leading-none">+</span> Ajouter ligne
+                    <span className="text-base font-bold leading-none">+</span> Unité de la fiche
                   </button>
+                  )}
                 </div>
               </div>
 

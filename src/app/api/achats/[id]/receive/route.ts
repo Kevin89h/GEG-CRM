@@ -1,162 +1,60 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient as createAdminSupabase } from "@supabase/supabase-js"
-import { createClient } from "@/lib/supabase/server"
+import { receptionNumber } from "@/lib/stock-numbers"
+import { createSchemaClient } from "@/lib/supabase/admin"
 import { getCompanySchema } from "@/lib/company"
-
-interface StockMove {
-  type: "in"
-  product_id: string | null
-  to_warehouse_id: string | null
-  quantity: number
-  notes: string
-  user_id: string
-}
-
-interface ProductUpdate {
-  product_id: string
-  buy_price: number
-  buy_price_currency: string
-}
+import { errorResponse, requireSchemaAccess } from "@/lib/access"
+import { stockEngine } from "@/lib/stock-engine"
 
 interface ReceptionLine {
-  order_line_id: string | null
-  product_id: string | null
-  description: string
+  order_line_id: string
   quantity: number
-  unit_price: number
+  unit_price?: number
   warehouse_id: string | null
+  /** M3: client invoice line, for a direct supplier → customer delivery ("Livraison directe" location) */
+  invoice_line_id?: string | null
+  notes?: string | null
 }
 
+interface ProductUpdate { product_id: string; buy_price: number; buy_price_currency: string }
+
+// POST { receptionLines, productUpdates } — receives a purchase order (any user of the company, as in production today).
+// Phase 1 (M1, D3, T-01, M3): one database transaction (achat_receptionner): order locked, each quantity capped by
+// what REMAINS to receive on its line (a second reception can never count the whole order again), services received
+// without stock, a warehouse for every goods line, the direct-delivery location only with the customer's invoice line,
+// reception + lines + stock moves (linked to the reception lines) + levels + qty_received + status written together.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  const body = await req.json()
-  const { stockMoves, productUpdates, receptionLines } = body as {
-    stockMoves: StockMove[]
-    productUpdates: ProductUpdate[]
-    receptionLines?: ReceptionLine[]
-  }
+  try {
+    const { id } = await params
+    const schema = await getCompanySchema()
+    const access = await requireSchemaAccess(schema)
+    const db = createSchemaClient(schema)
+    const body = await req.json()
+    const lines = (Array.isArray(body.receptionLines) ? body.receptionLines : []) as ReceptionLine[]
+    if (!lines.length) return NextResponse.json({ error: "Aucune ligne à réceptionner" }, { status: 400 })
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+    const r = await stockEngine<{ reception_id: string; number: string; status: string }>(db, "achat_receptionner", {
+      p_order: id,
+      p_number: await receptionNumber(db),
+      p_lines: lines.map(l => ({
+        order_line_id: l.order_line_id, quantity: Number(l.quantity), unit_price: Number(l.unit_price ?? 0),
+        warehouse_id: l.warehouse_id ?? null, invoice_line_id: l.invoice_line_id ?? null, notes: l.notes ?? null,
+      })),
+      p_user: access.userId,
+    })
+    if (!r.ok) return r.response
 
-  const schema = await getCompanySchema()
-  const adminDb = createAdminSupabase(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  ).schema(schema)
-
-  // 1. Créer le bon de réception (admin pour bypasser RLS)
-  const { data: order } = await adminDb.from("purchase_orders").select("number").eq("id", id).single()
-  const { count } = await adminDb.from("purchase_receptions").select("id", { count: "exact", head: true })
-  const receptionNumber = `BR/${new Date().getFullYear()}/${String((count ?? 0) + 1).padStart(5, "0")}`
-
-  const { data: reception, error: recErr } = await adminDb.from("purchase_receptions").insert([{
-    order_id: id,
-    number: receptionNumber,
-    received_at: new Date().toISOString(),
-    user_id: user?.id ?? null,
-  }]).select("id").single()
-
-  if (recErr || !reception) {
-    return NextResponse.json({ error: `reception: ${recErr?.message}` }, { status: 400 })
-  }
-
-  // 2. Lignes du bon de réception
-  if (receptionLines && receptionLines.length > 0) {
-    await adminDb.from("purchase_reception_lines").insert(
-      receptionLines.map(l => ({
-        reception_id: reception.id,
-        order_line_id: l.order_line_id,
-        product_id: l.product_id,
-        description: l.description,
-        quantity: l.quantity,
-        unit_price: l.unit_price,
-        warehouse_id: l.warehouse_id,
-      }))
-    )
-
-    // Incrémenter qty_received sur chaque purchase_order_line
-    for (const l of receptionLines) {
-      if (!l.order_line_id) continue
-      const { data: pol } = await adminDb
-        .from("purchase_order_lines")
-        .select("qty_received")
-        .eq("id", l.order_line_id)
-        .single()
-      if (pol) {
-        await adminDb
-          .from("purchase_order_lines")
-          .update({ qty_received: Number(pol.qty_received ?? 0) + l.quantity })
-          .eq("id", l.order_line_id)
+    // purchase price of the received products (landed cost), only for the lines actually received (as in production today)
+    const updates = (Array.isArray(body.productUpdates) ? body.productUpdates : []) as ProductUpdate[]
+    if (updates.length) {
+      const { data: received } = await db.from("purchase_reception_lines").select("product_id").eq("reception_id", r.data.reception_id)
+      const ids = new Set(((received ?? []) as { product_id: string | null }[]).map(x => x.product_id))
+      for (const u of updates.filter(u => ids.has(u.product_id))) {
+        await db.from("products").update({ buy_price: u.buy_price, buy_price_currency: u.buy_price_currency }).eq("id", u.product_id)
       }
     }
+    const { data: order } = await db.from("purchase_orders").select("number").eq("id", id).single()
+    return NextResponse.json({ ok: true, receptionId: r.data.reception_id, receptionNumber: r.data.number, status: r.data.status, orderNumber: order?.number })
+  } catch (err) {
+    return errorResponse(err)
   }
-
-  // 2b. Déterminer le nouveau statut (partial ou received)
-  const { data: orderLines } = await adminDb
-    .from("purchase_order_lines")
-    .select("quantity, qty_received")
-    .eq("order_id", id)
-
-  let newStatus: "partial" | "received" = "received"
-  if (orderLines && orderLines.length > 0) {
-    const allReceived = orderLines.every(
-      ol => Number(ol.qty_received ?? 0) >= Number(ol.quantity ?? 0)
-    )
-    newStatus = allReceived ? "received" : "partial"
-  }
-
-  // 3. Mouvements de stock
-  if (stockMoves.length > 0) {
-    const { error: moveErr } = await adminDb.from("stock_moves").insert(stockMoves)
-    if (moveErr) return NextResponse.json({ error: `stock_moves: ${moveErr.message}` }, { status: 400 })
-
-    for (const m of stockMoves) {
-      if (!m.product_id || !m.to_warehouse_id) continue
-      const { data: level } = await adminDb
-        .from("stock_levels")
-        .select("quantity")
-        .eq("product_id", m.product_id)
-        .eq("warehouse_id", m.to_warehouse_id)
-        .maybeSingle()
-      const current = Number(level?.quantity ?? 0)
-      const { error: upsertErr } = await adminDb.from("stock_levels").upsert(
-        { product_id: m.product_id, warehouse_id: m.to_warehouse_id, quantity: current + m.quantity },
-        { onConflict: "product_id,warehouse_id" }
-      )
-      if (upsertErr) return NextResponse.json({ error: `stock_levels: ${upsertErr.message}` }, { status: 400 })
-    }
-  }
-
-  // 4. Mise à jour prix d'achat produits
-  for (const u of productUpdates) {
-    await adminDb.from("products").update({
-      buy_price: u.buy_price,
-      buy_price_currency: u.buy_price_currency,
-    }).eq("id", u.product_id)
-  }
-
-  // 5. Statut PO → partial ou received
-  const { data: currentOrder } = await adminDb.from("purchase_orders").select("status").eq("id", id).single()
-  const { error: orderErr } = await adminDb.from("purchase_orders").update({ status: newStatus }).eq("id", id)
-  if (orderErr) return NextResponse.json({ error: `purchase_orders: ${orderErr.message}` }, { status: 400 })
-
-  // 6. Événement de réception dans l'historique
-  await adminDb.from("purchase_order_events").insert([{
-    order_id:   id,
-    event_type: "reception",
-    payload: {
-      reception_id: reception.id,
-      from:  currentOrder?.status ?? null,
-      to:    newStatus,
-      lines: receptionLines?.map(l => ({
-        order_line_id: l.order_line_id,
-        description:   l.description,
-        quantity:      l.quantity,
-      })) ?? [],
-    },
-    user_id: user?.id ?? null,
-  }])
-
-  return NextResponse.json({ ok: true, receptionId: reception.id, receptionNumber, orderNumber: order?.number })
 }

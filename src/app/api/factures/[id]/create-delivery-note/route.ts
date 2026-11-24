@@ -1,48 +1,30 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { invoiceDeliveryNoteNumber } from "@/lib/stock-numbers"
+import { createSchemaClient } from "@/lib/supabase/admin"
 import { getCompanySchema } from "@/lib/company"
+import { errorResponse, requireSchemaAccess } from "@/lib/access"
+import { stockEngine } from "@/lib/stock-engine"
 
-export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  const { lines, userId, accountId } = await req.json()
-  const schema = await getCompanySchema()
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const db = (createAdminClient() as any).schema(schema)
-
-  const { count } = await db.from("delivery_notes").select("id", { count: "exact", head: true })
-  const year = new Date().getFullYear()
-  const blNumber = `BL/${year}/${String((count ?? 0) + 1).padStart(5, "0")}`
-
-  const { data: dn, error: dnError } = await db
-    .from("delivery_notes")
-    .insert([{
-      number: blNumber,
-      invoice_id: id,
-      account_id: accountId ?? null,
-      status: "draft",
-      user_id: userId,
-    }])
-    .select("id")
-    .single()
-
-  if (dnError || !dn) {
-    return NextResponse.json({ error: dnError?.message ?? "Failed to create delivery note" }, { status: 400 })
+// POST — « Livrer » an emitted invoice (any user of the company, as in production today). A1 (GEG 24/11/2026):
+// - an existing DRAFT delivery note of this invoice is reused (never a second draft, even on a double click);
+// - otherwise a draft is created with, for each goods line, what REMAINS to deliver (all confirmed notes deducted),
+//   linked to its invoice line; services, discounts and quantities already delivered are left out; comments chosen
+//   for the delivery note are kept as text;
+// - nothing leaves the stock here: only the confirmation of the delivery note moves the stock.
+export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params
+    const schema = await getCompanySchema()
+    const access = await requireSchemaAccess(schema)
+    const db = createSchemaClient(schema)
+    const r = await stockEngine<{ id: string; number: string; reused: boolean }>(db, "livraison_preparer", {
+      p_invoice: id, p_number: await invoiceDeliveryNoteNumber(db), p_user: access.userId,
+    })
+    if (!r.ok) return r.response
+    // a free line of the invoice (no catalogue sheet) is copied « not linked »: it must be linked to its sheet on the
+    // delivery note before confirmation (ANO-001); the stock then leaves normally
+    return NextResponse.json({ deliveryNoteId: r.data.id, number: r.data.number, reused: r.data.reused })
+  } catch (err) {
+    return errorResponse(err)
   }
-
-  if (lines && lines.length > 0) {
-    const { error: linesError } = await db.from("delivery_note_lines").insert(
-      lines.map((l: { product_id: string | null; description: string; quantity: number }, i: number) => ({
-        delivery_note_id: dn.id,
-        product_id: l.product_id ?? null,
-        description: l.description,
-        quantity: l.quantity,
-        position: i,
-      }))
-    )
-    if (linesError) {
-      return NextResponse.json({ error: linesError.message }, { status: 400 })
-    }
-  }
-
-  return NextResponse.json({ deliveryNoteId: dn.id })
 }

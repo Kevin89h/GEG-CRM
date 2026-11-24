@@ -31,8 +31,12 @@ export async function POST(req: NextRequest)  {
     const seq = String((count ?? 0) + 1).padStart(4, "0")
     const number = `FAC-${year}-${month}-${seq}`
 
+    // M4 (GEG 24/11/2026): the invoice is created as a DRAFT with its lines, then emitted: the purchase check of the
+    // database runs at the emission (draft → sent) and can never be bypassed by creating it already emitted
+    const requestedStatus = (invoiceData.status as string | undefined) ?? "draft"
     const { data: invoice, error: invErr } = await db.from("invoices").insert([{
       ...invoiceData,
+      status: "draft",
       number,
       user_id,
     }]).select("id").single()
@@ -44,6 +48,12 @@ export async function POST(req: NextRequest)  {
         lines.map(l => ({ ...l, invoice_id: invoice.id }))
       )
       if (lineErr) return NextResponse.json({ error: lineErr.message }, { status: 400 })
+    }
+
+    if (requestedStatus !== "draft") {
+      const { error: stErr } = await db.from("invoices").update({ status: requestedStatus }).eq("id", invoice.id)
+      // refused (e.g. goods not covered by stock nor by a recorded purchase): the invoice stays a draft, with the reason
+      if (stErr) return NextResponse.json({ error: stErr.message, id: invoice.id }, { status: 409 })
     }
 
     logActivity({ action: "create", resource: "invoice", resourceId: invoice.id, label: `Facture ${number} créée`, details: { number } })

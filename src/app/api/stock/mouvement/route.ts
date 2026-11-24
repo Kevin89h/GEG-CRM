@@ -1,105 +1,30 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createAdminClient } from "@/lib/supabase/admin"
-import { guard, requireSchemaAccess } from "@/lib/access"
+import { createSchemaClient } from "@/lib/supabase/admin"
+import { errorResponse, requireSchemaAccess } from "@/lib/access"
+import { getCompanySchema } from "@/lib/company"
+import { stockEngine } from "@/lib/stock-engine"
 
-export async function POST(req: NextRequest)  {
-  const denied = await guard(() => requireSchemaAccess("geg_guinee"))
-  if (denied) return denied
+// POST { type, product_id, from_warehouse_id, to_warehouse_id, quantity, notes, reason } — manual stock operation
+// (permission "stock.mouvement_manuel", checked by the middleware). Phase 1 (M1, A5, GEG 24/11/2026): one database
+// transaction (stock_appliquer) — stocks locked, checked BEFORE writing, never negative, the move and the levels are
+// written together or not at all, precise refusal message (product, warehouse, requested, available).
+export async function POST(req: NextRequest) {
   try {
+    const schema = await getCompanySchema()
+    const access = await requireSchemaAccess(schema)
     const body = await req.json()
-    const { type, product_id, from_warehouse_id, to_warehouse_id, quantity, notes, user_id } = body as {
-      type: string
-      product_id: string
-      from_warehouse_id: string | null
-      to_warehouse_id: string | null
-      quantity: number
-      notes: string | null
-      user_id: string
-    }
-
-    const db = createAdminClient().schema("geg_guinee")
-
-    if (type === "adjustment") {
-      // For adjustment: quantity = target absolute value
-      const { data: level } = await db
-        .from("stock_levels")
-        .select("quantity")
-        .eq("product_id", product_id)
-        .eq("warehouse_id", to_warehouse_id!)
-        .maybeSingle()
-
-      const currentQty = Number(level?.quantity ?? 0)
-      const delta = quantity - currentQty
-
-      if (delta !== 0) {
-        const { error: moveErr } = await db.from("stock_moves").insert([{
-          type: "adjustment",
-          product_id,
-          quantity: Math.abs(delta),
-          notes: notes ?? `Ajustement: ${currentQty} → ${quantity}`,
-          to_warehouse_id,
-          from_warehouse_id: null,
-          user_id,
-        }])
-        if (moveErr) return NextResponse.json({ error: moveErr.message }, { status: 400 })
-
-        const { error: levelErr } = await db.from("stock_levels").upsert(
-          { product_id, warehouse_id: to_warehouse_id!, quantity },
-          { onConflict: "product_id,warehouse_id" }
-        )
-        if (levelErr) return NextResponse.json({ error: levelErr.message }, { status: 400 })
-      }
-      return NextResponse.json({ ok: true, delta })
-    }
-
-    // General move types: in, out, transfer, damaged, lost, destroyed
-    const { error: moveErr } = await db.from("stock_moves").insert([{
-      type, product_id, quantity, notes,
-      from_warehouse_id: from_warehouse_id || null,
-      to_warehouse_id: to_warehouse_id || null,
-      user_id,
-    }])
-    if (moveErr) return NextResponse.json({ error: moveErr.message }, { status: 400 })
-
-    // Update stock_levels
-    const needsFrom = ["out", "transfer", "damaged", "lost", "destroyed"].includes(type)
-    const needsTo = ["in", "transfer"].includes(type)
-
-    if (needsFrom && from_warehouse_id) {
-      const { data: lFrom } = await db.from("stock_levels")
-        .select("quantity")
-        .eq("product_id", product_id)
-        .eq("warehouse_id", from_warehouse_id)
-        .maybeSingle()
-      const cur = Number(lFrom?.quantity ?? 0)
-      if (cur < quantity) {
-        return NextResponse.json(
-          { error: `Stock insuffisant: ${cur} disponible, ${quantity} demandé` },
-          { status: 422 }
-        )
-      }
-      await db.from("stock_levels").upsert(
-        { product_id, warehouse_id: from_warehouse_id, quantity: cur - quantity },
-        { onConflict: "product_id,warehouse_id" }
-      )
-    }
-
-    if (needsTo && to_warehouse_id) {
-      const { data: lTo } = await db.from("stock_levels")
-        .select("quantity")
-        .eq("product_id", product_id)
-        .eq("warehouse_id", to_warehouse_id)
-        .maybeSingle()
-      const cur = Number(lTo?.quantity ?? 0)
-      await db.from("stock_levels").upsert(
-        { product_id, warehouse_id: to_warehouse_id, quantity: cur + quantity },
-        { onConflict: "product_id,warehouse_id" }
-      )
-    }
-
-    return NextResponse.json({ ok: true })
-
+    const r = await stockEngine(createSchemaClient(schema), "stock_appliquer", {
+      p_type: String(body.type ?? ""),
+      p_product: body.product_id || null,
+      p_from: body.from_warehouse_id || null,
+      p_to: body.to_warehouse_id || null,
+      p_quantity: body.quantity === "" || body.quantity == null ? null : Number(body.quantity),
+      p_user: access.userId,
+      p_notes: body.notes ? String(body.notes) : null,
+      p_reason: body.reason ? String(body.reason) : null,
+    })
+    return r.ok ? NextResponse.json(r.data) : r.response
   } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 })
+    return errorResponse(err)
   }
 }

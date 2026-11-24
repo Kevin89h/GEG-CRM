@@ -20,7 +20,7 @@ export default async function BonLivraisonPage({ params }: { params: Promise<{ l
   const { data: warehousesRaw } = await db
     .from("warehouses")
     .select("id, name")
-    .eq("is_active", true)
+    .eq("is_active", true).eq("kind", "physical")
     .order("name")
 
   const lines = ((order.lines ?? []) as Record<string, unknown>[])

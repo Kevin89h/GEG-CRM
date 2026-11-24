@@ -8,6 +8,7 @@ import { useTranslations } from "next-intl"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { formatNumber } from "@/lib/utils"
 import { PROJECT_OPTIONS } from "@/lib/projects"
+import StockAlert from "@/components/sales/StockAlert"
 
 /* --- Types ----------------------------------------------- */
 interface Account  { id: string; name: string; salesperson_id: string | null; cgv_text?: string | null }
@@ -263,7 +264,7 @@ export default function NouveauDevisClient({
   /* Modal produit */
   const [showProductModal, setShowProductModal] = useState(false)
   const [pendingLineIndex,  setPendingLineIndex] = useState<number | null>(null)
-  const [pForm, setPForm] = useState({ name: "", reference: "", sell_price: "", unit_id: "" })
+  const [pForm, setPForm] = useState({ name: "", reference: "", sell_price: "", unit_id: "", product_type: "storable", packaging: "", packaging_other: "" })
   const [pSaving, setPSaving] = useState(false)
   const [pError,  setPError]  = useState<string | null>(null)
 
@@ -303,23 +304,12 @@ export default function NouveauDevisClient({
 
   function onProductSelected(lineId: number, productId: string) {
     const p = products.find(p => p.id === productId)
-    const firstPkg = p?.packaging?.[0]
+    // M5 (GEG 24/11/2026): the unit and the price are those of the sheet; alternative packagings are no longer sold
     updateLine(lineId, {
       product_id:  productId,
       description: p?.name ?? "",
-      unit_price:  String(firstPkg?.sell_price ?? p?.sell_price ?? 0),
-      unit_id:     firstPkg?.unit_id ?? p?.unit?.id ?? "",
-    })
-  }
-
-  function onUnitChanged(lineId: number, unitId: string) {
-    const line = lines.find(l => l.id === lineId)
-    if (!line) return
-    const p = products.find(p => p.id === line.product_id)
-    const pkg = p?.packaging?.find(pk => pk.unit_id === unitId)
-    updateLine(lineId, {
-      unit_id: unitId,
-      ...(pkg?.sell_price != null ? { unit_price: String(pkg.sell_price) } : {}),
+      unit_price:  String(p?.sell_price ?? 0),
+      unit_id:     p?.unit?.id ?? "",
     })
   }
 
@@ -363,7 +353,7 @@ export default function NouveauDevisClient({
   /* -- Création produit -- */
   function openProductModal(lineIndex: number) {
     setPendingLineIndex(lineIndex)
-    setPForm({ name: "", reference: "", sell_price: "", unit_id: units[0]?.id ?? "" })
+    setPForm({ name: "", reference: "", sell_price: "", unit_id: units[0]?.id ?? "", product_type: "storable", packaging: "", packaging_other: "" })
     setPError(null)
     setShowProductModal(true)
   }
@@ -374,7 +364,8 @@ export default function NouveauDevisClient({
     const res = await fetch("/api/stock/produits", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: pForm.name.trim(), reference: pForm.reference || null, sell_price: pForm.sell_price ? parseFloat(pForm.sell_price) : null, currency: form.currency, unit_id: pForm.unit_id || null, is_active: true }),
+      body: JSON.stringify({ name: pForm.name.trim(), reference: pForm.reference || null, sell_price: pForm.sell_price ? parseFloat(pForm.sell_price) : null, currency: form.currency, unit_id: pForm.unit_id || null, is_active: true,
+        product_type: pForm.product_type, packaging: ["storable", "consumable"].includes(pForm.product_type) ? pForm.packaging || null : null, packaging_other: pForm.packaging === "Autre" ? pForm.packaging_other || null : null }),
     })
     const json = await res.json()
     if (!res.ok) { setPError(json.error ?? t("erreur")); setPSaving(false); return }
@@ -732,25 +723,8 @@ export default function NouveauDevisClient({
                             />
                           </td>
                           <td className="px-3 py-2">
-                            {(() => {
-                              const prod = products.find(p => p.id === l.product_id)
-                              const pkgUnitIds = prod?.packaging?.map(pk => pk.unit_id)
-                              const availableUnits = pkgUnitIds?.length
-                                ? units.filter(u => pkgUnitIds.includes(u.id))
-                                : prod?.unit_ids?.length
-                                  ? units.filter(u => prod.unit_ids!.includes(u.id))
-                                  : units
-                              return (
-                                <select
-                                  value={l.unit_id}
-                                  onChange={e => onUnitChanged(l.id, e.target.value)}
-                                  className="w-full text-sm bg-transparent outline-none border-b border-transparent hover:border-gray-200 focus:border-blue-400 py-0.5"
-                                >
-                                  <option value="">—</option>
-                                  {availableUnits.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                                </select>
-                              )
-                            })()}
+                            {/* M5: the unit of the sheet, never another one (choose the sheet of the other packaging instead) */}
+                            <span className="text-sm text-gray-600" title="Unité de la fiche produit">{units.find(u => u.id === l.unit_id)?.name ?? "—"}</span>
                           </td>
                           <td className="px-3 py-2">
                             <input
@@ -803,6 +777,9 @@ export default function NouveauDevisClient({
             </div>
 
             {/* Zone conditions + totaux */}
+            {/* A2: stock per warehouse (internal, never printed) */}
+            <StockAlert className="px-8 pb-3" lines={lines.map(l => ({ product_id: (l as { product_id?: string | null }).product_id || null, quantity: (l as { quantity: number | string }).quantity }))} />
+
             <div className="border-t border-gray-100 px-8 py-5 flex gap-8">
               <div className="flex-1 space-y-3">
                 <div>
@@ -967,6 +944,29 @@ export default function NouveauDevisClient({
                 </select>
               </div>
             </div>
+            {/* type and packaging of the new sheet (M5, M6): one sheet = one packaging; a discount never holds stock */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Type</label>
+                <select value={pForm.product_type} onChange={e => setPForm(f => ({ ...f, product_type: e.target.value }))} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white">
+                  <option value="storable">Marchandise</option>
+                  <option value="service">Prestation</option>
+                  <option value="discount">Remise</option>
+                </select>
+              </div>
+              {pForm.product_type === "storable" && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Conditionnement *</label>
+                  <select value={pForm.packaging} onChange={e => setPForm(f => ({ ...f, packaging: e.target.value }))} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white">
+                    <option value="">Choisir…</option>
+                    {["1 L", "4 L", "5 L", "20 L", "200 L", "208 L", "Autre"].map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+              )}
+            </div>
+            {pForm.product_type === "storable" && pForm.packaging === "Autre" && (
+              <LabeledInput label="Préciser le conditionnement *" value={pForm.packaging_other} onChange={v => setPForm(f => ({ ...f, packaging_other: v }))} placeholder="ex : Fût 180 kg" />
+            )}
             <LabeledInput label={t("prixDeVenteLabel", { currency: form.currency })} type="number" value={pForm.sell_price} onChange={v => setPForm(f => ({ ...f, sell_price: v }))} placeholder="0" />
             {pError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg">{pError}</p>}
             <div className="flex gap-3 pt-2">

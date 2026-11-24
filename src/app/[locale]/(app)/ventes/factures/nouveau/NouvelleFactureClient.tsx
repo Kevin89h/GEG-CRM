@@ -6,6 +6,7 @@ import { Plus, Trash2, ChevronDown } from "lucide-react"
 import { useTranslations } from "next-intl"
 import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { formatNumber } from "@/lib/utils"
+import StockAlert from "@/components/sales/StockAlert"
 
 interface Account { id: string; name: string }
 interface Product { id: string; name: string; reference: string | null; sell_price: number; currency: string }
@@ -62,6 +63,10 @@ function AccountPicker({ accounts, value, onSelect, onCreated }: {
     })
     const json = await res.json()
     setCreating(false)
+    // A4 / A6: a sheet needs its type and packaging, and duplicates are refused: explain instead of failing silently
+    if (!res.ok) { window.alert(`${json.error ?? "Création impossible"}
+
+Créez la fiche complète (type, conditionnement, unité) dans Stock › Produits, puis choisissez-la ici.`); return }
     if (res.ok && json.id) {
       const newAccount: Account = { id: json.id, name: json.name }
       onCreated(newAccount)
@@ -423,6 +428,9 @@ export default function NouvelleFactureClient({ locale, accounts: initialAccount
               })}
             </tbody>
           </table>
+
+          {/* A2: stock per warehouse (internal, never printed) */}
+          <StockAlert className="mt-3" lines={lines.filter(l => l.kind !== "note").map(l => ({ product_id: l.product_id || null, quantity: l.quantity }))} />
 
           <div className="flex gap-4 mt-3">
             <button onClick={addProductLine} className="flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-500 font-medium">
