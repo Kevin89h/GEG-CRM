@@ -12,6 +12,10 @@ export interface Availability {
   service: boolean
   total: number
   warehouses: { id: string; name: string; quantity: number }[]
+  product_code?: string | null
+  brand?: string | null
+  packaging?: string | null
+  unit?: string | null
 }
 
 interface StockAlertProps {
@@ -63,10 +67,25 @@ export default function StockAlert({ lines, onAvailability, className = "" }: St
     return [{ id, a, qty, short: qty > a.total }]
   })
 
-  if (alerts.length === 0) return null
+  // A2: stock total and per warehouse of every goods product of the document (internal screen only, never printed)
+  const goods = [...requested.keys()].map(id => ({ id, a: data[id] })).filter(x => x.a && !x.a.service)
+  if (alerts.length === 0 && goods.length === 0) return null
 
   return (
     <div className={`space-y-2 ${className}`}>
+      {goods.length > 0 && (
+        <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-xs text-gray-600" data-testid="stock-availability">
+          <p className="font-semibold text-gray-700 mb-0.5">Stock disponible (information interne, jamais imprimée)</p>
+          {goods.map(({ id, a }) => (
+            <p key={id}>
+              <span className="font-medium text-gray-800">{[a.product_code, a.name].filter(Boolean).join(" ")}</span>
+              {[a.brand, a.packaging, a.unit ? `unité : ${a.unit}` : null].filter(Boolean).length > 0 && <> ({[a.brand, a.packaging, a.unit ? `unité : ${a.unit}` : null].filter(Boolean).join(" · ")})</>}
+              {" — "}total <strong>{formatNumber(a.total)}</strong>
+              {a.warehouses.map(w => ` · ${w.name} : ${formatNumber(w.quantity)}`).join("")}
+            </p>
+          ))}
+        </div>
+      )}
       {alerts.map(({ id, a, qty, short }) => {
         const stocked = a.warehouses.filter(w => w.quantity > 0)
         return (

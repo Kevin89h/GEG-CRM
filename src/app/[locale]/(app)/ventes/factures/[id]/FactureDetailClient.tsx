@@ -73,7 +73,25 @@ interface Invoice {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-interface Props { invoice: Invoice; locale: string; treasuryAccounts: TreasuryAccount[]; warehouses: Warehouse[]; deliveryNotes: DeliveryNote[]; docSettings?: Record<string, any>; perms: string[] }
+interface Props { invoice: Invoice; locale: string; treasuryAccounts: TreasuryAccount[]; warehouses: Warehouse[]; deliveryNotes: DeliveryNote[]; docSettings?: Record<string, any>; perms: string[]; delivery?: Delivery }
+
+/** A1: delivery state of the invoice and, per goods line, quantities delivered / remaining (all confirmed notes) */
+export interface Delivery {
+  state: "non_livree" | "partielle" | "livree" | "sans_marchandise" | "avoir" | "annulee" | "brouillon"
+  remaining: number
+  draftNotes: number
+  lines: Record<string, { delivered: number; remaining: number }>
+}
+
+const DELIVERY_LABEL: Record<Delivery["state"], { label: string; color: string }> = {
+  non_livree: { label: "Non livrée", color: "bg-red-100 text-red-700" },
+  partielle: { label: "Partiellement livrée", color: "bg-amber-100 text-amber-700" },
+  livree: { label: "Livrée", color: "bg-emerald-100 text-emerald-700" },
+  sans_marchandise: { label: "Sans marchandise à livrer", color: "bg-gray-100 text-gray-500" },
+  avoir: { label: "Avoir", color: "bg-gray-100 text-gray-500" },
+  annulee: { label: "Annulée", color: "bg-gray-100 text-gray-500" },
+  brouillon: { label: "Brouillon", color: "bg-gray-100 text-gray-500" },
+}
 
 const statusColor: Record<string, string> = {
   draft: "bg-gray-100 text-gray-600",
@@ -83,7 +101,7 @@ const statusColor: Record<string, string> = {
   cancelled: "bg-red-100 text-red-600",
 }
 
-export default function FactureDetailClient({ invoice: initial, locale, treasuryAccounts, warehouses, deliveryNotes: initialDNs, docSettings = {}, perms }: Props) {
+export default function FactureDetailClient({ invoice: initial, locale, treasuryAccounts, warehouses, deliveryNotes: initialDNs, docSettings = {}, perms, delivery }: Props) {
   const router = useRouter()
   const t = useTranslations("factures")
   const [invoice, setInvoice] = useState(initial)
@@ -495,29 +513,13 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
 
   const hasStockLines = invoice.lines.some(l => l.product_id)
 
+  // A1 « Livrer »: the server reuses the draft delivery note of this invoice, or creates one with what remains to deliver
   async function createDeliveryNote() {
+    if (creatingBL) return
     setCreatingBL(true)
     setError(null)
     try {
-      const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { setError("Non authentifié"); setCreatingBL(false); return }
-
-      const accountId = invoice.account_id ?? null
-      const res = await fetch(`/api/factures/${invoice.id}/create-delivery-note`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: user.id,
-          accountId,
-          // Comment lines are never delivered
-          lines: invoice.lines.filter(l => !isComment(l)).map(l => ({
-            product_id: l.product_id ?? null,
-            description: l.description,
-            quantity: l.quantity,
-          })),
-        }),
-      })
+      const res = await fetch(`/api/factures/${invoice.id}/create-delivery-note`, { method: "POST" })
       const json = await res.json()
       if (!res.ok) {
         const msg = json.error ?? "Erreur lors de la création du bon de livraison"
@@ -780,6 +782,11 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
       <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
         <div>
           <h1 className="text-xl md:text-2xl font-bold text-gray-900 font-mono mb-0.5">{invoice.number}</h1>
+          {invoice.status !== "draft" && !isCancelled && delivery && (
+            <span className={`inline-block mb-1 text-xs px-2 py-0.5 rounded-full font-medium ${DELIVERY_LABEL[delivery.state].color}`} data-testid="delivery-state">
+              {DELIVERY_LABEL[delivery.state].label}{delivery.state === "partielle" ? ` — reste ${formatNumber(delivery.remaining)}` : ""}
+            </span>
+          )}
           {editingAccount ? (
             <div className="relative mt-1">
               <input
@@ -852,9 +859,9 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
             clientName={invoice.account?.name}
             type="facture"
           />
-          {!isCancelled && invoice.status !== "draft" && allows(perms, "livraisons.creer") && (
-            <Button variant="secondary" onClick={createDeliveryNote} disabled={creatingBL}>
-              <Truck className="w-4 h-4" /> {creatingBL ? t("creating") : t("deliveryNote")}
+          {!isCancelled && invoice.status !== "draft" && allows(perms, "livraisons.creer") && delivery && (delivery.draftNotes > 0 || ["non_livree", "partielle"].includes(delivery.state)) && (
+            <Button variant="secondary" onClick={createDeliveryNote} disabled={creatingBL} data-testid="livrer">
+              <Truck className="w-4 h-4" /> {creatingBL ? t("creating") : delivery.draftNotes > 0 ? "Reprendre le BL brouillon" : "Livrer"}
             </Button>
           )}
         </div>
@@ -1045,6 +1052,12 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
                   ) : (
                     <span className="font-medium text-gray-900">{l.description}</span>
                   )}
+                  {/* A1: delivered / remaining per goods line (emitted invoice) */}
+                  {!isDraft && delivery?.lines[l.id] && (
+                    <div className="mt-0.5 text-xs text-gray-500" data-testid="line-delivery">
+                      Livré {formatNumber(delivery.lines[l.id].delivered)} · reste à livrer {formatNumber(delivery.lines[l.id].remaining)}
+                    </div>
+                  )}
                   {/* R1: an old free line of a draft must be attached to a catalogue product before emission */}
                   {!l.product_id && isDraft && !isCreditNote && (
                     <div className="flex items-center gap-2 mt-0.5 flex-wrap">
@@ -1194,8 +1207,8 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
             La facture ne pourra pas être émise tant qu&apos;elles ne sont pas rattachées à un produit ou un service du catalogue (ou supprimées).
           </div>
         )}
-        {/* R3: non-blocking stock alerts on draft invoices (services never checked) */}
-        {isDraft && (
+        {/* R3 + A2: stock per warehouse (internal) and non-blocking alerts (services and discounts never checked) */}
+        {!isCancelled && (
           <StockAlert className="mx-4 mb-3" lines={invoice.lines.filter(l => !isComment(l)).map(l => ({ product_id: l.product_id, quantity: l.quantity }))} />
         )}
         <div className="border-t border-gray-100 px-4 py-3 flex flex-col items-end gap-1 text-sm">

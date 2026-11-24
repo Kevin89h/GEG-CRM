@@ -1,58 +1,31 @@
 import { NextRequest, NextResponse } from "next/server"
 import { nextDeliveryNoteNumber } from "@/lib/numbering"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { createSchemaClient } from "@/lib/supabase/admin"
 import { getCompanySchema } from "@/lib/company"
-import { deliveryRowsWithComments } from "@/lib/catalog"
+import { errorResponse, requireSchemaAccess } from "@/lib/access"
+import { stockEngine } from "@/lib/stock-engine"
 import { applyValidatedLinks } from "@/lib/delivery-lines"
 
-export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  const { lines, userId, accountId } = await req.json()
-  const schema = await getCompanySchema()
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const db = (createAdminClient() as any).schema(schema)
-
-  const blNumber = await nextDeliveryNoteNumber(db)
-
-  const { data: dn, error: dnError } = await db
-    .from("delivery_notes")
-    .insert([{
-      number: blNumber,
-      invoice_id: id,
-      account_id: accountId ?? null,
-      status: "draft",
-      user_id: userId,
-    }])
-    .select("id")
-    .single()
-
-  if (dnError || !dn) {
-    return NextResponse.json({ error: dnError?.message ?? "Failed to create delivery note" }, { status: 400 })
+// POST — « Livrer » an emitted invoice (permission "livraisons.creer", checked by the middleware). A1 (GEG 24/11/2026):
+// - an existing DRAFT delivery note of this invoice is reused (never a second draft, even on a double click);
+// - otherwise a draft is created with, for each goods line, what REMAINS to deliver (all confirmed notes deducted),
+//   linked to its invoice line; services, discounts and quantities already delivered are left out; comments chosen
+//   for the delivery note are kept as text;
+// - nothing leaves the stock here: only the confirmation of the delivery note moves the stock.
+export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params
+    const schema = await getCompanySchema()
+    const access = await requireSchemaAccess(schema)
+    const db = createSchemaClient(schema)
+    const r = await stockEngine<{ id: string; number: string; reused: boolean }>(db, "livraison_preparer", {
+      p_invoice: id, p_number: await nextDeliveryNoteNumber(db), p_user: access.userId,
+    })
+    if (!r.ok) return r.response
+    // an old free line of the invoice gets its sheet from a VALIDATED historical correspondence (never a proposed one)
+    if (!r.data.reused) await applyValidatedLinks(db, r.data.id, "invoice_lines", id)
+    return NextResponse.json({ deliveryNoteId: r.data.id, number: r.data.number, reused: r.data.reused })
+  } catch (err) {
+    return errorResponse(err)
   }
-
-  // Comment lines (text only, no quantity) are never delivered: the invoice's comments are copied as comments,
-  // in their place, with their "Imprimer sur le bon de livraison" choice
-  type Row = { product_id: string | null; description: string; quantity: number }
-  const deliverable: Row[] = (lines ?? []).filter((l: { line_type?: string | null; product_id?: string | null; quantity?: number }) =>
-    l.line_type !== "comment" && !(!l.product_id && Number(l.quantity ?? 0) === 0))
-    .map((l: Row) => ({ product_id: l.product_id ?? null, description: l.description, quantity: l.quantity }))
-  const { data: source } = await db.from("invoice_lines").select("product_id, description, line_type, print_on_delivery, position").eq("invoice_id", id).order("position")
-  const queue = [...deliverable]
-  const rows = deliveryRowsWithComments((source ?? []) as { product_id: string | null; description: string; line_type: string | null; print_on_delivery: boolean | null }[], (l) => {
-    const i = queue.findIndex(q => q.product_id === l.product_id)
-    return i >= 0 ? queue.splice(i, 1)[0] : null
-  }, queue)
-  if (rows.some(r => !("line_type" in r))) {
-    const { error: linesError } = await db.from("delivery_note_lines").insert(
-      rows.map(r => ({ line_type: "product", print_on_delivery: true, ...r, delivery_note_id: dn.id }))
-    )
-    if (linesError) {
-      return NextResponse.json({ error: linesError.message }, { status: 400 })
-    }
-    // an old free line of the invoice gets its catalogue sheet from a VALIDATED historical correspondence (never a
-    // proposed one); the others stay "not linked" and must be linked before the delivery note can be validated
-    await applyValidatedLinks(db, dn.id, "invoice_lines", id)
-  }
-
-  return NextResponse.json({ deliveryNoteId: dn.id })
 }

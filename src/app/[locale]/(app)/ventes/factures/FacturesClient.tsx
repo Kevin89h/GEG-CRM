@@ -25,7 +25,17 @@ interface Invoice {
   total_paid: number
   balance: number
   client_name: string
+  /** A1: delivery state of the goods (emitted invoices) */
+  delivery_state?: string | null
 }
+
+const DELIVERY_BADGE: Record<string, { label: string; color: string }> = {
+  non_livree: { label: "Non livrée", color: "text-red-600" },
+  partielle: { label: "Partiellement livrée", color: "text-amber-600" },
+  livree: { label: "Livrée", color: "text-emerald-600" },
+}
+const TO_DELIVER = (i: { status: string; delivery_state?: string | null }) =>
+  ["sent", "partial", "paid"].includes(i.status) && (i.delivery_state === "non_livree" || i.delivery_state === "partielle")
 
 interface Props {
   invoices: Invoice[]
@@ -81,6 +91,8 @@ export default function FacturesClient({ invoices, schema, fx }: Props) {
   const [search, setSearch] = useState("")
   const [filterCurrency, setFilterCurrency] = useState<string>("all")
   const [filterOverdue, setFilterOverdue] = useState(false)
+  // A1: « Factures à livrer » — emitted invoices whose goods are not (fully) delivered
+  const [filterToDeliver, setFilterToDeliver] = useState(false)
   const [sortField, setSortField] = useState<SortField>("issue_date")
   const [sortDir, setSortDir] = useState<SortDir>("desc")
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -197,6 +209,7 @@ export default function FacturesClient({ invoices, schema, fx }: Props) {
     else base = invoices
 
     if (statusFilters.size > 0) base = base.filter(i => statusFilters.has(i.status))
+    if (filterToDeliver) base = invoices.filter(TO_DELIVER)
 
     if (search) {
       const q = search.toLowerCase()
@@ -224,7 +237,7 @@ export default function FacturesClient({ invoices, schema, fx }: Props) {
       }
     })
     return base
-  }, [tab, statusFilters, search, filterCurrency, filterOverdue, sortField, sortDir, invoices])
+  }, [tab, statusFilters, search, filterCurrency, filterOverdue, filterToDeliver, sortField, sortDir, invoices])
 
   const TABS: { key: Tab; label: string; count: number }[] = [
     { key: "ouvertes",   label: t("tabOpen"),    count: stats.ouvertes },
@@ -323,6 +336,17 @@ export default function FacturesClient({ invoices, schema, fx }: Props) {
             }`}
           >
             <AlertTriangle className="w-3 h-3" /> En retard
+          </button>
+
+          {/* A1: invoices to deliver */}
+          <button
+            onClick={() => setFilterToDeliver(v => !v)}
+            data-testid="filter-to-deliver"
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded border transition font-medium ${
+              filterToDeliver ? "bg-amber-50 border-amber-300 text-amber-700" : "border-gray-200 text-gray-500 hover:border-gray-300"
+            }`}
+          >
+            Factures à livrer ({invoices.filter(TO_DELIVER).length})
           </button>
 
           <div className="relative">
@@ -501,6 +525,9 @@ export default function FacturesClient({ invoices, schema, fx }: Props) {
                         <Link href={`/${locale}/ventes/factures/${i.id}`} className="font-mono font-semibold text-blue-600 hover:underline text-xs">
                           {i.number}
                         </Link>
+                        {["sent", "partial", "paid"].includes(i.status) && i.delivery_state && DELIVERY_BADGE[i.delivery_state] && (
+                          <div className={`text-[10px] font-medium ${DELIVERY_BADGE[i.delivery_state].color}`}>{DELIVERY_BADGE[i.delivery_state].label}</div>
+                        )}
                       </td>
                       <td className="px-4 py-3 font-medium text-gray-900">{i.client_name || "—"}</td>
                       <td className="px-4 py-3 text-gray-500 text-xs">

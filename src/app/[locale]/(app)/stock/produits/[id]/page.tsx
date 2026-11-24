@@ -1,7 +1,8 @@
 import { createSchemaClient } from "@/lib/supabase/admin"
 import { notFound } from "next/navigation"
 import ProductDetailClient from "./ProductDetailClient"
-import { hasPermission } from "@/lib/access"
+import { getAccess, hasPermission } from "@/lib/access"
+import { MANAGER_ROLES } from "@/lib/catalog-identity"
 import { getCompanyName, getCompanySchema } from "@/lib/company"
 
 type Props = Parameters<typeof ProductDetailClient>[0]
@@ -46,7 +47,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       : none,
     db.from("product_categories").select("id, name, color").order("name"),
     db.from("units").select("id, name, type").order("name"),
-    stockEnabled ? db.from("warehouses").select("id, name").eq("is_active", true) : none,
+    stockEnabled ? db.from("warehouses").select("id, name").eq("is_active", true).eq("kind", "physical") : none,
     db.from("product_documents")
       .select("id, type, name, url, file_size, created_at")
       .eq("product_id", id)
@@ -80,6 +81,7 @@ export default async function ProductDetailPage({ params }: { params: Promise<{ 
       isAdmin={isAdmin}
       companyName={companyName}
       stockEnabled={stockEnabled}
+      canValidatePackaging={MANAGER_ROLES.includes((await getAccess())?.role ?? "")}
     />
   )
 }

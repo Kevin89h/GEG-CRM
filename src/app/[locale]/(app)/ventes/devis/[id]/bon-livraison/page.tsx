@@ -20,7 +20,7 @@ export default async function BonLivraisonPage({ params }: { params: Promise<{ l
   const { data: warehousesRaw } = await db
     .from("warehouses")
     .select("id, name")
-    .eq("is_active", true)
+    .eq("is_active", true).eq("kind", "physical")
     .order("name")
 
   // Comment lines (text only) are never delivered: the server copies them into the delivery note itself

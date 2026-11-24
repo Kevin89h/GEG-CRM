@@ -232,15 +232,15 @@ export default function NouveauDevisClient({
         unit: unitByName ? { id: unitByName.id, name: unitByName.name } : null, unit_ids: null, packaging: null,
       }].sort((a, b) => a.name.localeCompare(b.name)))
     }
-    const firstPkg = known?.packaging?.[0]
+    // M5 (GEG 24/11/2026): the unit and price are those of the sheet — alternative packagings are no longer sold
     const patch: Omit<Line, "id" | "line_type" | "print_on_pdf" | "print_on_delivery" | "quantity" | "discount" | "tva_exempt"> = {
       product_id:        cp.id,
       product_name:      cp.name,
       product_reference: cp.reference,
       product_type:      cp.product_type,
       description:       cp.name,
-      unit_price:        String(firstPkg?.sell_price ?? known?.sell_price ?? cp.sell_price ?? 0),
-      unit_id:           firstPkg?.unit_id ?? known?.unit?.id ?? unitByName?.id ?? "",
+      unit_price:        String(known?.sell_price ?? cp.sell_price ?? 0),
+      unit_id:           known?.unit?.id ?? unitByName?.id ?? "",
     }
     if (target === "new") {
       setLines(ls => [...ls, { id: uid(), line_type: "product", print_on_pdf: true, print_on_delivery: false, quantity: "1", discount: "0", tva_exempt: false, ...patch }])
@@ -256,17 +256,6 @@ export default function NouveauDevisClient({
       product_id: "", product_name: "", product_reference: null, product_type: null,
       description: "", quantity: "0", unit_id: "", unit_price: "0", discount: "0", tva_exempt: false,
     }])
-  }
-
-  function onUnitChanged(lineId: number, unitId: string) {
-    const line = lines.find(l => l.id === lineId)
-    if (!line) return
-    const p = products.find(p => p.id === line.product_id)
-    const pkg = p?.packaging?.find(pk => pk.unit_id === unitId)
-    updateLine(lineId, {
-      unit_id: unitId,
-      ...(pkg?.sell_price != null ? { unit_price: String(pkg.sell_price) } : {}),
-    })
   }
 
   function removeLine(lineId: number) {
@@ -681,25 +670,8 @@ export default function NouveauDevisClient({
                         />
                       </td>
                       <td className="px-3 py-2">
-                        {(() => {
-                          const prod = products.find(p => p.id === l.product_id)
-                          const pkgUnitIds = prod?.packaging?.map(pk => pk.unit_id)
-                          const availableUnits = pkgUnitIds?.length
-                            ? units.filter(u => pkgUnitIds.includes(u.id))
-                            : prod?.unit_ids?.length
-                              ? units.filter(u => prod.unit_ids!.includes(u.id))
-                              : units
-                          return (
-                            <select
-                              value={l.unit_id}
-                              onChange={e => onUnitChanged(l.id, e.target.value)}
-                              className="w-full text-sm bg-transparent outline-none border-b border-transparent hover:border-gray-200 focus:border-blue-400 py-0.5"
-                            >
-                              <option value="">—</option>
-                              {availableUnits.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                            </select>
-                          )
-                        })()}
+                        {/* M5: the unit of the sheet, never another one (choose the sheet of the other packaging instead) */}
+                        <span className="text-sm text-gray-600" title="Unité de la fiche produit">{units.find(u => u.id === l.unit_id)?.name ?? "—"}</span>
                       </td>
                       <td className="px-3 py-2">
                         <input

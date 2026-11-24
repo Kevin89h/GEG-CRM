@@ -1,221 +1,90 @@
 import { NextRequest, NextResponse } from "next/server"
 import { nextPartialDeliveryNoteNumber } from "@/lib/numbering"
-import { hasPermission } from "@/lib/access"
-import { deliveryRowsWithComments, deliveryShortages, derogationReason } from "@/lib/catalog"
-import { createAdminClient } from "@/lib/supabase/admin"
+import { deliveryRowsWithComments } from "@/lib/catalog"
+import { createSchemaClient } from "@/lib/supabase/admin"
 import { getCompanySchema } from "@/lib/company"
+import { errorResponse, requireSchemaAccess } from "@/lib/access"
+import { stockEngine } from "@/lib/stock-engine"
 
 interface DeliveryLine {
   order_line_id: string
-  product_id: string | null
-  description: string
+  description?: string
   qty_to_deliver: number
+  /** warehouse chosen by the user for this line (else the warehouse chosen for the whole delivery) */
+  warehouse_id?: string | null
 }
 
+// POST { lines, warehouse_id, notes } — direct (partial) delivery of a CONFIRMED quote (permission "livraisons.creer").
+// Phase 1 (D1, D6, D8): the delivery note and its lines are created, then confirmed by the SAME engine as any delivery
+// note (livraison_confirmer): capped by what remains to deliver on each quote line, stock checked at that moment and
+// never negative, moves linked to the note's lines, quote quantities updated in the same transaction. If the engine
+// refuses, the draft just created by this request is removed: nothing is left behind and nothing left the stock.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
-  const body = await req.json()
-  let { lines } = body as { lines: DeliveryLine[] }
-  const { warehouse_id, notes, user_id } = body as {
-    lines: DeliveryLine[]
-    warehouse_id: string
-    notes?: string
-    user_id: string
-  }
+  try {
+    const { id } = await params
+    const schema = await getCompanySchema()
+    const access = await requireSchemaAccess(schema)
+    const body = await req.json()
+    const { warehouse_id, notes } = body as { warehouse_id?: string; notes?: string }
+    const db = createSchemaClient(schema)
 
-  if (!lines || lines.length === 0) {
-    return NextResponse.json({ error: "Aucune ligne à livrer" }, { status: 400 })
-  }
+    const { data: order } = await db.from("sales_orders").select("status").eq("id", id).maybeSingle()
+    if (!order) return NextResponse.json({ error: "Devis introuvable" }, { status: 404 })
+    if (order.status !== "confirmed") return NextResponse.json({ error: "Seul un devis confirmé peut être livré directement" }, { status: 409 })
 
-  const schema = await getCompanySchema()
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const db = (createAdminClient() as any).schema(schema)
+    const { data: srcLines } = await db.from("sales_order_lines").select("id, product_id, description, line_type, print_on_delivery, position").eq("order_id", id).order("position")
+    type Src = { id: string; product_id: string | null; description: string; line_type: string | null; print_on_delivery: boolean | null }
+    const src = (srcLines ?? []) as Src[]
+    const srcById = new Map(src.map(s => [s.id, s]))
+    const lines = ((body.lines ?? []) as DeliveryLine[]).filter(l => srcById.get(l.order_line_id)?.line_type !== "comment")
+    if (!lines.length) return NextResponse.json({ error: "Aucune ligne à livrer" }, { status: 400 })
+    if (lines.some(l => !srcById.has(l.order_line_id))) return NextResponse.json({ error: "Ligne de devis inconnue" }, { status: 400 })
+    if (lines.some(l => !(Number(l.qty_to_deliver) >= 0))) return NextResponse.json({ error: "Quantité invalide" }, { status: 400 })
 
-  // Comment lines (text only) are never delivered
-  const { data: commentRows } = await db.from("sales_order_lines").select("id").eq("order_id", id).eq("line_type", "comment")
-  const commentIds = new Set((commentRows ?? []).map((r: { id: string }) => r.id))
-  lines = lines.filter(l => !commentIds.has(l.order_line_id))
-  if (lines.length === 0) return NextResponse.json({ error: "Aucune ligne à livrer" }, { status: 400 })
-
-  // Phase 0 (D1/D6): only a CONFIRMED quote can be delivered directly; a warehouse is mandatory; quantities are
-  // checked by the server against what remains to deliver on each quote line (never trusted from the browser).
-  const { data: order } = await db.from("sales_orders").select("status").eq("id", id).maybeSingle()
-  if (!order) return NextResponse.json({ error: "Devis introuvable" }, { status: 404 })
-  if (order.status !== "confirmed") return NextResponse.json({ error: "Seul un devis confirmé peut être livré directement" }, { status: 409 })
-  if (!warehouse_id) return NextResponse.json({ error: "Choisissez le dépôt de sortie" }, { status: 400 })
-
-  // Catalogue sheet of each line read from the database (an old free line uses its VALIDATED historical
-  // correspondence). A line still without a sheet is NOT a service: it blocks the delivery (regression 17/11/2026).
-  const { data: srcLines } = await db.from("sales_order_lines").select("id, product_id, description, quantity, qty_delivered").eq("order_id", id)
-  const srcById = new Map(((srcLines ?? []) as { id: string; product_id: string | null; description: string; quantity: number; qty_delivered: number | null }[]).map(s => [s.id, s]))
-  if (lines.some(l => !srcById.has(l.order_line_id))) return NextResponse.json({ error: "Ligne de devis inconnue" }, { status: 400 })
-  if (lines.some(l => !(Number(l.qty_to_deliver) >= 0))) return NextResponse.json({ error: "Quantité invalide" }, { status: 400 })
-  const over = lines.filter(l => { const s = srcById.get(l.order_line_id)!; return Number(l.qty_to_deliver) > Number(s.quantity) - Number(s.qty_delivered ?? 0) + 1e-9 })
-  if (over.length) {
-    return NextResponse.json({
-      error: `Quantité supérieure au reste à livrer : ${over.map(l => { const s = srcById.get(l.order_line_id)!; return `« ${s.description} » (reste ${Number(s.quantity) - Number(s.qty_delivered ?? 0)}, demandé ${Number(l.qty_to_deliver)})` }).join(", ")}`,
-    }, { status: 409 })
-  }
-  const freeIds = [...srcById.values()].filter(s => !s.product_id).map(s => s.id)
-  const { data: validLinks } = freeIds.length
-    ? await db.from("historical_line_links").select("line_id, product_id").eq("line_table", "sales_order_lines").eq("status", "validated").in("line_id", freeIds)
-    : { data: [] }
-  const linked = new Map(((validLinks ?? []) as { line_id: string; product_id: string }[]).map(l => [l.line_id, l.product_id]))
-  lines = lines.map(l => { const s = srcById.get(l.order_line_id); return s ? { ...l, product_id: s.product_id ?? linked.get(s.id) ?? null } : l })
-  const unlinked = lines.filter(l => !l.product_id && Number(l.qty_to_deliver) > 0)
-  if (unlinked.length) {
-    return NextResponse.json({
-      error: `Ligne(s) non rattachée(s) au catalogue : ${unlinked.map(l => `« ${l.description} »`).join(", ")}. Rattachez chaque ligne à sa fiche (produit ou prestation) avant de livrer.`,
-      unlinked: unlinked.map(l => ({ order_line_id: l.order_line_id, description: l.description })),
-    }, { status: 409 })
-  }
-
-  // R4: stock check BEFORE creating the delivery note; derogation only with "stock.livraison_hors_stock",
-  // explicit confirmation and justification (audited). R5: services never move stock.
-  const { shortages, stockLines } = await deliveryShortages(db, lines.map(l => ({ product_id: l.product_id, warehouse_id, quantity: Number(l.qty_to_deliver) })))
-  let derogation: string | null = null
-  if (shortages.length) {
-    const canOverride = await hasPermission("stock.livraison_hors_stock")
-    const reason = derogationReason(body)
-    if (!reason || !canOverride) {
+    // product of each line read from the DATABASE (an old free line uses its VALIDATED historical correspondence)
+    const freeIds = src.filter(s => !s.product_id).map(s => s.id)
+    const { data: validLinks } = freeIds.length
+      ? await db.from("historical_line_links").select("line_id, product_id").eq("line_table", "sales_order_lines").eq("status", "validated").in("line_id", freeIds)
+      : { data: [] }
+    const linked = new Map(((validLinks ?? []) as { line_id: string; product_id: string }[]).map(l => [l.line_id, l.product_id]))
+    const productOf = (lineId: string) => srcById.get(lineId)?.product_id ?? linked.get(lineId) ?? null
+    const unlinked = lines.filter(l => !productOf(l.order_line_id) && Number(l.qty_to_deliver) > 0)
+    if (unlinked.length) {
       return NextResponse.json({
-        error: canOverride
-          ? "Stock insuffisant : confirmez la dérogation et indiquez une justification (10 caractères minimum)"
-          : "Stock insuffisant : livraison impossible au-delà du stock disponible",
-        shortages, canOverride,
-      }, { status: canOverride ? 409 : 403 })
-    }
-    derogation = reason
-  }
-  const stockProductIds = new Set(stockLines.map(l => l.product_id))
-
-  // Generate BL number
-  const blNumber = await nextPartialDeliveryNoteNumber(db)
-
-  // Create delivery note
-  const { data: dn, error: dnError } = await db
-    .from("delivery_notes")
-    .insert([{
-      number: blNumber,
-      order_id: id,
-      status: "draft",
-      user_id,
-      notes: notes ?? null,
-    }])
-    .select("id")
-    .single()
-
-  if (dnError || !dn) {
-    return NextResponse.json({ error: dnError?.message ?? "Impossible de créer le bon de livraison" }, { status: 400 })
-  }
-
-  // Create delivery note lines, with the quote's comments in their place ("Imprimer sur le bon de livraison" choice kept)
-  const { data: source } = await db.from("sales_order_lines").select("id, description, line_type, print_on_delivery, position").eq("order_id", id).order("position")
-  const byLine = new Map(lines.map(l => [l.order_line_id, l]))
-  // the warehouse is kept on each goods line (internal traceability; never printed for the customer)
-  const toRow = (l: DeliveryLine) => ({ order_line_id: l.order_line_id, product_id: l.product_id ?? null, description: l.description, quantity: l.qty_to_deliver, qty_delivered: l.qty_to_deliver, warehouse_id: l.product_id && stockProductIds.has(l.product_id) ? warehouse_id : null })
-  const sourceIds = new Set((source ?? []).map((s: { id: string }) => s.id))
-  const rows = deliveryRowsWithComments((source ?? []) as { id: string; description: string; line_type: string | null; print_on_delivery: boolean | null }[],
-    s => { const l = byLine.get(s.id); return l ? toRow(l) : null },
-    lines.filter(l => !sourceIds.has(l.order_line_id)).map(toRow))
-  const { error: linesError } = await db.from("delivery_note_lines").insert(
-    rows.map(r => ({ line_type: "product", print_on_delivery: true, ...r, delivery_note_id: dn.id }))
-  )
-  if (linesError) {
-    return NextResponse.json({ error: linesError.message }, { status: 400 })
-  }
-
-  // Stock moves and stock_levels update for product lines
-  const productLines = lines.filter(l => l.product_id && l.qty_to_deliver > 0 && stockProductIds.has(l.product_id))
-  if (productLines.length > 0) {
-    const { error: moveErr } = await db.from("stock_moves").insert(
-      productLines.map(l => ({
-        type: "out",
-        product_id: l.product_id,
-        from_warehouse_id: warehouse_id,
-        quantity: l.qty_to_deliver,
-        notes: `Livraison partielle ${blNumber}`,
-        user_id,
-      }))
-    )
-    if (moveErr) {
-      return NextResponse.json({ error: `stock_moves: ${moveErr.message}` }, { status: 400 })
+        error: `Ligne(s) non rattachée(s) au catalogue : ${unlinked.map(l => `« ${srcById.get(l.order_line_id)!.description} »`).join(", ")}. Rattachez chaque ligne à sa fiche (produit ou prestation) avant de livrer.`,
+        unlinked: unlinked.map(l => ({ order_line_id: l.order_line_id, description: srcById.get(l.order_line_id)!.description })),
+      }, { status: 409 })
     }
 
-    for (const l of productLines) {
-      const { data: level } = await db
-        .from("stock_levels")
-        .select("quantity")
-        .eq("product_id", l.product_id!)
-        .eq("warehouse_id", warehouse_id)
-        .maybeSingle()
-      const current = Number(level?.quantity ?? 0)
-      const { error: levelErr } = await db.from("stock_levels").upsert(
-        { product_id: l.product_id!, warehouse_id, quantity: current - Number(l.qty_to_deliver) },
-        { onConflict: "product_id,warehouse_id" }
-      )
-      if (levelErr) {
-        return NextResponse.json({ error: `stock_levels: ${levelErr.message}` }, { status: 400 })
-      }
-    }
-  }
+    const blNumber = await nextPartialDeliveryNoteNumber(db)
+    const { data: dn, error: dnError } = await db.from("delivery_notes")
+      .insert([{ number: blNumber, order_id: id, status: "draft", user_id: access.userId, notes: notes ?? null }]).select("id, number").single()
+    if (dnError || !dn) return NextResponse.json({ error: dnError?.message ?? "Impossible de créer le bon de livraison" }, { status: 400 })
 
-  // Phase 0 (D1): the stock has just left: this delivery note is DELIVERED, never a draft. Before this fix it stayed a
-  // draft, and confirming it later took the stock out a SECOND time.
-  const { error: doneErr } = await db.from("delivery_notes")
-    .update({ status: "delivered", delivery_date: new Date().toISOString().split("T")[0] }).eq("id", dn.id).eq("status", "draft")
-  if (doneErr) return NextResponse.json({ error: `delivery_notes: ${doneErr.message}` }, { status: 400 })
-
-  // Update qty_delivered on each order line
-  for (const l of lines) {
-    const { error: qtyErr } = await db.rpc("increment_order_line_qty_delivered", {
-      p_line_id: l.order_line_id,
-      p_qty: l.qty_to_deliver,
+    const byLine = new Map(lines.map(l => [l.order_line_id, l]))
+    const toRow = (l: DeliveryLine) => ({
+      order_line_id: l.order_line_id, product_id: productOf(l.order_line_id), description: srcById.get(l.order_line_id)!.description,
+      quantity: Number(l.qty_to_deliver), qty_delivered: Number(l.qty_to_deliver), warehouse_id: l.warehouse_id || warehouse_id || null,
     })
-    if (qtyErr) {
-      // Fallback: manual read-then-update
-      const { data: ol } = await db
-        .from("sales_order_lines")
-        .select("qty_delivered, quantity")
-        .eq("id", l.order_line_id)
-        .single()
-      if (ol) {
-        await db
-          .from("sales_order_lines")
-          .update({ qty_delivered: Number(ol.qty_delivered ?? 0) + l.qty_to_deliver })
-          .eq("id", l.order_line_id)
-      }
+    const rows = deliveryRowsWithComments(src, s => { const l = byLine.get(s.id); return l ? toRow(l) : null })
+    const { error: linesError } = await db.from("delivery_note_lines").insert(rows.map(r => ({ line_type: "product", print_on_delivery: true, ...r, delivery_note_id: dn.id })))
+    const removeDraft = () => db.from("delivery_notes").delete().eq("id", dn.id).eq("status", "draft")
+    if (linesError) { await removeDraft(); return NextResponse.json({ error: linesError.message }, { status: 400 }) }
+
+    const r = await stockEngine(db, "livraison_confirmer", { p_dn: dn.id, p_lines: [], p_user: access.userId })
+    if (!r.ok) { await removeDraft(); return r.response }
+
+    // quote status from its lines (behaviour kept as before; ANO-002 is tracked separately)
+    const { data: allLines } = await db.from("sales_order_lines").select("quantity, qty_delivered, line_type").eq("order_id", id)
+    const goods = ((allLines ?? []) as { quantity: number; qty_delivered: number; line_type: string | null }[]).filter(l => l.line_type !== "comment")
+    if (goods.length) {
+      const all = goods.every(l => Number(l.qty_delivered ?? 0) >= Number(l.quantity ?? 0))
+      const any = goods.some(l => Number(l.qty_delivered ?? 0) > 0)
+      const newStatus = all ? "invoiced" : any ? "partial_delivery" : undefined
+      if (newStatus) await db.from("sales_orders").update({ status: newStatus }).eq("id", id)
     }
+    return NextResponse.json({ deliveryNoteId: dn.id, number: dn.number })
+  } catch (err) {
+    return errorResponse(err)
   }
-
-  // Recalculate order status based on all lines
-  const { data: allLines } = await db
-    .from("sales_order_lines")
-    .select("quantity, qty_delivered")
-    .eq("order_id", id)
-
-  if (allLines && allLines.length > 0) {
-    const allDelivered = allLines.every(
-      (ol: { quantity: number; qty_delivered: number }) =>
-        Number(ol.qty_delivered ?? 0) >= Number(ol.quantity ?? 0)
-    )
-    const anyDelivered = allLines.some(
-      (ol: { quantity: number; qty_delivered: number }) =>
-        Number(ol.qty_delivered ?? 0) > 0
-    )
-
-    const newStatus = allDelivered ? "invoiced" : anyDelivered ? "partial_delivery" : undefined
-    if (newStatus) {
-      await db.from("sales_orders").update({ status: newStatus }).eq("id", id)
-    }
-  }
-
-  if (derogation) {
-    await createAdminClient().rpc("audit_log_event", {
-      p_company: schema, p_module: "stock", p_action: "livraison.derogation_stock", p_entity_type: "delivery_notes",
-      p_entity_id: dn.id, p_label: blNumber, p_details: { justification: derogation, ecarts: shortages },
-    })
-  }
-
-  return NextResponse.json({ deliveryNoteId: dn.id, number: blNumber, derogation: !!derogation })
 }

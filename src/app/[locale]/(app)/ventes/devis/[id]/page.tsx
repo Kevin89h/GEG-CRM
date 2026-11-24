@@ -53,7 +53,7 @@ export default async function DevisDetailPage({ params }: { params: Promise<{ lo
   const { data: warehouseData } = await supabase
     .from("warehouses")
     .select("id, name")
-    .eq("is_active", true)
+    .eq("is_active", true).eq("kind", "physical")
     .limit(1)
     .single()
   if (warehouseData) firstWarehouse = warehouseData

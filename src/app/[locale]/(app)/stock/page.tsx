@@ -41,7 +41,7 @@ export default async function StockPage({ params }: { params: Promise<{ locale: 
       .select("*, product:products!inner(id, name, reference, product_type, category:product_categories(name, color), unit:units(name)), warehouse:warehouses(id, name, city)")
       .neq("product.product_type", "service")
       .order("updated_at", { ascending: false }),
-    supabase.from("warehouses").select("*").eq("is_active", true).order("name"),
+    supabase.from("warehouses").select("*").eq("is_active", true).eq("kind", "physical").order("name"),
     supabase.from("products").select("id, name, reference, category:product_categories(name, color), unit:units(name)").eq("is_active", true).neq("product_type", "service").order("name"),
   ])
 

@@ -7,7 +7,6 @@ import Link from "next/link"
 import { Button } from "@/components/ui/Button"
 import { Select } from "@/components/ui/Select"
 import { Modal } from "@/components/ui/Modal"
-import { getCompanyClientBrowser } from "@/lib/supabase/company-client-browser"
 import { formatDate } from "@/lib/utils"
 import { usePerms } from "@/components/PermissionsProvider"
 import { deliveryLineKind, suggestProducts } from "@/lib/delivery-lines"
@@ -25,6 +24,13 @@ interface DNLine {
   print_on_delivery?: boolean | null
   /** type of the linked catalogue sheet: "service" lines never move stock */
   product_type?: string | null
+  invoice_line_id?: string | null
+  product_code?: string | null
+  brand?: string | null
+  packaging?: string | null
+  unit?: string | null
+  /** part of another line delivered from another warehouse (Q3: one line per warehouse) */
+  split_of?: string | null
 }
 
 interface CatalogueProduct { id: string; name: string; reference: string | null; product_type: string | null }
@@ -42,10 +48,12 @@ interface DN {
   account_name: string | null
 }
 
-interface Warehouse { id: string; name: string; city: string | null }
+interface Warehouse { id: string; name: string; city: string | null; kind?: string }
+interface StockLevel { product_id: string; warehouse_id: string; quantity: number }
+type Remaining = Record<string, { invoiced: number; delivered: number; remaining: number; direct: number }>
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-interface Props { dn: DN; lines: DNLine[]; warehouses: Warehouse[]; locale: string; docSettings?: Record<string, any>; products?: CatalogueProduct[] }
+interface Props { dn: DN; lines: DNLine[]; warehouses: Warehouse[]; locale: string; docSettings?: Record<string, any>; products?: CatalogueProduct[]; stock?: StockLevel[]; remaining?: Remaining }
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   draft:     { label: "En cours", color: "bg-amber-100 text-amber-700" },
@@ -53,25 +61,36 @@ const statusConfig: Record<string, { label: string; color: string }> = {
   cancelled: { label: "Annulé",   color: "bg-red-100 text-red-600" },
 }
 
-export default function BonLivraisonClient({ dn, lines: initialLines, warehouses, locale, docSettings = {}, products = [] }: Props) {
+export default function BonLivraisonClient({ dn, lines: initialLines, warehouses: allWarehouses, locale, docSettings = {}, products = [], stock = [], remaining = {} }: Props) {
   const router = useRouter()
   const { can } = usePerms()
-  const firstWarehouseId = warehouses[0]?.id ?? ""
-  const [lines, setLines] = useState(() =>
-    initialLines.map(l => ({ ...l, warehouse_id: isComment(l) ? null : (l.warehouse_id || firstWarehouseId || null) }))
+  // GEG 24/11/2026: the user chooses the warehouse(s) of each line; nothing is chosen nor split automatically
+  const warehouses = allWarehouses.filter(w => w.kind !== "direct")
+  const directWarehouse = allWarehouses.find(w => w.kind === "direct") ?? null
+  const [lines, setLines] = useState<DNLine[]>(() =>
+    initialLines.map(l => ({ ...l, warehouse_id: isComment(l) ? null : (l.warehouse_id || null) }))
   )
+  const qtyIn = (productId: string | null | undefined, warehouseId: string) => stock.find(s => s.product_id === productId && s.warehouse_id === warehouseId)?.quantity ?? 0
+  const totalStock = (productId: string | null | undefined) => warehouses.reduce((s, w) => s + qtyIn(productId, w.id), 0)
+  const fmtQ = (n: number) => Number(n).toLocaleString("fr")
+  const [splitSeq, setSplitSeq] = useState(0)
+  function splitLine(source: DNLine) {
+    const id = `split-${splitSeq}`
+    setSplitSeq(n => n + 1)
+    setLines(prev => {
+      const i = prev.findIndex(l => l.id === source.id)
+      const part: DNLine = { ...source, id, split_of: source.split_of ?? source.id, quantity: 0, warehouse_id: null }
+      return [...prev.slice(0, i + 1), part, ...prev.slice(i + 1)]
+    })
+    setShortages(null)
+  }
+  function removeSplit(id: string) { setLines(prev => prev.filter(l => l.id !== id)); setShortages(null) }
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [defaultWarehouse, setDefaultWarehouse] = useState(firstWarehouseId)
-  // R4/H3: stock shortages returned by the server (409 = derogation possible, 403 = not allowed)
+  const [defaultWarehouse, setDefaultWarehouse] = useState("")
+  // Stock shortages returned by the server: the delivery is refused (no derogation, no negative stock — decision Q1)
   const [shortages, setShortages] = useState<Shortage[] | null>(null)
-  const [serverCanOverride, setServerCanOverride] = useState(false)
-  const [derogationOpen, setDerogationOpen] = useState(false)
-  const [derogationReason, setDerogationReason] = useState("")
-  const [derogationConfirmed, setDerogationConfirmed] = useState(false)
-  const [derogationError, setDerogationError] = useState<string | null>(null)
-  const canOverride = serverCanOverride && can("stock.livraison_hors_stock")
 
   const isDraft = dn.status === "draft"
   // Display only (D2): cancel before delivery needs "livraisons.annuler", confirm needs "livraisons.confirmer".
@@ -116,7 +135,7 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
     setLines(prev => prev.map(l => isComment(l) ? l : ({ ...l, warehouse_id: l.warehouse_id || wid })))
   }
 
-  async function confirmDelivery(derogation?: { reason: string; confirmed: true }) {
+  async function confirmDelivery() {
     if (unlinkedLines.length) {
       setError("Rattachez d'abord chaque ligne à sa fiche du catalogue.")
       return
@@ -128,47 +147,31 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
 
     setSaving(true)
     setError(null)
-    setDerogationError(null)
-    const { supabase } = getCompanyClientBrowser()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setSaving(false); return }
-
     const res = await fetch(`/api/bons-livraison/${dn.id}/confirm`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      // Comment lines never move stock: they are not sent
-      body: JSON.stringify({ lines: lines.filter(l => !isComment(l)), userId: user.id, ...(derogation ? { derogation } : {}) }),
+      // Comment lines never move stock: they are not sent. Split parts are sent apart (the server creates them).
+      body: JSON.stringify({
+        lines: lines.filter(l => !isComment(l) && !l.split_of).map(l => ({ id: l.id, quantity: l.quantity, warehouse_id: l.warehouse_id })),
+        splits: lines.filter(l => l.split_of).map(l => ({ split_of: l.split_of, quantity: l.quantity, warehouse_id: l.warehouse_id })),
+      }),
     })
     const json = await res.json().catch(() => ({}))
     if (!res.ok) {
-      // Stock shortage: show the detailed panel on the page instead of a bare error
-      if ((res.status === 409 || res.status === 403) && Array.isArray(json.shortages) && json.shortages.length > 0) {
-        setShortages(json.shortages)
-        setServerCanOverride(!!json.canOverride)
+      // Stock shortage: detailed panel on the page instead of a bare error
+      if (Array.isArray(json.shortages) && json.shortages.length > 0) {
+        setShortages(json.shortages.map((s: Shortage) => ({ ...s, result: Number(s.available) - Number(s.requested) })))
         setConfirmOpen(false)
-        if (derogation) setDerogationError(json.error ?? "La dérogation a été refusée")
-        else setError(json.error ?? null)
-      } else if (derogation) {
-        setDerogationError(json.error ?? "Erreur lors de la confirmation")
-      } else {
-        setError(json.error ?? "Erreur lors de la confirmation")
       }
+      setError(json.error ?? "Erreur lors de la confirmation")
       setSaving(false)
       return
     }
 
     setConfirmOpen(false)
-    setDerogationOpen(false)
     setShortages(null)
     setSaving(false)
     router.refresh()
-  }
-
-  function openDerogation() {
-    setDerogationReason("")
-    setDerogationConfirmed(false)
-    setDerogationError(null)
-    setDerogationOpen(true)
   }
 
   async function cancel() {
@@ -267,13 +270,14 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
       {canConfirm && warehouses.length > 0 && (
         <div className="bg-blue-50 border border-blue-100 rounded-xl px-5 py-4 mb-6 flex items-center gap-4">
           <Truck className="w-4 h-4 text-blue-500 flex-shrink-0" />
-          <p className="text-sm text-blue-700 flex-1">Entrepôt de sortie par défaut :</p>
+          <p className="text-sm text-blue-700 flex-1">Appliquer un dépôt aux lignes qui n&apos;en ont pas encore (choix manuel) :</p>
           <div className="w-64">
             <select
               value={defaultWarehouse}
               onChange={e => applyDefaultWarehouse(e.target.value)}
               className="w-full px-3 py-1.5 text-sm border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
             >
+              <option value="">Choisir…</option>
               {warehouses.map(w => (
                 <option key={w.id} value={w.id}>{w.city ? `${w.name} — ${w.city}` : w.name}</option>
               ))}
@@ -293,19 +297,10 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
             </div>
           </div>
           <ShortageTable shortages={shortages} />
-          {canOverride ? (
-            <div className="mt-3 flex items-center justify-between gap-3 flex-wrap">
-              <p className="text-xs text-red-700">Vous pouvez exceptionnellement autoriser cette livraison (dérogation tracée).</p>
-              <Button variant="danger" onClick={openDerogation}>
-                <AlertTriangle className="w-4 h-4" /> Livrer malgré le stock insuffisant
-              </Button>
-            </div>
-          ) : (
-            <p className="mt-3 text-xs text-red-700">
-              La livraison est impossible tant que le stock est insuffisant. Réapprovisionnez le dépôt, changez d&apos;entrepôt ou de quantité,
-              ou demandez à un Manager (droit « livraison hors stock ») de l&apos;autoriser.
-            </p>
-          )}
+          <p className="mt-3 text-xs text-red-700">
+            La livraison est impossible tant que le stock est insuffisant : choisissez un autre dépôt, répartissez la ligne sur plusieurs dépôts,
+            réduisez la quantité ou enregistrez d&apos;abord la réception de la marchandise. Aucun stock ne peut devenir négatif.
+          </p>
         </div>
       )}
 
@@ -344,7 +339,23 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
             ) : (
               <tr key={l.id} className={kind(l) === "unlinked" ? "bg-amber-50/60" : kind(l) === "service" ? "opacity-60" : ""} data-kind={kind(l)}>
                 <td className="px-4 py-3 font-medium text-gray-900">
-                  {l.description}
+                  {l.split_of ? <span className="text-xs text-gray-500 font-normal">↳ suite de la ligne (autre dépôt)</span> : l.description}
+                  {kind(l) === "product" && !l.split_of && (
+                    <div className="mt-0.5 text-xs font-normal text-gray-500" data-testid="product-details">
+                      {[l.product_code, l.brand, l.packaging, l.unit ? `unité : ${l.unit}` : null].filter(Boolean).join(" · ") || "—"}
+                    </div>
+                  )}
+                  {kind(l) === "product" && !l.split_of && isDraft && (
+                    <div className="mt-0.5 text-xs font-normal text-gray-500" data-testid="stock-per-warehouse">
+                      Stock total {fmtQ(totalStock(l.product_id))}
+                      {warehouses.map(w => ` · ${w.name} : ${fmtQ(qtyIn(l.product_id, w.id))}`).join("")}
+                    </div>
+                  )}
+                  {kind(l) === "product" && !l.split_of && l.invoice_line_id && remaining[l.invoice_line_id] && (
+                    <div className="mt-0.5 text-xs font-normal text-gray-500">
+                      Facturé {fmtQ(remaining[l.invoice_line_id].invoiced)} · déjà livré {fmtQ(remaining[l.invoice_line_id].delivered)} · reste {fmtQ(remaining[l.invoice_line_id].remaining)}
+                    </div>
+                  )}
                   {kind(l) === "service" && (
                     <span className="ml-2 text-xs text-gray-400 font-normal">(prestation — pas de stock)</span>
                   )}
@@ -388,16 +399,27 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
                 <td className="px-4 py-3">
                   {kind(l) === "product" ? (
                     canConfirm ? (
-                      <select
-                        value={l.warehouse_id ?? ""}
-                        onChange={e => setLineWarehouse(l.id, e.target.value)}
-                        className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                      >
-                        <option value="">Choisir…</option>
-                        {warehouses.map(w => (
-                          <option key={w.id} value={w.id}>{w.city ? `${w.name} — ${w.city}` : w.name}</option>
-                        ))}
-                      </select>
+                      <div className="flex items-center gap-1">
+                        <select
+                          value={l.warehouse_id ?? ""}
+                          onChange={e => setLineWarehouse(l.id, e.target.value)}
+                          className={`w-full px-2 py-1.5 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white ${l.warehouse_id ? "border-gray-200" : "border-red-300 bg-red-50"}`}
+                          data-testid="warehouse-select"
+                        >
+                          <option value="">Choisir…</option>
+                          {warehouses.map(w => (
+                            <option key={w.id} value={w.id}>{w.city ? `${w.name} — ${w.city}` : w.name} (stock : {fmtQ(qtyIn(l.product_id, w.id))})</option>
+                          ))}
+                          {directWarehouse && l.invoice_line_id && (remaining[l.invoice_line_id]?.direct ?? 0) > 0 && (
+                            <option value={directWarehouse.id}>Livraison directe (réceptionné pour ce client : {fmtQ(remaining[l.invoice_line_id].direct)})</option>
+                          )}
+                        </select>
+                        {l.split_of ? (
+                          <button type="button" onClick={() => removeSplit(l.id)} className="px-1.5 text-gray-400 hover:text-red-500" title="Retirer cette répartition">✕</button>
+                        ) : (
+                          <button type="button" onClick={() => splitLine(l)} className="whitespace-nowrap px-1.5 text-xs text-blue-600 hover:underline" title="Livrer une partie de cette ligne depuis un autre dépôt" data-testid="split-line">Répartir</button>
+                        )}
+                      </div>
                     ) : (
                       <span className="text-gray-600 text-xs">{warehouseLabel(l.warehouse_id)}</span>
                     )
@@ -460,55 +482,6 @@ export default function BonLivraisonClient({ dn, lines: initialLines, warehouses
         </div>
       </Modal>
 
-      {/* Modal dérogation : livraison au-delà du stock disponible */}
-      <Modal open={derogationOpen && canOverride && !!shortages} onClose={() => setDerogationOpen(false)} title="Livrer malgré le stock insuffisant" className="max-w-2xl">
-        <div className="space-y-4">
-          <div className="flex items-start gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-sm text-red-800">
-            <AlertTriangle className="w-5 h-5 flex-shrink-0 text-red-600" />
-            <div>
-              <p className="font-semibold mb-1">Attention : livraison au-delà du stock disponible</p>
-              <p>
-                Le stock des produits ci-dessous deviendra négatif. Cette dérogation est exceptionnelle,
-                enregistrée avec votre nom et votre justification dans le journal d&apos;audit.
-              </p>
-            </div>
-          </div>
-          {shortages && <ShortageTable shortages={shortages} />}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Justification (obligatoire, 10 caractères minimum)</label>
-            <textarea
-              value={derogationReason}
-              onChange={e => setDerogationReason(e.target.value)}
-              rows={3}
-              placeholder="Ex : marchandise physiquement présente, réception fournisseur pas encore saisie…"
-              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
-            />
-            <p className={`text-xs mt-1 ${derogationReason.trim().length >= 10 ? "text-gray-400" : "text-red-500"}`}>
-              {derogationReason.trim().length} / 10 caractères minimum
-            </p>
-          </div>
-          <label className="flex items-start gap-2 text-sm text-gray-800 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={derogationConfirmed}
-              onChange={e => setDerogationConfirmed(e.target.checked)}
-              className="mt-0.5"
-            />
-            Je confirme cette livraison au-delà du stock disponible
-          </label>
-          {derogationError && <p className="text-sm text-red-600">{derogationError}</p>}
-          <div className="flex justify-end gap-3 pt-2">
-            <Button variant="secondary" onClick={() => setDerogationOpen(false)}>Annuler</Button>
-            <Button
-              variant="danger"
-              onClick={() => confirmDelivery({ reason: derogationReason.trim(), confirmed: true })}
-              disabled={saving || derogationReason.trim().length < 10 || !derogationConfirmed}
-            >
-              {saving ? "Confirmation…" : "Livrer malgré le stock insuffisant"}
-            </Button>
-          </div>
-        </div>
-      </Modal>
     </div>
   )
 }

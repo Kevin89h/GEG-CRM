@@ -36,7 +36,8 @@ export default function BLPartielClient({ orderId, orderNumber, locale, lines, w
   const { can } = usePerms()
   // Creating the delivery note needs "livraisons.creer" (D2, display only)
   const canCreate = can("livraisons.creer")
-  const [warehouseId, setWarehouseId] = useState(warehouses[0]?.id ?? "")
+  // chosen by the user, never automatically (GEG 24/11/2026)
+  const [warehouseId, setWarehouseId] = useState("")
   const [notes, setNotes] = useState("")
   const [qtys, setQtys] = useState<Record<string, number>>(() => {
     const init: Record<string, number> = {}
@@ -113,8 +114,8 @@ export default function BLPartielClient({ orderId, orderNumber, locale, lines, w
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
         // Stock shortage: detailed panel instead of a bare error
-        if ((res.status === 409 || res.status === 403) && Array.isArray(data.shortages) && data.shortages.length > 0) {
-          setShortages(data.shortages)
+        if ((res.status === 409 || res.status === 403 || res.status === 422) && Array.isArray(data.shortages) && data.shortages.length > 0) {
+          setShortages(data.shortages.map((s: Shortage) => ({ ...s, result: Number(s.available) - Number(s.requested) })))
           setServerCanOverride(!!data.canOverride)
           if (derogation) setDerogationError(data.error ?? "La dérogation a été refusée")
           else setError(data.error ?? null)
@@ -162,6 +163,7 @@ export default function BLPartielClient({ orderId, orderNumber, locale, lines, w
           onChange={e => { setWarehouseId(e.target.value); setShortages(null) }}
           className="w-full max-w-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
+          <option value="">Choisir le dépôt…</option>
           {warehouses.map(w => (
             <option key={w.id} value={w.id}>{w.name}</option>
           ))}
@@ -266,7 +268,7 @@ export default function BLPartielClient({ orderId, orderNumber, locale, lines, w
           ) : (
             <p className="mt-3 text-xs">
               La livraison est impossible tant que le stock est insuffisant. Réapprovisionnez le dépôt, changez d&apos;entrepôt ou de quantité,
-              ou demandez à un Manager (droit « livraison hors stock ») de l&apos;autoriser.
+              ou enregistrez d&apos;abord la réception de la marchandise (aucun stock négatif).
             </p>
           )}
         </div>

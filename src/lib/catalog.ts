@@ -80,15 +80,19 @@ export async function invalidSalesLines(db: Db, lines: SalesLineInput[]): Promis
   }
   if (!sales.length) return null
   const ids = [...new Set(sales.map(x => x.l.product_id as string))]
-  const { data } = await db.from("products").select("id, name, is_active, product_type").in("id", ids)
-  const found = new Map<string, { name: string; is_active: boolean; product_type: string | null }>((data ?? []).map((p: { id: string; name: string; is_active: boolean; product_type: string | null }) => [p.id, p]))
+  const { data } = await db.from("products").select("id, name, is_active, product_type, packaging_status").in("id", ids)
+  const found = new Map<string, { name: string; is_active: boolean; product_type: string | null; packaging_status?: string | null }>((data ?? []).map((p: { id: string; name: string; is_active: boolean; product_type: string | null; packaging_status?: string | null }) => [p.id, p]))
   const unknown = ids.filter(id => !found.has(id))
   if (unknown.length) return "Produit introuvable dans le catalogue."
   const inactive = ids.map(id => found.get(id)!).filter(p => !p.is_active)
   if (inactive.length) return `Produit désactivé, il ne peut plus être vendu : ${inactive.map(p => p.name).join(", ")}.`
-  const negative = sales.find(x => Number(x.l.unit_price ?? 0) < 0 && found.get(x.l.product_id as string)?.product_type !== "service")
+  // M5: a sheet whose packaging « Autre » is not validated yet cannot be used
+  const pending = ids.map(id => found.get(id)!).filter(p => p.packaging_status === "a_valider")
+  if (pending.length) return `Fiche inutilisable tant que son conditionnement « Autre » n'est pas validé par un Manager : ${pending.map(p => p.name).join(", ")}.`
+  // M6: only a « Remise » sheet may carry a negative amount
+  const negative = sales.find(x => Number(x.l.unit_price ?? 0) < 0 && found.get(x.l.product_id as string)?.product_type !== "discount")
   if (negative) {
-    return `Ligne ${negative.i + 1} : un montant négatif n'est possible que sur un service (par exemple « Remise commerciale »), pas sur une marchandise.`
+    return `Ligne ${negative.i + 1} : un montant négatif n'est possible que sur une fiche de type « Remise », pas sur une marchandise ni une prestation.`
   }
   return null
 }
@@ -237,7 +241,7 @@ export async function deliveryShortages(db: Db, lines: { product_id: string | nu
     db.from("warehouses").select("id, name").in("id", whs),
   ])
   const prod = new Map<string, { name: string; product_type: string | null }>((products ?? []).map((p: { id: string; name: string; product_type: string | null }) => [p.id, p]))
-  const stockLines = withProduct.filter(l => prod.get(l.product_id as string)?.product_type !== "service")
+  const stockLines = withProduct.filter(l => !["service", "discount"].includes(prod.get(l.product_id as string)?.product_type ?? ""))
   // Several lines of the same product and warehouse are added up before comparing
   const need = new Map<string, number>()
   for (const l of stockLines) need.set(`${l.product_id}|${l.warehouse_id}`, (need.get(`${l.product_id}|${l.warehouse_id}`) ?? 0) + Number(l.quantity))

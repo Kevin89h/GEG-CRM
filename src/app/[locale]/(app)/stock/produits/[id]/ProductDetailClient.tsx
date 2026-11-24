@@ -32,8 +32,12 @@ interface Product {
   is_active: boolean
   can_be_sold?: boolean
   can_be_purchased?: boolean
-  product_type?: "consumable" | "service" | "storable"
+  product_type?: "consumable" | "service" | "storable" | "discount"
   barcode?: string | null
+  /** A4 / M5: packaging of the sheet (closed list), « Autre » validated by a Manager before use */
+  packaging?: string | null
+  packaging_other?: string | null
+  packaging_status?: "valide" | "a_valider" | null
   tva_vente?: number | null
   tva_achat?: number | null
   category: { id: string; name: string; color: string } | null
@@ -91,7 +95,11 @@ interface Props {
    * (GEG Singapour has no stock in use and the document routes write to GEG Guinée)
    */
   stockEnabled: boolean
+  /** M5: Manager or above, may validate a packaging « Autre » */
+  canValidatePackaging?: boolean
 }
+
+const PACKAGING_OPTIONS = ["1 L", "4 L", "5 L", "20 L", "200 L", "208 L", "Autre"]
 
 type Tab = "general" | "interne" | "prix" | "inventaire" | "documents" | "mouvements"
 
@@ -110,7 +118,7 @@ function splitMissing(text: string | null | undefined): string[] {
 export default function ProductDetailClient({
   product: initial, stockLevels, moves, documents: initialDocs,
   totalStock, incoming, outgoing,
-  categories, units, warehouses, locale, isAdmin, companyName, stockEnabled,
+  categories, units, warehouses, locale, isAdmin, companyName, stockEnabled, canValidatePackaging = false,
 }: Props) {
   const t = useTranslations("produits")
   const router = useRouter()
@@ -138,6 +146,7 @@ export default function ProductDetailClient({
     { value: "consumable", label: t("typeConsommable") },
     { value: "storable", label: t("typeStockable") },
     { value: "service", label: t("typeService") },
+    { value: "discount", label: "Remise (jamais de stock, montant négatif autorisé)" },
   ]
 
   const DOC_TYPES = [
@@ -158,6 +167,8 @@ export default function ProductDetailClient({
     category_id: initial.category?.id ?? "",
     unit_id: initial.unit?.id ?? "",
     product_type: initial.product_type ?? "consumable",
+    packaging: initial.packaging ?? "",
+    packaging_other: initial.packaging_other ?? "",
     can_be_sold: initial.can_be_sold ?? true,
     can_be_purchased: initial.can_be_purchased ?? true,
     sell_price: String(initial.sell_price ?? ""),
@@ -186,6 +197,8 @@ export default function ProductDetailClient({
       category_id: p.category?.id ?? "",
       unit_id: p.unit?.id ?? "",
       product_type: p.product_type ?? "consumable",
+      packaging: p.packaging ?? "",
+      packaging_other: p.packaging_other ?? "",
       can_be_sold: p.can_be_sold ?? true,
       can_be_purchased: p.can_be_purchased ?? true,
       sell_price: String(p.sell_price ?? ""),
@@ -200,6 +213,14 @@ export default function ProductDetailClient({
 
   const [saveError, setSaveError] = useState<string | null>(null)
 
+  async function validatePackaging() {
+    setSaveError(null)
+    const res = await fetch(`/api/stock/produits/${product.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ validate_packaging: true }) })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok) { setSaveError(json.error ?? "Validation impossible"); return }
+    setProduct(p => ({ ...p, packaging_status: "valide" }))
+  }
+
   async function save() {
     setSaving(true)
     setSaveError(null)
@@ -212,6 +233,10 @@ export default function ProductDetailClient({
       unit_id: form.unit_id || null,
       product_type: form.product_type,
       can_be_sold: form.can_be_sold,
+      // A4: packaging sent only when it was changed (an older sheet without packaging stays editable for other fields)
+      ...(form.packaging !== (product.packaging ?? "") || form.packaging_other !== (product.packaging_other ?? "")
+        ? { packaging: form.packaging || null, packaging_other: form.packaging === "Autre" ? form.packaging_other.trim() || null : null }
+        : {}),
       can_be_purchased: form.can_be_purchased,
       sell_price: form.sell_price ? parseFloat(form.sell_price) : null,
       currency: form.currency,
@@ -747,6 +772,37 @@ export default function ProductDetailClient({
                     <p className="text-sm text-gray-800">{product.brand ?? "—"}</p>
                   )}
                 </div>
+
+                {/* A4 / M5: packaging (closed list) — 20 L and 200 L are two distinct sheets, no conversion */}
+                {["storable", "consumable"].includes((editing ? form.product_type : product.product_type) ?? "consumable") && (
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
+                    Conditionnement
+                    <span className="ml-1.5 text-xs text-gray-400 normal-case font-normal">(un autre conditionnement = une autre fiche)</span>
+                  </label>
+                  {editing ? (
+                    <div className="flex gap-2">
+                      <select value={form.packaging} onChange={e => setF("packaging", e.target.value)} className={inputCls} data-testid="packaging-select">
+                        <option value="">— à renseigner —</option>
+                        {PACKAGING_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                      {form.packaging === "Autre" && (
+                        <input value={form.packaging_other} onChange={e => setF("packaging_other", e.target.value)} className={inputCls} placeholder="Précisez (obligatoire)" />
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="text-sm text-gray-800">{product.packaging === "Autre" ? `Autre : ${product.packaging_other ?? ""}` : product.packaging ?? "— à renseigner —"}</p>
+                      {product.packaging_status === "a_valider" && (
+                        <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-medium">À valider par un Manager : fiche inutilisable sur les documents</span>
+                      )}
+                      {product.packaging_status === "a_valider" && canValidatePackaging && (
+                        <button type="button" onClick={validatePackaging} className="text-xs text-blue-600 hover:underline font-medium" data-testid="validate-packaging">Valider ce conditionnement</button>
+                      )}
+                    </div>
+                  )}
+                </div>
+                )}
 
                 {/* E5: commercial reference, visible to everyone, editable with "produits.gerer" */}
                 <div>

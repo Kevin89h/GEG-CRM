@@ -30,6 +30,7 @@ export async function DELETE(req: Request) {
     const { error } = await db
       .from("warehouses")
       .update({ is_active: false })
+      .eq("kind", "physical") // never the non-physical "Livraison directe" location
       .eq("id", id)
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
