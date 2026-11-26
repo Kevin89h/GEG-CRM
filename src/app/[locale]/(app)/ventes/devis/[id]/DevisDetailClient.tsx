@@ -17,6 +17,7 @@ import { usePerms } from "@/components/PermissionsProvider"
 import { ProductPickerDialog, type CatalogProduct } from "@/components/sales/ProductPicker"
 import StockAlert, { type Availability } from "@/components/sales/StockAlert"
 import QuoteStatusBadge from "@/components/QuoteStatusBadge"
+import { TC_FIELDS, effectiveTerms, type QuoteTerms } from "@/lib/quote-terms"
 
 interface Line {
   id: string
@@ -54,6 +55,7 @@ interface Order {
   project_code?: string | null
   commission_client?: number | null
   conditions_generales?: string | null
+  terms_conditions?: QuoteTerms | null
   account: { id: string; name: string; country: string | null } | null
   contact: { id: string; first_name: string; last_name: string } | null
   salesperson?: { full_name: string } | null
@@ -365,6 +367,17 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
   const freeLines = lines.filter(l => !l.product_id && !isComment(l))
 
   // Sends only the changed field: for project_code the body is exactly { project_code }
+  // REG-09: the conditions printed on the quote, editable while it is neither invoiced nor cancelled
+  const [terms, setTerms] = useState<QuoteTerms>(() => effectiveTerms(order.terms_conditions))
+  const [general, setGeneral] = useState(order.conditions_generales ?? "")
+  const [termsMsg, setTermsMsg] = useState<string | null>(null)
+  async function saveConditions(nextTerms: QuoteTerms, nextGeneral: string) {
+    setTermsMsg(null)
+    const res = await fetch(`/api/devis/${order.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ terms_conditions: nextTerms, conditions_generales: nextGeneral.trim() || null }) })
+    const j = await res.json().catch(() => ({}))
+    setTermsMsg(res.ok ? "Conditions enregistrées : elles seront imprimées sur le devis." : (j.error ?? "Enregistrement impossible"))
+  }
+
   async function updateOrderField(field: string, value: string) {
     setOrderFields(prev => ({ ...prev, [field]: value }))
     await patchOrder({ [field]: value || null })
@@ -778,22 +791,41 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
             {order.commission_client != null && <Field label="Commission client" value={`${order.commission_client}%`} />}
           </div>
         </div>
-        {(order.title || order.conditions_generales) && (
+        {order.title && (
           <div className="px-6 pb-4 border-t border-gray-100 pt-3 space-y-2">
-            {order.title && (
-              <div>
-                <p className="text-xs text-gray-400">Sujet</p>
-                <p className="text-sm font-medium text-gray-900">{order.title}</p>
-              </div>
-            )}
-            {order.conditions_generales && (
-              <div>
-                <p className="text-xs text-gray-400">Conditions générales</p>
-                <p className="text-sm text-gray-700 whitespace-pre-line">{order.conditions_generales}</p>
-              </div>
-            )}
+            <div>
+              <p className="text-xs text-gray-400">Sujet</p>
+              <p className="text-sm font-medium text-gray-900">{order.title}</p>
+            </div>
           </div>
         )}
+        {/* REG-09: conditions printed on the quote (PDF and print), exactly as entered here */}
+        <div className="px-6 pb-4 border-t border-gray-100 pt-3" data-testid="quote-conditions">
+          <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2">Conditions imprimées sur le devis</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {TC_FIELDS.map(f => (
+              <label key={f.key} className="text-xs text-gray-500">
+                {f.label}
+                {canEdit ? (
+                  <input value={terms[f.key] ?? ""} onChange={e => setTerms(t => ({ ...t, [f.key]: e.target.value }))} onBlur={() => saveConditions(terms, general)}
+                    className="mt-0.5 w-full px-2 py-1 text-sm text-gray-900 border border-gray-200 rounded" />
+                ) : (
+                  <span className="block text-sm text-gray-900">{terms[f.key] || "—"}</span>
+                )}
+              </label>
+            ))}
+          </div>
+          <label className="mt-2 block text-xs text-gray-500">
+            Conditions générales
+            {canEdit ? (
+              <textarea rows={3} value={general} onChange={e => setGeneral(e.target.value)} onBlur={() => saveConditions(terms, general)}
+                className="mt-0.5 w-full px-2 py-1 text-sm text-gray-900 border border-gray-200 rounded" />
+            ) : (
+              <span className="block text-sm text-gray-700 whitespace-pre-line">{general || "—"}</span>
+            )}
+          </label>
+          {termsMsg && <p className="mt-1 text-xs text-gray-500">{termsMsg}</p>}
+        </div>
       </div>
 
       {/* Onglets */}

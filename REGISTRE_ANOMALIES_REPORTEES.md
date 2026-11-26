@@ -1,0 +1,18 @@
+# Registre des anomalies reportées
+
+Ouvert le 24/11/2026, conformément à votre consigne. Il recense les anomalies **indépendantes et non bloquantes** découvertes pendant le chantier A1–A7 / D1–D8.
+Elles ne sont pas corrigées maintenant. Elles sont regroupées par cause commune.
+
+Les anomalies **bloquantes** (sécurité, intégrité des données, opérations essentielles, déploiement) ne figurent pas ici : elles ont été corrigées et retestées, ou sont listées comme **blocages** dans le compte rendu du chantier.
+
+| N° | Cause commune | Anomalie | Où | Impact | Statut |
+|---|---|---|---|---|---|
+| REG-01 | Expressions régulières sans `\` (code ancien) | `brandOf` remplace les lettres « s » au lieu des espaces (`/s+/`). Les comparaisons restent cohérentes, car le même traitement est appliqué des deux côtés | `src/lib/catalog.ts` (marque) | Libellés internes légèrement altérés, aucun effet sur les blocages | Reporté |
+| REG-02 | Même cause | `packagingBlock` : `(d+(?:.d+)?)` et `^W+` au lieu de `\d` / `\W`. Le message « conditionnement différent » s'affiche avec le libellé brut (« 20l » au lieu de « 20 L ») | `src/lib/catalog.ts` (rattachements historiques) | Présentation du message seulement : la détection fonctionne | Reporté |
+| REG-03 | Code mort après la décision Q1 | L'écran « Nouveau bon de livraison » depuis un devis contient encore la fenêtre de dérogation, qui ne peut plus s'ouvrir car le serveur ne la propose plus | `BLPartielClient.tsx` | Aucun (inaccessible) | Nettoyage ultérieur |
+| REG-04 | Lisibilité du BL client | Une ligne répartie sur deux dépôts apparaît deux fois sur le PDF du BL (même désignation, quantités séparées). Aucun dépôt n'est affiché | PDF du BL | Présentation : le total est juste | À décider : regrouper à l'impression ? |
+| REG-05 | Avertissements de lint antérieurs | 12 erreurs `react-hooks` / `no-unescaped-entities` existaient déjà dans `FacturesClient`, `FactureDetailClient`, `RattachementsClient` et `factures/[id]/pdf` | Écrans | Aucun en fonctionnement | Reporté |
+| REG-06 | Limite de lecture de l'API (1 000 lignes) | La liste des factures lit `invoice_totals` sans pagination. Aujourd'hui : 509 factures en Guinée. Au-delà de 1 000, la liste serait tronquée | `ventes/factures/page.tsx` | Aucun à ce jour | À surveiller |
+| REG-07 | Serveur de développement local | Après de nombreuses modifications à chaud, le serveur local a répondu 404 sur toutes les routes à identifiant. Un redémarrage a suffi | Poste de développement | Aucun en production (Vercel compile à neuf) | Information |
+| REG-08 | Statut du devis après livraison partielle | ANO-002 (déjà inscrite) : comportement conservé tel quel | `devis/[id]/delivery` | Affichage du statut du devis | Déjà au suivi |
+| REG-09 | Deux jeux de « conditions » sur le devis, un seul imprimé | Les conditions du CRM n'apparaissent pas sur le PDF du devis (DEV-2026-11-0299, signalé le 26/11). L'écran d'impression n'imprime que les « Terms & Conditions (PDF) » structurées, ou leurs valeurs par défaut quand elles sont vides : le PDF reçu montre exactement ces valeurs par défaut. Le texte « Conditions générales » du devis, prérempli avec les CGV du client, est affiché à l'écran mais jamais imprimé. Le PDF téléchargé par l'API n'imprime aucune des deux. Les « Terms & Conditions » ne sont pas modifiables après la création du devis | Écran et PDF du devis (production et Dev) | Document client incomplet ou faux (conditions commerciales) | **Corrigé le 26/11** (décision GEG) dans le lot et sur `tests-coline` : les deux PDF impriment les conditions saisies et les conditions générales ; modifiables tant que le devis n’est ni facturé ni annulé ; recopiées à la duplication |

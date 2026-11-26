@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { formatDate } from "@/lib/utils"
+import { termRows } from "@/lib/quote-terms"
 
 const NO_DECIMAL_CURRENCIES = ["GNF", "XOF"]
 
@@ -80,6 +81,8 @@ interface Props {
   deliveryAddress?: string | null
   paymentTerms?: string | null
   termsConditions?: Record<string, string> | null
+  /** « Conditions générales » of the quote (free text), printed under the Terms & Conditions (REG-09) */
+  generalConditions?: string | null
   lines: Line[]
   locale: string
   docType: "devis" | "bon-livraison"
@@ -87,18 +90,11 @@ interface Props {
   bankAccounts?: BankAccount[]
 }
 
-const DEFAULT_TC = {
-  prices: "USD",
-  payment_terms: "100% before delivery",
-  validity: "7 days",
-  lead_time: "5–7 days",
-  delivery_location: "To be discussed",
-}
 
 export default function PrintPage({
   id, number, status, currency, createdAt, validUntil, notes,
   accountName, accountCountry, accountNif, salespersonName, deliveryAddress, paymentTerms,
-  termsConditions,
+  termsConditions, generalConditions,
   lines: allLines, locale, docType, docSettings, bankAccounts = [],
 }: Props) {
   const [showImages, setShowImages] = useState(true)
@@ -465,15 +461,10 @@ export default function PrintPage({
               </div>
 
               {docType !== "bon-livraison" && (() => {
-                const tc = termsConditions ?? DEFAULT_TC
-                const rows = [
-                  { label: "Prices", value: tc.prices },
-                  { label: "Payment Terms", value: tc.payment_terms },
-                  { label: "Quotation Validity", value: tc.validity },
-                  { label: "Delivery Lead Time", value: tc.lead_time },
-                  { label: "Delivery Location", value: tc.delivery_location },
-                ].filter(r => r.value)
-                if (!rows.length) return null
+                // REG-09: the conditions entered on the quote (defaults only when none was entered) + its general conditions
+                const rows = termRows(termsConditions)
+                const general = (generalConditions ?? "").trim()
+                if (!rows.length && !general) return null
                 return (
                   <div className="tc-section">
                     <div className="tc-header">
@@ -486,6 +477,11 @@ export default function PrintPage({
                           <span className="tc-label">{r.label}:</span> {r.value}
                         </div>
                       ))}
+                      {general && (
+                        <div className="tc-item" style={{ marginTop: rows.length ? 8 : 0, whiteSpace: "pre-line" }} data-testid="general-conditions">
+                          <div className="tc-label">Conditions générales :</div><div>{general}</div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )

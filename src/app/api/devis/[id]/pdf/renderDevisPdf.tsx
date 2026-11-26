@@ -2,6 +2,7 @@ import React from "react"
 import {
   Document, Page, View, Text, Image, StyleSheet, Font, renderToBuffer,
 } from "@react-pdf/renderer"
+import { termRows, type QuoteTerms } from "@/lib/quote-terms"
 
 // Use built-in fonts — no external fetch needed on Vercel
 Font.register({
@@ -60,6 +61,9 @@ interface Props {
   notes: string | null
   additionalInfo: string | null
   paymentTerms: string | null
+  /** REG-09: Terms & Conditions entered on the quote, and its « Conditions générales » (free text) */
+  termsConditions?: QuoteTerms | null
+  generalConditions?: string | null
   accountName: string
   accountCountry: string | null
   salespersonName: string | null
@@ -71,7 +75,7 @@ interface Props {
 
 export async function renderDevisPdf(props: Props): Promise<Buffer> {
   const {
-    number, status, currency, createdAt, validUntil, notes, additionalInfo, paymentTerms,
+    number, status, currency, createdAt, validUntil, notes, additionalInfo, paymentTerms, termsConditions, generalConditions,
     accountName, accountCountry, salespersonName, lines, bankAccounts, docSettings: ds, docType,
   } = props
 
@@ -322,6 +326,26 @@ export async function renderDevisPdf(props: Props): Promise<Buffer> {
             </View>
           )}
         </View>
+
+        {/* REG-09: the conditions entered on the quote (defaults only when none was entered), quote only */}
+        {docType !== "bon-livraison" && (
+          <View style={{ margin: "14 20 0 20", borderWidth: 1, borderColor: "#e5e7eb", borderRadius: 4 }} wrap={false}>
+            <View style={{ backgroundColor: color, padding: "6 10" }}>
+              <Text style={{ fontSize: 8, color: "#fff", fontFamily: "Helvetica", fontWeight: "bold", letterSpacing: 1, textAlign: "center" }}>TERMS & CONDITIONS</Text>
+            </View>
+            <View style={{ padding: "8 12" }}>
+              {termRows(termsConditions).map(r => (
+                <Text key={r.label} style={{ fontSize: 8, color: "#333", marginBottom: 3 }}>• <Text style={{ fontFamily: "Helvetica", fontWeight: "bold" }}>{r.label}: </Text>{r.value}</Text>
+              ))}
+              {(generalConditions ?? "").trim() && (
+                <View style={{ marginTop: 6 }}>
+                  <Text style={{ fontSize: 8, fontFamily: "Helvetica", fontWeight: "bold", color: "#333", marginBottom: 2 }}>Conditions générales :</Text>
+                  <Text style={{ fontSize: 8, color: "#333", lineHeight: 1.5 }}>{(generalConditions ?? "").trim()}</Text>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
 
         {/* CGV */}
         {cgvText && (
