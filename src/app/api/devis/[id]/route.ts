@@ -20,6 +20,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   }
 
+  // REG-09: the printed conditions change only while the quote is neither invoiced nor cancelled
+  if ("terms_conditions" in body || "conditions_generales" in body) {
+    const { data: cur } = await db.from("sales_orders").select("status").eq("id", id).single()
+    if (!cur) return NextResponse.json({ error: "Devis introuvable" }, { status: 404 })
+    if (cur.status === "invoiced" || cur.status === "cancelled") {
+      return NextResponse.json({ error: "Les conditions d'un devis facturé ou annulé ne peuvent plus être modifiées" }, { status: 409 })
+    }
+  }
+
   const { data, error } = await db
     .from("sales_orders")
     .update(body)
