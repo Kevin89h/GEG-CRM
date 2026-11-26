@@ -259,21 +259,26 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
     }
   }
 
-  async function addLine() {
+  // R1: a new line is created from its catalogue sheet (designation and price of the sheet), never as a free line
+  const [newLineSearch, setNewLineSearch] = useState("")
+  async function addLine(productId: string) {
     if (addingLine) return
+    const p = allProducts.find(x => x.id === productId)
+    if (!p) return
     setAddingLine(true)
     try {
       const res = await fetch(`/api/devis/${order.id}/lines`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ description: "Nouvelle ligne", quantity: 1, unit_price: 0, discount: 0 }),
+        body: JSON.stringify({ product_id: p.id, description: p.name, quantity: 1, unit_price: p.sale_price ?? 0, discount: 0 }),
       })
       const data = await res.json()
       if (!res.ok) {
         alert(`Erreur: ${data.error ?? res.status}`)
         return
       }
-      setLines(prev => [...prev, { ...data, product: null, unit: null, tva_exempt: false }])
+      setLines(prev => [...prev, { ...data, product: { name: p.name, reference: p.reference }, unit: p.unit, tva_exempt: false }])
+      setNewLineSearch("")
     } finally {
       setAddingLine(false)
     }
@@ -926,14 +931,37 @@ export default function DevisDetailClient({ order, locale, docSettings = {}, sto
             </table>
             {isDraft && (
               <div className="px-4 py-3 border-t border-gray-50">
-                <button
-                  onClick={addLine}
-                  disabled={addingLine}
-                  className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Plus className="w-4 h-4" />
-                  {addingLine ? "Ajout..." : "Ajouter une ligne"}
-                </button>
+                <div className="relative w-96 max-w-full">
+                  <div className="flex items-center gap-1.5 text-sm text-blue-600">
+                    <Plus className="w-4 h-4 shrink-0" />
+                    <input
+                      data-testid="add-line-search"
+                      className="flex-1 text-sm bg-transparent border-b border-gray-200 focus:border-blue-500 focus:outline-none py-0.5 text-gray-900 placeholder:text-blue-600"
+                      value={newLineSearch}
+                      disabled={addingLine}
+                      onChange={e => setNewLineSearch(e.target.value)}
+                      placeholder={addingLine ? "Ajout..." : "Ajouter une ligne : tapez le nom ou le code de la fiche"}
+                    />
+                  </div>
+                  {newLineSearch.trim().length > 0 && (() => {
+                    const q = newLineSearch.trim().toLowerCase()
+                    const matches = allProducts.filter(p => p.name.toLowerCase().includes(q) || (p.reference ?? "").toLowerCase().includes(q)).slice(0, 8)
+                    return (
+                      <div className="absolute z-20 left-0 top-full mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg overflow-hidden">
+                        {matches.length === 0 && <p className="px-3 py-2 text-xs text-gray-500">Aucune fiche trouvée. Créez-la dans Stock › Produits.</p>}
+                        {matches.map(p => (
+                          <button key={p.id} type="button" onMouseDown={() => addLine(p.id)} className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 flex items-center gap-2">
+                            <span className="font-medium text-gray-900 truncate flex-1">{p.name}</span>
+                            <span className="text-gray-400 text-xs shrink-0">
+                              {p.sale_price != null ? `${formatNumber(p.sale_price)}` : ""}
+                              {p.reference ? ` · ${p.reference}` : ""}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )
+                  })()}
+                </div>
               </div>
             )}
 

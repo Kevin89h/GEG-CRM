@@ -309,16 +309,18 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
     setInvoice(prev => ({ ...prev, lines: prev.lines.filter(l => l.id !== lineId) }))
   }
 
-  async function addLine() {
+  async function addLine(productId: string) {
     const position = invoice.lines.length
     const defaultTvaRate = 0
+    // R1: designation and price come from the sheet (server side), then stay editable on the line
     const res = await fetch(`/api/invoices/${invoice.id}/lines`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ description: "", quantity: 1, unit_price: 0, discount: 0, position, tva_rate: defaultTvaRate }),
+      body: JSON.stringify({ product_id: productId, quantity: 1, discount: 0, position, tva_rate: defaultTvaRate }),
     })
     const json = await res.json()
     if (json.line) setInvoice(prev => ({ ...prev, lines: [...prev.lines, json.line as Line] }))
+    else window.alert(json.error ?? "Ligne non ajoutée")
   }
 
   async function updateStatus(status: string) {
@@ -925,9 +927,16 @@ export default function FactureDetailClient({ invoice: initial, locale, treasury
         {canEdit && (
           <div className="px-4 py-2 border-t border-gray-50 flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-3">
-              <button onClick={addLine} className="text-sm text-blue-600 hover:text-blue-500 font-medium transition-colors">
-                + Ajouter une ligne
-              </button>
+              {/* R1: a new line is created from its catalogue sheet (designation and price of the sheet), never as a free line */}
+              <select
+                data-testid="add-line-sheet"
+                value=""
+                onChange={e => { if (e.target.value) addLine(e.target.value) }}
+                className="text-sm text-blue-600 font-medium bg-transparent border border-blue-100 rounded px-1.5 py-0.5 max-w-[22rem]"
+              >
+                <option value="">+ Ajouter une ligne : choisir la fiche…</option>
+                {linkProducts.map(p => <option key={p.id} value={p.id}>{p.product_code ? `${p.product_code} ` : ""}{p.name}</option>)}
+              </select>
               <span className="text-gray-200">|</span>
               <div className="flex items-center gap-1.5">
                 <span className="text-xs text-gray-500">Remise globale</span>
